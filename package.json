@@ -1,0 +1,26 @@
+{
+  "name": "linkedin-automation",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @linkedin-automation/api dev",
+    "dev:dashboard": "pnpm --filter @linkedin-automation/dashboard dev",
+    "db:migrate": "pnpm --filter @linkedin-automation/db migrate",
+    "db:generate": "pnpm --filter @linkedin-automation/db generate",
+    "db:studio": "pnpm --filter @linkedin-automation/db studio",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.9"
+  }
+}

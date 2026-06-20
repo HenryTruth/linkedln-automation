@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WarmUpPhase {
+  MANUAL
+  WEEK2
+  WEEK3
+  WEEK4
+  FULL
+}
+
+enum AccountStatus {
+  ACTIVE
+  PAUSED
+  RESTRICTED
+}
+
+enum ProxyHealth {
+  HEALTHY
+  DEGRADED
+  DEAD
+}
+
+enum ProxyRotationMode {
+  STATIC
+  STICKY_SESSION
+}
+
+enum ConnectionStatus {
+  NONE
+  PENDING
+  CONNECTED
+  WITHDRAWN
+}
+
+enum CampaignType {
+  CONNECT
+  MESSAGE
+  SCRAPE
+  CONTENT_SIGNAL
+}
+
+enum CampaignStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+model Account {
+  id                String        @id @default(cuid())
+  email             String        @unique
+  cookiesEncrypted  String?       @db.Text
+  userAgent         String?
+  viewportWidth     Int           @default(1280)
+  viewportHeight    Int           @default(800)
+  timezone          String        @default("America/New_York")
+  warmUpPhase       WarmUpPhase   @default(MANUAL)
+  status            AccountStatus @default(ACTIVE)
+  dailyCaps         Json          @default("{}")
+  proxyId           String?
+  proxy             Proxy?        @relation(fields: [proxyId], references: [id])
+  campaigns         Campaign[]
+  leads             Lead[]
+  activityLogs      ActivityLog[]
+  checkpoints       Checkpoint[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([status])
+}
+
+model Proxy {
+  id           String      @id @default(cuid())
+  host         String
+  port         Int
+  country      String
+  city         String?
+  username     String
+  usernameTemplate String?
+  password     String
+  rotationMode ProxyRotationMode @default(STATIC)
+  currentSessionId String?
+  currentExitIp String?
+  lastSessionStartedAt DateTime?
+  lastUsed     DateTime?
+  healthStatus ProxyHealth @default(HEALTHY)
+  accounts     Account[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Lead {
+  id                String           @id @default(cuid())
+  linkedinUrl       String           @unique
+  firstName         String?
+  lastName          String?
+  title             String?
+  company           String?
+  connectionStatus  ConnectionStatus @default(NONE)
+  blacklisted       Boolean          @default(false)
+  blacklistReason   String?
+  accountId         String?
+  account           Account?         @relation(fields: [accountId], references: [id])
+  campaigns         CampaignLead[]
+  postSignals       PostSignal[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([connectionStatus])
+  @@index([company])
+  @@index([accountId])
+  @@index([blacklisted])
+}
+
+model Campaign {
+  id                    String                 @id @default(cuid())
+  name                  String
+  accountId             String
+  account               Account                @relation(fields: [accountId], references: [id])
+  type                  CampaignType
+  status                CampaignStatus         @default(ACTIVE)
+  dailyLimit            Int                    @default(10)
+  leads                 CampaignLead[]
+  messages              Message[]
+  contentSignalConfig   ContentSignalConfig?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([accountId, status])
+}
+
+model CampaignLead {
+  id             String      @id @default(cuid())
+  campaignId     String
+  campaign       Campaign    @relation(fields: [campaignId], references: [id])
+  leadId         String
+  lead           Lead        @relation(fields: [leadId], references: [id])
+  stage          Int         @default(0)
+  variantGroup   String      @default("A")
+  lastActionAt   DateTime?
+  nextActionAt   DateTime?
+  repliedAt      DateTime?
+  postSignalId   String?
+  postSignal     PostSignal? @relation(fields: [postSignalId], references: [id])
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([campaignId, leadId])
+  @@index([nextActionAt])
+  @@index([repliedAt])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  campaignId     String
+  campaign       Campaign @relation(fields: [campaignId], references: [id])
+  sequenceOrder  Int
+  bodyTemplate   String   @db.Text
+  variantGroup   String   @default("A")
+  delayDays      Int      @default(3)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([campaignId, sequenceOrder, variantGroup])
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  actionType  String
+  targetUrl   String?
+  result      String?
+  bodyHash    String?
+  createdAt   DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([actionType])
+  @@index([accountId, bodyHash])
+}
+
+model Checkpoint {
+  id          String    @id @default(cuid())
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id])
+  detectedAt  DateTime  @default(now())
+  resolvedAt  DateTime?
+  resolvedBy  String?
+
+  @@index([accountId, resolvedAt])
+}
+
+model ContentSignalConfig {
+  id                     String    @id @default(cuid())
+  campaignId             String    @unique
+  campaign               Campaign  @relation(fields: [campaignId], references: [id])
+  keyword                String
+  dateRangeDays          Int       @default(7)
+  maxLeads               Int       @default(50)
+  titleFilter            String?
+  companyFilter          String?
+  connectionNoteTemplate String?   @db.Text
+  lastScrapedAt          DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([keyword])
+}
+
+model PostSignal {
+  id            String        @id @default(cuid())
+  leadId        String
+  lead          Lead          @relation(fields: [leadId], references: [id])
+  campaignId    String
+  postUrl       String        @unique
+  excerpt       String        @db.Text
+  keyword       String
+  publishedAt   DateTime
+  scrapedAt     DateTime      @default(now())
+  campaignLeads CampaignLead[]
+
+  @@index([leadId])
+  @@index([campaignId])
+  @@index([keyword])
+}

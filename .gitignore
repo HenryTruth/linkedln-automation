@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.env
+*.env.local
+.next/
+.pnpm-store/
+*.tsbuildinfo
+
+# Prisma generated
+packages/db/src/generated/
+
+# Browser session data
+*.cookies.json
+sessions/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store

@@ -19,6 +19,11 @@ export default function CheckpointsPage() {
 
   useEffect(() => {
     reload().finally(() => setLoading(false));
+
+    const id = setInterval(() => {
+      reload().catch(() => {});
+    }, 30_000);
+    return () => clearInterval(id);
   }, [showUnresolved]);
 
   async function handleResolve(cp: Checkpoint) {

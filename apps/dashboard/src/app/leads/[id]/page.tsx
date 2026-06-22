@@ -5,13 +5,15 @@ import { useParams, useRouter } from "next/navigation";
 import { api, type Lead, type Campaign, type PostSignal } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 
+type CampaignMembership = {
+  campaign: Campaign;
+  stage: number;
+  repliedAt: string | null;
+  postSignal: PostSignal | null;
+};
+
 type LeadDetail = Lead & {
-  campaigns: Array<{
-    campaign: Campaign;
-    stage: number;
-    repliedAt: string | null;
-    postSignal: PostSignal | null;
-  }>;
+  campaigns: CampaignMembership[];
   postSignals: PostSignal[];
 };
 
@@ -35,6 +37,7 @@ export default function LeadDetailPage() {
   const [blacklistBusy, setBlacklistBusy] = useState(false);
   const [blacklistReason, setBlacklistReason] = useState("");
   const [showBlacklistForm, setShowBlacklistForm] = useState(false);
+  const [markingReplied, setMarkingReplied] = useState<string | null>(null);
 
   useEffect(() => {
     (api.leads.get as (id: string) => Promise<LeadDetail>)(id)
@@ -55,6 +58,29 @@ export default function LeadDetailPage() {
       alert((err as Error).message);
     } finally {
       setBlacklistBusy(false);
+    }
+  }
+
+  async function handleMarkReplied(campaignId: string) {
+    if (!lead) return;
+    setMarkingReplied(campaignId);
+    try {
+      await api.campaigns.markReplied(campaignId, lead.id);
+      setLead((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          campaigns: prev.campaigns.map((cl) =>
+            cl.campaign.id === campaignId
+              ? { ...cl, repliedAt: new Date().toISOString() }
+              : cl
+          ),
+        };
+      });
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setMarkingReplied(null);
     }
   }
 
@@ -247,10 +273,20 @@ export default function LeadDetailPage() {
                         <Badge value={cl.campaign.status} />
                       </div>
                     </div>
-                    <div className="text-right text-xs text-slate-500 shrink-0">
-                      <div>Stage {cl.stage}</div>
-                      {cl.repliedAt && (
-                        <div className="mt-1 font-semibold text-emerald-600">Replied</div>
+                    <div className="text-right text-xs shrink-0 space-y-1.5">
+                      <div className="text-slate-500">Stage {cl.stage}</div>
+                      {cl.repliedAt ? (
+                        <div className="font-semibold text-emerald-600">
+                          Replied {new Date(cl.repliedAt).toLocaleDateString()}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleMarkReplied(cl.campaign.id)}
+                          disabled={markingReplied === cl.campaign.id}
+                          className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                        >
+                          {markingReplied === cl.campaign.id ? "..." : "Mark replied"}
+                        </button>
                       )}
                     </div>
                   </div>

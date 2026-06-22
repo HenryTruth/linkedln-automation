@@ -1,22 +1,116 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Account, type Checkpoint, type Proxy } from "@/lib/api";
+import {
+  api,
+  type Account,
+  type Checkpoint,
+  type Proxy,
+  type CapKey,
+  SYSTEM_CAPS,
+  HARD_CEILING,
+  CAP_LABELS,
+} from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { HealthScore } from "@/components/HealthScore";
 
-const BASE_CAPS: Record<string, number> = {
-  connection: 15,
-  message: 40,
-  profileView: 60,
-  searchPage: 10,
-};
+const CAP_KEYS: CapKey[] = ["connection", "message", "profileView", "searchPage"];
 
-const CAP_LABELS: Record<string, string> = {
-  connection: "Connections",
-  message: "Messages",
-  profileView: "Profile Views",
-  searchPage: "Search Pages",
+// ── Account-type presets ───────────────────────────────────────────────────
+// Numbers are calibrated against LinkedIn's known enforcement thresholds.
+// Weekly connection total = (weekday cap × 5) + (weekday cap × 0.5 × 2) = cap × 6
+// LinkedIn's published soft cap is ~100 connections/week for free accounts.
+type PresetId = "new" | "established" | "veteran" | "sales_nav";
+
+interface CapPreset {
+  id: PresetId;
+  label: string;
+  badge: string;
+  caps: Record<CapKey, number>;
+  description: string;
+  caveats: string[];
+}
+
+const CAP_PRESETS: CapPreset[] = [
+  {
+    id: "new",
+    label: "New account",
+    badge: "< 6 months",
+    caps: { connection: 5, message: 10, profileView: 20, searchPage: 4 },
+    description:
+      "LinkedIn places new accounts under the highest scrutiny. Even manual users can be flagged. Start slow — build trust before increasing volume.",
+    caveats: [
+      "~30 connection requests/week — well under LinkedIn's 100/week soft cap",
+      "Profile views are limited to avoid the commercial-use warning",
+      "Increase only after the account has organic connections and post engagement",
+    ],
+  },
+  {
+    id: "established",
+    label: "Established",
+    badge: "6 months – 2 years",
+    caps: { connection: 15, message: 40, profileView: 80, searchPage: 12 },
+    description:
+      "Standard safe baseline for most free LinkedIn accounts with some history. Keeps weekly connection sends at ~90 — just under LinkedIn's 100/week guideline.",
+    caveats: [
+      "~90 connection requests/week (LinkedIn's free-account cap is ~100/week)",
+      "Free accounts start hitting the commercial-use limit around 80–100 profile views/day",
+      "Staying at these levels avoids triggering LinkedIn's automation detection",
+    ],
+  },
+  {
+    id: "veteran",
+    label: "Veteran",
+    badge: "2+ years",
+    caps: { connection: 20, message: 80, profileView: 150, searchPage: 20 },
+    description:
+      "For accounts with a proven network history and consistent engagement. LinkedIn's algorithm is more lenient with aged accounts — but the 100/week connection guideline still applies.",
+    caveats: [
+      "~120 connection requests/week — slightly above the 100/week guideline",
+      "Safe for accounts with high SSI (Social Selling Index ≥ 60) and 2+ years of activity",
+      "If you start seeing 'connection limit reached' notices, drop back to 15/day",
+    ],
+  },
+  {
+    id: "sales_nav",
+    label: "Sales Navigator",
+    badge: "Premium subscription",
+    caps: { connection: 25, message: 100, profileView: 200, searchPage: 30 },
+    description:
+      "Sales Navigator signals legitimate sales activity to LinkedIn's algorithm and removes the commercial-use limit on search and profile views. InMails (50/month) are a separate quota not tracked here.",
+    caveats: [
+      "~150 connection requests/week — SN accounts have a higher threshold (~150–200/week)",
+      "Profile views and search pages are unrestricted by commercial-use limits on SN",
+      "InMail credits (50/month) are not affected by the message cap here — this tracks direct messages only",
+    ],
+  },
+];
+
+// Per-field LinkedIn context
+const CAP_FIELD_INFO: Record<
+  CapKey,
+  { weeklyNote: string; safeZone: number; amberZone: number }
+> = {
+  connection: {
+    weeklyNote: "Weekly total = daily × 6 (weekend throttle 50%)",
+    safeZone: 15,   // ≤15/day → ≤90/week, under LinkedIn's ~100/week soft cap
+    amberZone: 20,  // ≤20/day → ≤120/week, borderline for veteran accounts
+  },
+  message: {
+    weeklyNote: "First-degree connections only. No weekly hard cap, but volume triggers spam filters.",
+    safeZone: 60,
+    amberZone: 100,
+  },
+  profileView: {
+    weeklyNote: "Free accounts hit LinkedIn's commercial-use limit around 80–100/day. SN removes this limit.",
+    safeZone: 80,
+    amberZone: 150,
+  },
+  searchPage: {
+    weeklyNote: "Search pages exhaust the commercial-use limit faster than any other action on free accounts.",
+    safeZone: 12,
+    amberZone: 25,
+  },
 };
 
 const TIMEZONES = [
@@ -34,10 +128,16 @@ const TIMEZONES = [
   "Asia/Tokyo",
   "Asia/Shanghai",
   "Australia/Sydney",
+  "Africa/Lagos",
 ];
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function effectiveCap(account: Account, key: CapKey): number {
+  const overrides = account.maxDailyCaps ?? {};
+  return overrides[key] ?? SYSTEM_CAPS[key];
 }
 
 function CapBar({ label, used, cap }: { label: string; used: number; cap: number }) {
@@ -63,16 +163,93 @@ function CapBar({ label, used, cap }: { label: string; used: number; cap: number
   );
 }
 
+type AccountNoticeType = "success" | "error" | "info";
+
+function AccountActionButton({
+  title,
+  description,
+  detail,
+  tone = "slate",
+  active = false,
+  disabled = false,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  detail?: string;
+  tone?: "slate" | "teal" | "violet" | "amber" | "red";
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const toneClasses = {
+    slate: "border-slate-200 bg-white text-slate-900 hover:border-slate-300",
+    teal: "border-teal-200 bg-teal-50/70 text-teal-950 hover:border-teal-300",
+    violet: "border-violet-200 bg-violet-50/70 text-violet-950 hover:border-violet-300",
+    amber: "border-amber-200 bg-amber-50/80 text-amber-950 hover:border-amber-300",
+    red: "border-red-200 bg-red-50/80 text-red-950 hover:border-red-300",
+  };
+  const dotClasses = {
+    slate: "bg-slate-400",
+    teal: "bg-teal-500",
+    violet: "bg-violet-500",
+    amber: "bg-amber-500",
+    red: "bg-red-500",
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`min-h-[6.75rem] rounded-2xl border p-3 text-left shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+        toneClasses[tone]
+      } ${active ? "ring-4 ring-slate-200/70" : ""}`}
+    >
+      <span className="flex items-start gap-2">
+        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${dotClasses[tone]}`} />
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold leading-5">{title}</span>
+          <span className="mt-1 block text-xs leading-5 text-slate-500">
+            {description}
+          </span>
+          {detail && (
+            <span className="mt-2 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+              {detail}
+            </span>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
-  // cookie upload state: accountId -> textarea value
+  const [notice, setNotice] = useState<
+    Record<string, { type: AccountNoticeType; message: string }>
+  >({});
+  const [confirmingAction, setConfirmingAction] = useState<{
+    accountId: string;
+    action: "pause" | "warmup";
+  } | null>(null);
+
+  // cookie upload state
   const [cookieInputs, setCookieInputs] = useState<Record<string, string>>({});
+  const [cookieConsent, setCookieConsent] = useState<Record<string, boolean>>({});
   const [showCookieFor, setShowCookieFor] = useState<string | null>(null);
   const [uploadingCookies, setUploadingCookies] = useState(false);
+
+  // per-account cap editor state
+  const [showCapsFor, setShowCapsFor] = useState<string | null>(null);
+  const [capDrafts, setCapDrafts] = useState<Record<string, Partial<Record<CapKey, number>>>>({});
+  const [selectedPreset, setSelectedPreset] = useState<Record<string, PresetId | null>>({});
+  const [savingCaps, setSavingCaps] = useState(false);
+  const [capError, setCapError] = useState<string | null>(null);
 
   // Add account form
   const [showForm, setShowForm] = useState(false);
@@ -81,6 +258,37 @@ export default function AccountsPage() {
   const [newProxyId, setNewProxyId] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  function setAccountNotice(
+    accountId: string,
+    type: AccountNoticeType,
+    message: string
+  ) {
+    setNotice((prev) => ({ ...prev, [accountId]: { type, message } }));
+  }
+
+  function clearAccountNotice(accountId: string) {
+    setNotice((prev) => {
+      const next = { ...prev };
+      delete next[accountId];
+      return next;
+    });
+    setConfirmingAction((current) =>
+      current?.accountId === accountId ? null : current
+    );
+  }
+
+  function toggleCapsPanel(account: Account) {
+    clearAccountNotice(account.id);
+    setShowCookieFor(null);
+    openCapsEditor(account);
+  }
+
+  function toggleCookiePanel(accountId: string) {
+    clearAccountNotice(accountId);
+    setShowCapsFor(null);
+    setShowCookieFor((v) => (v === accountId ? null : accountId));
+  }
 
   function reload() {
     return Promise.all([
@@ -96,7 +304,51 @@ export default function AccountsPage() {
 
   useEffect(() => {
     reload().finally(() => setLoading(false));
+
+    const id = setInterval(() => {
+      reload().catch(() => {});
+    }, 30_000);
+    return () => clearInterval(id);
   }, []);
+
+  function openCapsEditor(account: Account) {
+    const overrides = account.maxDailyCaps ?? {};
+    const draft: Partial<Record<CapKey, number>> = {};
+    for (const key of CAP_KEYS) {
+      draft[key] = overrides[key] ?? SYSTEM_CAPS[key];
+    }
+    setCapDrafts((prev) => ({ ...prev, [account.id]: draft }));
+    setSelectedPreset((prev) => ({ ...prev, [account.id]: null }));
+    setCapError(null);
+    setShowCapsFor((v) => (v === account.id ? null : account.id));
+  }
+
+  function applyPreset(accountId: string, preset: CapPreset) {
+    setCapDrafts((prev) => ({
+      ...prev,
+      [accountId]: { ...preset.caps },
+    }));
+    setSelectedPreset((prev) => ({ ...prev, [accountId]: preset.id }));
+  }
+
+  async function handleSaveCaps(id: string) {
+    const draft = capDrafts[id];
+    if (!draft) return;
+    setSavingCaps(true);
+    setCapError(null);
+    clearAccountNotice(id);
+    try {
+      await api.accounts.updateCaps(id, draft);
+      setShowCapsFor(null);
+      await reload();
+      setAccountNotice(id, "success", "Daily limits updated.");
+    } catch (e) {
+      setCapError((e as Error).message);
+      setAccountNotice(id, "error", (e as Error).message);
+    } finally {
+      setSavingCaps(false);
+    }
+  }
 
   async function handleAddAccount(e: React.FormEvent) {
     e.preventDefault();
@@ -119,37 +371,67 @@ export default function AccountsPage() {
     }
   }
 
-  async function handlePause(id: string) {
-    setBusy(id);
+  async function handlePause(account: Account) {
+    const isConfirming =
+      confirmingAction?.accountId === account.id &&
+      confirmingAction.action === "pause";
+    if (!isConfirming) {
+      setConfirmingAction({ accountId: account.id, action: "pause" });
+      setAccountNotice(
+        account.id,
+        "info",
+        "Click Confirm pause to stop queued work for this account."
+      );
+      return;
+    }
+    setBusy(account.id);
+    clearAccountNotice(account.id);
     try {
-      await api.accounts.pause(id);
+      await api.accounts.pause(account.id);
       await reload();
+      setAccountNotice(account.id, "success", "Automation paused for this account.");
     } catch (e) {
-      alert((e as Error).message);
+      setAccountNotice(account.id, "error", (e as Error).message);
     } finally {
       setBusy(null);
     }
   }
 
-  async function handleResume(id: string) {
-    setBusy(id);
+  async function handleResume(account: Account) {
+    setBusy(account.id);
+    clearAccountNotice(account.id);
     try {
-      await api.accounts.resume(id);
+      await api.accounts.resume(account.id);
       await reload();
+      setAccountNotice(account.id, "success", "Automation resumed.");
     } catch (e) {
-      alert((e as Error).message);
+      setAccountNotice(account.id, "error", (e as Error).message);
     } finally {
       setBusy(null);
     }
   }
 
-  async function handleAdvanceWarmup(id: string) {
-    setBusy(id);
+  async function handleAdvanceWarmup(account: Account) {
+    const isConfirming =
+      confirmingAction?.accountId === account.id &&
+      confirmingAction.action === "warmup";
+    if (!isConfirming) {
+      setConfirmingAction({ accountId: account.id, action: "warmup" });
+      setAccountNotice(
+        account.id,
+        "info",
+        "Click Confirm warm-up after this account has been stable at the current phase."
+      );
+      return;
+    }
+    setBusy(account.id);
+    clearAccountNotice(account.id);
     try {
-      await api.accounts.advanceWarmup(id);
+      await api.accounts.advanceWarmup(account.id);
       await reload();
+      setAccountNotice(account.id, "success", "Warm-up phase advanced.");
     } catch (e) {
-      alert((e as Error).message);
+      setAccountNotice(account.id, "error", (e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -158,14 +440,38 @@ export default function AccountsPage() {
   async function handleUploadCookies(id: string) {
     const cookies = cookieInputs[id]?.trim();
     if (!cookies) return;
-    setUploadingCookies(true);
+    if (!cookieConsent[id]) {
+      setAccountNotice(
+        id,
+        "error",
+        "Confirm cookie storage consent before saving session cookies."
+      );
+      return;
+    }
     try {
-      await api.accounts.uploadCookies(id, cookies);
-      setCookieInputs((prev) => ({ ...prev, [id]: "" }));
-      setShowCookieFor(null);
-      alert("Cookies saved. The account will use them on the next browser session.");
+      const parsed = JSON.parse(cookies) as unknown;
+      if (!Array.isArray(parsed)) {
+        throw new Error("Cookies must be a JSON array.");
+      }
     } catch (e) {
-      alert((e as Error).message);
+      setAccountNotice(id, "error", `Invalid cookie JSON: ${(e as Error).message}`);
+      return;
+    }
+    setUploadingCookies(true);
+    clearAccountNotice(id);
+    try {
+      await api.accounts.uploadCookies(id, cookies, true);
+      setCookieInputs((prev) => ({ ...prev, [id]: "" }));
+      setCookieConsent((prev) => ({ ...prev, [id]: false }));
+      setShowCookieFor(null);
+      await reload();
+      setAccountNotice(
+        id,
+        "success",
+        "Cookies saved with consent. The next browser session will use them."
+      );
+    } catch (e) {
+      setAccountNotice(id, "error", (e as Error).message);
     } finally {
       setUploadingCookies(false);
     }
@@ -305,6 +611,18 @@ export default function AccountsPage() {
           const openCount = checkpoints.filter(
             (cp) => cp.accountId === account.id
           ).length;
+          const draft = capDrafts[account.id] ?? {};
+          const accountNotice = notice[account.id];
+          const accountBusy = busy === account.id;
+          const confirmingPause =
+            confirmingAction?.accountId === account.id &&
+            confirmingAction.action === "pause";
+          const confirmingWarmup =
+            confirmingAction?.accountId === account.id &&
+            confirmingAction.action === "warmup";
+          const canResume =
+            account.status === "PAUSED" || account.status === "RESTRICTED";
+          const isRestricted = account.status === "RESTRICTED";
 
           return (
             <div
@@ -337,48 +655,349 @@ export default function AccountsPage() {
                   )}
                 </div>
 
-                <div className="flex shrink-0 flex-col gap-2">
-                  {account.status === "PAUSED" ||
-                  account.status === "RESTRICTED" ? (
-                    <button
-                      onClick={() => handleResume(account.id)}
-                      disabled={
-                        busy === account.id || account.status === "RESTRICTED"
-                      }
-                      className="btn-secondary px-3 py-1.5 text-emerald-700"
-                    >
-                      {account.status === "RESTRICTED"
-                        ? "Restricted"
-                        : "Resume"}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handlePause(account.id)}
-                      disabled={busy === account.id}
-                      className="btn-secondary px-3 py-1.5"
-                    >
-                      Pause
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleAdvanceWarmup(account.id)}
-                    disabled={busy === account.id || account.warmUpPhase === "FULL"}
-                    title={account.warmUpPhase === "FULL" ? "Already at full automation" : "Advance to next warm-up phase"}
-                    className="btn-secondary px-3 py-1.5 text-violet-700 disabled:opacity-40"
-                  >
-                    {account.warmUpPhase === "FULL" ? "Fully warmed" : "Advance warm-up"}
-                  </button>
-                  <button
-                    onClick={() =>
-                      setShowCookieFor((v) =>
-                        v === account.id ? null : account.id
-                      )
-                    }
-                    className="btn-secondary px-3 py-1.5 text-teal-700"
-                  >
-                    {showCookieFor === account.id ? "Cancel" : "Upload cookies"}
-                  </button>
+                <div className="hidden shrink-0 sm:block">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                    {account.status === "ACTIVE" ? "Running" : "Needs attention"}
+                  </span>
                 </div>
+              </div>
+
+              {accountNotice && (
+                <div
+                  className={`rounded-2xl border p-3 text-sm ${
+                    accountNotice.type === "success"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : accountNotice.type === "info"
+                      ? "border-sky-200 bg-sky-50 text-sky-700"
+                      : "border-red-200 bg-red-50 text-red-700"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span>{accountNotice.message}</span>
+                    {confirmingAction?.accountId === account.id && (
+                      <button
+                        type="button"
+                        onClick={() => clearAccountNotice(account.id)}
+                        className="text-xs font-semibold underline-offset-2 hover:underline"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Account actions
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Control automation, warm-up, limits, and session cookies.
+                    </p>
+                  </div>
+                  {accountBusy && (
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-500">
+                      Working...
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {canResume ? (
+                    <AccountActionButton
+                      title={isRestricted ? "Review required" : "Resume automation"}
+                      description={
+                        isRestricted
+                          ? "Resolve the account restriction before automation can run again."
+                          : "Restart queued work for this account."
+                      }
+                      detail={isRestricted ? "Locked" : "Paused"}
+                      tone={isRestricted ? "red" : "teal"}
+                      onClick={() => handleResume(account)}
+                      disabled={accountBusy || account.status === "RESTRICTED"}
+                    />
+                  ) : (
+                    <AccountActionButton
+                      title={confirmingPause ? "Confirm pause" : "Pause automation"}
+                      description={
+                        confirmingPause
+                          ? "Confirm to stop queued work until you resume the account."
+                          : "Temporarily stop all automated work for this account."
+                      }
+                      detail={confirmingPause ? "Confirmation needed" : "Running"}
+                      tone={confirmingPause ? "amber" : "slate"}
+                      active={confirmingPause}
+                      onClick={() => handlePause(account)}
+                      disabled={accountBusy}
+                    />
+                  )}
+
+                  <AccountActionButton
+                    title={confirmingWarmup ? "Confirm warm-up" : "Advance warm-up"}
+                    description={
+                      account.warmUpPhase === "FULL"
+                        ? "This account is already at the full operating phase."
+                        : confirmingWarmup
+                        ? "Confirm only after the account has stayed healthy at this phase."
+                        : "Move to the next sending volume phase."
+                    }
+                    detail={
+                      account.warmUpPhase === "FULL"
+                        ? "Complete"
+                        : confirmingWarmup
+                        ? "Confirmation needed"
+                        : account.warmUpPhase
+                    }
+                    tone={confirmingWarmup ? "amber" : "violet"}
+                    active={confirmingWarmup}
+                    onClick={() => handleAdvanceWarmup(account)}
+                    disabled={accountBusy || account.warmUpPhase === "FULL"}
+                  />
+
+                  <AccountActionButton
+                    title={showCapsFor === account.id ? "Close limits" : "Edit daily limits"}
+                    description="Tune connection, message, profile view, and search caps."
+                    detail="Guardrails"
+                    tone="violet"
+                    active={showCapsFor === account.id}
+                    onClick={() => toggleCapsPanel(account)}
+                  />
+
+                  <AccountActionButton
+                    title={showCookieFor === account.id ? "Close cookies" : "Session cookies"}
+                    description="Paste browser cookies so the worker can keep a trusted session."
+                    detail="Login session"
+                    tone="teal"
+                    active={showCookieFor === account.id}
+                    onClick={() => toggleCookiePanel(account.id)}
+                  />
+                </div>
+
+                {/* Cap editor panel */}
+                {showCapsFor === account.id && (
+                  <div className="mt-3 space-y-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                    <div>
+                      <p className="text-xs font-semibold text-violet-900">
+                        Daily limit overrides
+                      </p>
+                      <p className="mt-0.5 text-xs leading-5 text-violet-700">
+                        Pick your account type to pre-fill safe recommended values, or set custom numbers.
+                        Hard ceilings are enforced by the server.
+                      </p>
+                    </div>
+
+                    {/* Account-type preset picker */}
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {CAP_PRESETS.map((preset) => {
+                        const active = selectedPreset[account.id] === preset.id;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => applyPreset(account.id, preset)}
+                            className={`rounded-xl border px-3 py-2 text-left transition-all ${
+                              active
+                                ? "border-violet-500 bg-violet-100 ring-2 ring-violet-300"
+                                : "border-violet-200 bg-white hover:border-violet-400 hover:bg-violet-50"
+                            }`}
+                          >
+                            <p className="text-xs font-semibold text-violet-900">
+                              {preset.label}
+                            </p>
+                            <p className="mt-0.5 text-[10px] text-violet-500">
+                              {preset.badge}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Preset description */}
+                    {selectedPreset[account.id] && (() => {
+                      const preset = CAP_PRESETS.find(
+                        (p) => p.id === selectedPreset[account.id]
+                      )!;
+                      return (
+                        <div className="space-y-2 rounded-xl border border-violet-200 bg-white/70 p-3">
+                          <p className="text-xs leading-5 text-slate-700">
+                            {preset.description}
+                          </p>
+                          <ul className="space-y-1">
+                            {preset.caveats.map((c) => (
+                              <li key={c} className="flex items-start gap-1.5 text-[11px] text-slate-500">
+                                <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-violet-400" />
+                                {c}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })()}
+
+                    {capError && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                        {capError}
+                      </div>
+                    )}
+
+                    {/* Input grid */}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {CAP_KEYS.map((key) => {
+                        const val = draft[key] ?? SYSTEM_CAPS[key];
+                        const info = CAP_FIELD_INFO[key];
+                        const weekly = Math.round(val * 6);
+                        const safeColor =
+                          val <= info.safeZone
+                            ? "text-emerald-600"
+                            : val <= info.amberZone
+                            ? "text-amber-600"
+                            : "text-red-600";
+                        const safeLabel =
+                          val <= info.safeZone
+                            ? "safe"
+                            : val <= info.amberZone
+                            ? "borderline"
+                            : "risky";
+                        return (
+                          <div key={key} className="rounded-xl border border-violet-100 bg-white/60 p-3">
+                            <div className="mb-1.5 flex items-center justify-between">
+                              <label className="text-xs font-semibold text-violet-900">
+                                {CAP_LABELS[key]}
+                              </label>
+                              <span className={`text-[10px] font-semibold ${safeColor}`}>
+                                {safeLabel}
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              min={1}
+                              max={HARD_CEILING[key]}
+                              value={val}
+                              onChange={(e) => {
+                                const n = parseInt(e.target.value, 10);
+                                setSelectedPreset((prev) => ({ ...prev, [account.id]: null }));
+                                setCapDrafts((prev) => ({
+                                  ...prev,
+                                  [account.id]: {
+                                    ...prev[account.id],
+                                    [key]: isNaN(n) ? SYSTEM_CAPS[key] : n,
+                                  },
+                                }));
+                              }}
+                              className="field w-full"
+                            />
+                            <div className="mt-1.5 space-y-0.5">
+                              {key === "connection" && (
+                                <p className={`text-[10px] font-medium ${safeColor}`}>
+                                  ~{weekly}/week
+                                  {val > info.amberZone
+                                    ? " — exceeds LinkedIn's ~100/week guideline"
+                                    : val > info.safeZone
+                                    ? " — approaching LinkedIn's ~100/week guideline"
+                                    : " — under LinkedIn's ~100/week soft cap"}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-slate-400">
+                                {info.weeklyNote}
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                System default {SYSTEM_CAPS[key]} · Hard ceiling {HARD_CEILING[key]}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={() => handleSaveCaps(account.id)}
+                        disabled={savingCaps}
+                        className="btn-primary px-4 py-1.5"
+                      >
+                        {savingCaps ? "Saving..." : "Save limits"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          applyPreset(
+                            account.id,
+                            CAP_PRESETS.find((p) => p.id === "established")!
+                          );
+                        }}
+                        className="text-xs text-violet-600 underline-offset-2 hover:underline"
+                      >
+                        Use established defaults
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cookie upload panel */}
+                {showCookieFor === account.id && (
+                  <div className="mt-3 space-y-3 rounded-2xl border border-teal-200 bg-teal-50/70 p-4">
+                    <p className="text-xs font-semibold text-teal-900">
+                      Paste session cookies (JSON array from browser devtools)
+                    </p>
+                    <p className="text-xs leading-5 text-teal-700">
+                      Open LinkedIn in your browser, open DevTools, then Application,
+                      Cookies, copy all cookies as JSON, then paste below.
+                    </p>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                      Session cookies grant access to this LinkedIn session. They are
+                      encrypted at rest and used only to run browser automation for
+                      this account. Do not paste cookies unless you authorize that use.
+                    </div>
+                    <textarea
+                      rows={5}
+                      value={cookieInputs[account.id] ?? ""}
+                      onChange={(e) =>
+                        setCookieInputs((prev) => ({
+                          ...prev,
+                          [account.id]: e.target.value,
+                        }))
+                      }
+                      placeholder='[{"name":"li_at","value":"...","domain":".linkedin.com",...}]'
+                      className="field w-full font-mono text-xs"
+                    />
+                    <label className="flex items-start gap-2 rounded-xl border border-teal-200 bg-white/70 p-3 text-xs leading-5 text-teal-900">
+                      <input
+                        type="checkbox"
+                        checked={cookieConsent[account.id] ?? false}
+                        onChange={(e) =>
+                          setCookieConsent((prev) => ({
+                            ...prev,
+                            [account.id]: e.target.checked,
+                          }))
+                        }
+                        className="mt-1 h-4 w-4 rounded border-teal-300 text-teal-600"
+                      />
+                      <span>
+                        I understand these cookies grant session access to my
+                        LinkedIn account and authorize this app to store and use
+                        them for automation on this account.
+                      </span>
+                    </label>
+                    {account.cookiesConsentAt && (
+                      <p className="text-[11px] text-teal-700">
+                        Last cookie consent recorded{" "}
+                        {new Date(account.cookiesConsentAt).toLocaleString()}.
+                      </p>
+                    )}
+                    <button
+                      onClick={() => handleUploadCookies(account.id)}
+                      disabled={
+                        uploadingCookies ||
+                        !(cookieInputs[account.id]?.trim()) ||
+                        !(cookieConsent[account.id] ?? false)
+                      }
+                      className="btn-primary px-4 py-1.5"
+                    >
+                      {uploadingCookies ? "Saving..." : "Save cookies"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Proxy row */}
@@ -416,51 +1035,17 @@ export default function AccountsPage() {
                   Today&apos;s usage
                 </p>
                 <div className="space-y-2">
-                  {Object.entries(BASE_CAPS).map(([key, cap]) => (
+                  {CAP_KEYS.map((key) => (
                     <CapBar
                       key={key}
-                      label={CAP_LABELS[key] ?? key}
+                      label={CAP_LABELS[key]}
                       used={todayCaps[key] ?? 0}
-                      cap={cap}
+                      cap={effectiveCap(account, key)}
                     />
                   ))}
                 </div>
               </div>
 
-              {/* Cookie upload panel */}
-              {showCookieFor === account.id && (
-                <div className="space-y-3 rounded-2xl border border-teal-200 bg-teal-50/70 p-4">
-                  <p className="text-xs font-semibold text-teal-900">
-                    Paste session cookies (JSON array from browser devtools)
-                  </p>
-                  <p className="text-xs leading-5 text-teal-700">
-                    Open LinkedIn in your browser, open DevTools → Application →
-                    Cookies, copy all cookies as JSON, then paste below.
-                  </p>
-                  <textarea
-                    rows={5}
-                    value={cookieInputs[account.id] ?? ""}
-                    onChange={(e) =>
-                      setCookieInputs((prev) => ({
-                        ...prev,
-                        [account.id]: e.target.value,
-                      }))
-                    }
-                    placeholder='[{"name":"li_at","value":"...","domain":".linkedin.com",...}]'
-                    className="field w-full font-mono text-xs"
-                  />
-                  <button
-                    onClick={() => handleUploadCookies(account.id)}
-                    disabled={
-                      uploadingCookies ||
-                      !(cookieInputs[account.id]?.trim())
-                    }
-                    className="btn-primary px-4 py-1.5"
-                  >
-                    {uploadingCookies ? "Saving..." : "Save Cookies"}
-                  </button>
-                </div>
-              )}
             </div>
           );
         })}

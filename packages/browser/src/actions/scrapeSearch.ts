@@ -77,6 +77,10 @@ export async function scrapeSearch(
 ): Promise<{ urls: string[]; pagesScraped: number }> {
   const allUrls: string[] = [];
   let pagesScraped = 0;
+  const account = await prisma.account.findUniqueOrThrow({
+    where: { id: accountId },
+    select: { userId: true },
+  });
 
   for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
     const pageUrl = buildPageUrl(searchUrl, pageNum);
@@ -89,8 +93,13 @@ export async function scrapeSearch(
 
     for (const lead of leads) {
       await prisma.lead.upsert({
-        where: { linkedinUrl: lead.linkedinUrl },
-        create: { ...lead, accountId },
+        where: {
+          userId_linkedinUrl: {
+            userId: account.userId,
+            linkedinUrl: lead.linkedinUrl,
+          },
+        },
+        create: { ...lead, accountId, userId: account.userId },
         update: { title: lead.title, company: lead.company },
       });
       allUrls.push(lead.linkedinUrl);

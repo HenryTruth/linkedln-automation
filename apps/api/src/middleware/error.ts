@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { ZodError } from "zod";
 import {
   DailyCapExceededError,
   WarmUpError,
@@ -12,6 +13,17 @@ export function errorMiddleware(
   res: Response,
   _next: NextFunction
 ): void {
+  if (err instanceof ZodError) {
+    res.status(400).json({
+      error: "Invalid request",
+      issues: err.issues.map((issue) => ({
+        path: issue.path.join("."),
+        message: issue.message,
+      })),
+    });
+    return;
+  }
+
   if (
     err instanceof DailyCapExceededError ||
     err instanceof WarmUpError ||

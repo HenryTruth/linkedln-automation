@@ -1,7 +1,7 @@
 import type { Job } from "bullmq";
 import { prisma, AccountStatus } from "@linkedin-automation/db";
 import {
-  checkDailyCap,
+  claimDailyCap,
   assertWarmUpAllowed,
   checkActionWindow,
   checkSessionErrorRate,
@@ -40,8 +40,8 @@ export async function contentSignalProcessor(
 
   try {
     // Guard A: search counts as searchPage cap usage
-    await checkDailyCap(accountId, "searchPage");
     assertWarmUpAllowed(accountId, account.warmUpPhase, "searchPage");
+    await claimDailyCap(accountId, "searchPage");
     await checkActionWindow(accountId);
     await checkSessionErrorRate(accountId);
     // Guard E: keyword uniqueness across active campaigns
@@ -114,6 +114,19 @@ export async function contentSignalProcessor(
         );
       }
     }
+  } catch (err) {
+    const artifact = await worker.captureFailureArtifacts(`content-signal-${job.id ?? "unknown"}`);
+    if (artifact) {
+      await prisma.activityLog.create({
+        data: {
+          accountId,
+          actionType: "contentSignal",
+          targetUrl: `linkedin.com/search/content?keywords=${encodeURIComponent(keyword)}`,
+          result: `failed: ${(err as Error).message}; artifact: ${artifact}`,
+        },
+      }).catch(() => {});
+    }
+    throw err;
   } finally {
     await worker.close();
   }

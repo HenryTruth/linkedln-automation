@@ -6,6 +6,8 @@ export {
   searchScrapeQueue,
   sequenceDispatchQueue,
   contentSignalQueue,
+  anomalyCheckQueue,
+  syncStatusQueue,
 } from "./queues.js";
 export type {
   ConnectJobData,
@@ -15,10 +17,14 @@ export type {
   SearchScrapeJobData,
   SequenceDispatchJobData,
   ContentSignalJobData,
+  AnomalyCheckJobData,
+  SyncStatusJobData,
 } from "./queues.js";
 export {
   startWorkers,
   scheduleWithdrawalJobs,
   scheduleWithdrawalForAccount,
   startSequenceTicker,
+  startAnomalyTicker,
+  startSyncStatusTicker,
 } from "./scheduler.js";

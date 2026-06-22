@@ -1,8 +1,7 @@
 import type { Job } from "bullmq";
 import { prisma, AccountStatus } from "@linkedin-automation/db";
 import {
-  checkDailyCap,
-  incrementDailyCap,
+  claimDailyCap,
   assertWarmUpAllowed,
   checkActionWindow,
   checkDuplicate,
@@ -45,14 +44,18 @@ export async function messageProcessor(
   }
 
   if (lead.blacklisted) {
+    await prisma.campaignLead.update({
+      where: { id: campaignLeadId },
+      data: { jobStatus: "SKIPPED", lastJobError: "Lead is blacklisted" },
+    });
     return;
   }
 
   const bodyHash = hashMessageBody(messageBody);
 
   try {
-    await checkDailyCap(accountId, "message");
     assertWarmUpAllowed(accountId, account.warmUpPhase, "message");
+    await claimDailyCap(accountId, "message");
     await checkActionWindow(accountId);
     await checkSessionErrorRate(accountId);
 
@@ -81,8 +84,6 @@ export async function messageProcessor(
     const page = await worker.getPage();
     await sendMessage(page, linkedinUrl, messageBody);
 
-    await incrementDailyCap(accountId, "message");
-
     await prisma.activityLog.create({
       data: {
         accountId,
@@ -98,8 +99,17 @@ export async function messageProcessor(
       data: {
         lastActionAt: new Date(),
         stage: { increment: 1 },
+        jobStatus: "SENT",
+        lastJobError: null,
       },
     });
+  } catch (err) {
+    const artifact = await worker.captureFailureArtifacts(`message-${job.id ?? "unknown"}`);
+    await prisma.campaignLead.update({
+      where: { id: campaignLeadId },
+      data: { lastJobError: `${(err as Error).message}\nArtifact: ${artifact ?? "unavailable"}` },
+    }).catch(() => {});
+    throw err;
   } finally {
     await worker.close();
   }

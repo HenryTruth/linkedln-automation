@@ -1,8 +1,7 @@
 import type { Job } from "bullmq";
 import { prisma, AccountStatus } from "@linkedin-automation/db";
 import {
-  checkDailyCap,
-  incrementDailyCap,
+  claimDailyCap,
   assertWarmUpAllowed,
   checkActionWindow,
   pauseAccountForAnomaly,
@@ -13,11 +12,11 @@ import { BrowserWorker, scrapeProfile } from "@linkedin-automation/browser";
 import type { ScrapeJobData } from "../queues.js";
 
 export async function scrapeProcessor(job: Job<ScrapeJobData>): Promise<void> {
-  const { accountId, linkedinUrl } = job.data;
+  const { accountId, linkedinUrl, campaignLeadId } = job.data;
 
   const account = await prisma.account.findUniqueOrThrow({
     where: { id: accountId },
-    select: { status: true, warmUpPhase: true },
+    select: { status: true, warmUpPhase: true, userId: true },
   });
 
   if (account.status === AccountStatus.PAUSED) {
@@ -26,16 +25,27 @@ export async function scrapeProcessor(job: Job<ScrapeJobData>): Promise<void> {
 
   // Skip blacklisted leads — look up by URL since scrape jobs carry linkedinUrl not leadId
   const existingLead = await prisma.lead.findUnique({
-    where: { linkedinUrl },
+    where: {
+      userId_linkedinUrl: {
+        userId: account.userId,
+        linkedinUrl,
+      },
+    },
     select: { blacklisted: true },
   });
   if (existingLead?.blacklisted) {
+    if (campaignLeadId) {
+      await prisma.campaignLead.update({
+        where: { id: campaignLeadId },
+        data: { jobStatus: "SKIPPED", lastJobError: "Lead is blacklisted" },
+      });
+    }
     return;
   }
 
   try {
-    await checkDailyCap(accountId, "profileView");
     assertWarmUpAllowed(accountId, account.warmUpPhase, "profileView");
+    await claimDailyCap(accountId, "profileView");
     await checkActionWindow(accountId);
   } catch (err) {
     if (err instanceof AnomalyError) {
@@ -50,8 +60,6 @@ export async function scrapeProcessor(job: Job<ScrapeJobData>): Promise<void> {
     const page = await worker.getPage();
     await scrapeProfile(page, linkedinUrl, accountId);
 
-    await incrementDailyCap(accountId, "profileView");
-
     await prisma.activityLog.create({
       data: {
         accountId,
@@ -60,6 +68,25 @@ export async function scrapeProcessor(job: Job<ScrapeJobData>): Promise<void> {
         result: "success",
       },
     });
+    if (campaignLeadId) {
+      await prisma.campaignLead.update({
+        where: { id: campaignLeadId },
+        data: {
+          jobStatus: "SENT",
+          lastActionAt: new Date(),
+          lastJobError: null,
+        },
+      });
+    }
+  } catch (err) {
+    const artifact = await worker.captureFailureArtifacts(`scrape-${job.id ?? "unknown"}`);
+    if (campaignLeadId && artifact) {
+      await prisma.campaignLead.update({
+        where: { id: campaignLeadId },
+        data: { lastJobError: `${(err as Error).message}\nArtifact: ${artifact}` },
+      }).catch(() => {});
+    }
+    throw err;
   } finally {
     await worker.close();
   }

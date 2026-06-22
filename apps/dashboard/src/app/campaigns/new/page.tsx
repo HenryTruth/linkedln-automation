@@ -19,6 +19,7 @@ export default function NewCampaignPage() {
     accountId: "",
     type: "CONNECT",
     dailyLimit: 10,
+    connectionNoteTemplate: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +36,10 @@ export default function NewCampaignPage() {
     setError(null);
     setSaving(true);
     try {
-      const campaign = await api.campaigns.create(form);
+      const campaign = await api.campaigns.create({
+        ...form,
+        connectionNoteTemplate: form.connectionNoteTemplate.trim() || null,
+      });
       router.push(`/campaigns/${campaign.id}`);
     } catch (err) {
       setError((err as Error).message);
@@ -143,6 +147,61 @@ export default function NewCampaignPage() {
               this dispatch limit.
             </p>
           </div>
+
+          {form.type === "CONNECT" && (
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">
+                Connection note{" "}
+                <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <p className="mb-2 text-xs leading-5 text-slate-500">
+                Personalise each request with dynamic variables. LinkedIn limits
+                notes to 300 characters. Leave blank to send without a note.
+              </p>
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {["{{firstName}}", "{{lastName}}", "{{company}}", "{{title}}"].map(
+                  (v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          connectionNoteTemplate:
+                            f.connectionNoteTemplate + v,
+                        }))
+                      }
+                      className="rounded-lg border border-teal-200 bg-teal-50 px-2 py-0.5 font-mono text-xs font-semibold text-teal-700 hover:bg-teal-100"
+                    >
+                      {v}
+                    </button>
+                  )
+                )}
+              </div>
+              <textarea
+                rows={4}
+                maxLength={300}
+                value={form.connectionNoteTemplate}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    connectionNoteTemplate: e.target.value,
+                  }))
+                }
+                placeholder={`Hi {{firstName}}, I came across your work at {{company}} and would love to connect!`}
+                className="field w-full resize-none font-mono text-sm"
+              />
+              <p
+                className={`mt-1 text-right text-xs font-medium ${
+                  form.connectionNoteTemplate.length > 280
+                    ? "text-red-500"
+                    : "text-slate-400"
+                }`}
+              >
+                {form.connectionNoteTemplate.length}/300
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-3 pt-2">
             <button

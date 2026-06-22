@@ -15,6 +15,7 @@ export async function sequenceProcessor(
     where: {
       repliedAt: null,
       nextActionAt: { lte: new Date() },
+      jobStatus: { notIn: ["QUEUED", "RUNNING"] },
       campaign: {
         type: CampaignType.MESSAGE,
         status: CampaignStatus.ACTIVE,
@@ -117,7 +118,12 @@ export async function sequenceProcessor(
     // Update nextActionAt so this lead won't fire again until the next window
     await prisma.campaignLead.update({
       where: { id: cl.id },
-      data: { nextActionAt },
+      data: {
+        nextActionAt,
+        jobStatus: "QUEUED",
+        queuedJobId: `seq-${cl.id}-step-${cl.stage}`,
+        lastJobError: null,
+      },
     });
   }
 }

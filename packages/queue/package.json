@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "workers": "tsx src/scheduler.ts"
+    "workers": "tsx src/worker.ts"
   },
   "dependencies": {
     "@linkedin-automation/browser": "workspace:*",

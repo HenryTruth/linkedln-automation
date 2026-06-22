@@ -52,10 +52,47 @@ enum CampaignStatus {
   COMPLETED
 }
 
+enum CampaignLeadJobStatus {
+  IDLE
+  QUEUED
+  RUNNING
+  SENT
+  SKIPPED
+  FAILED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  plan         String        @default("FREE_FOREVER")
+  sessions     AuthSession[]
+  accounts     Account[]
+  proxies      Proxy[]
+  leads        Lead[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 model Account {
   id                String        @id @default(cuid())
-  email             String        @unique
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email             String
   cookiesEncrypted  String?       @db.Text
+  cookiesConsentAt  DateTime?
   userAgent         String?
   viewportWidth     Int           @default(1280)
   viewportHeight    Int           @default(800)
@@ -63,6 +100,7 @@ model Account {
   warmUpPhase       WarmUpPhase   @default(MANUAL)
   status            AccountStatus @default(ACTIVE)
   dailyCaps         Json          @default("{}")
+  maxDailyCaps      Json          @default("{}")
   proxyId           String?
   proxy             Proxy?        @relation(fields: [proxyId], references: [id])
   campaigns         Campaign[]
@@ -72,11 +110,15 @@ model Account {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
+  @@unique([userId, email])
+  @@index([userId])
   @@index([status])
 }
 
 model Proxy {
   id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   host         String
   port         Int
   country      String
@@ -93,11 +135,15 @@ model Proxy {
   accounts     Account[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+
+  @@index([userId])
 }
 
 model Lead {
   id                String           @id @default(cuid())
-  linkedinUrl       String           @unique
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedinUrl       String
   firstName         String?
   lastName          String?
   title             String?
@@ -112,6 +158,8 @@ model Lead {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
+  @@unique([userId, linkedinUrl])
+  @@index([userId])
   @@index([connectionStatus])
   @@index([company])
   @@index([accountId])
@@ -126,6 +174,7 @@ model Campaign {
   type                  CampaignType
   status                CampaignStatus         @default(ACTIVE)
   dailyLimit            Int                    @default(10)
+  connectionNoteTemplate String?               @db.Text
   leads                 CampaignLead[]
   messages              Message[]
   contentSignalConfig   ContentSignalConfig?
@@ -146,6 +195,9 @@ model CampaignLead {
   lastActionAt   DateTime?
   nextActionAt   DateTime?
   repliedAt      DateTime?
+  jobStatus      CampaignLeadJobStatus @default(IDLE)
+  queuedJobId    String?
+  lastJobError   String?     @db.Text
   postSignalId   String?
   postSignal     PostSignal? @relation(fields: [postSignalId], references: [id])
   createdAt      DateTime    @default(now())
@@ -154,6 +206,7 @@ model CampaignLead {
   @@unique([campaignId, leadId])
   @@index([nextActionAt])
   @@index([repliedAt])
+  @@index([jobStatus])
 }
 
 model Message {
@@ -211,6 +264,12 @@ model ContentSignalConfig {
   updatedAt              DateTime  @updatedAt
 
   @@index([keyword])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
 }
 
 model PostSignal {

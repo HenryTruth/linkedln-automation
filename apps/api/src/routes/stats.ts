@@ -3,7 +3,7 @@ import { prisma } from "@linkedin-automation/db";
 
 export const statsRouter: IRouter = Router();
 
-statsRouter.get("/", async (_req, res, next) => {
+statsRouter.get("/", async (req, res, next) => {
   try {
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
@@ -19,17 +19,36 @@ statsRouter.get("/", async (_req, res, next) => {
       openCheckpoints,
     ] = await Promise.all([
       prisma.activityLog.count({
-        where: { actionType: "connect", createdAt: { gte: todayStart } },
+        where: {
+          actionType: "connect",
+          createdAt: { gte: todayStart },
+          account: { userId: req.user.id },
+        },
       }),
       prisma.activityLog.count({
-        where: { actionType: "message", createdAt: { gte: todayStart } },
+        where: {
+          actionType: "message",
+          createdAt: { gte: todayStart },
+          account: { userId: req.user.id },
+        },
       }),
-      prisma.lead.count(),
-      prisma.lead.count({ where: { connectionStatus: "CONNECTED" } }),
-      prisma.campaignLead.count({ where: { repliedAt: { not: null } } }),
-      prisma.campaignLead.count(),
-      prisma.account.count({ where: { status: "ACTIVE" } }),
-      prisma.checkpoint.count({ where: { resolvedAt: null } }),
+      prisma.lead.count({ where: { userId: req.user.id } }),
+      prisma.lead.count({
+        where: { userId: req.user.id, connectionStatus: "CONNECTED" },
+      }),
+      prisma.campaignLead.count({
+        where: {
+          repliedAt: { not: null },
+          campaign: { account: { userId: req.user.id } },
+        },
+      }),
+      prisma.campaignLead.count({
+        where: { campaign: { account: { userId: req.user.id } } },
+      }),
+      prisma.account.count({ where: { userId: req.user.id, status: "ACTIVE" } }),
+      prisma.checkpoint.count({
+        where: { resolvedAt: null, account: { userId: req.user.id } },
+      }),
     ]);
 
     const replyRate =

@@ -12,11 +12,21 @@ import { renderTemplate, validateTemplate } from "@linkedin-automation/guards";
 
 export const campaignsRouter: IRouter = Router();
 
+const NOTE_MAX = 300;
+
 const CreateCampaignSchema = z.object({
   name: z.string().min(1),
   accountId: z.string(),
   type: z.nativeEnum(CampaignType),
   dailyLimit: z.number().int().min(1).max(40).default(10),
+  connectionNoteTemplate: z.string().max(NOTE_MAX).nullable().optional(),
+});
+
+const UpdateCampaignSchema = z.object({
+  name: z.string().min(1).optional(),
+  status: z.nativeEnum(CampaignStatus).optional(),
+  dailyLimit: z.number().int().min(1).max(40).optional(),
+  connectionNoteTemplate: z.string().max(NOTE_MAX).nullable().optional(),
 });
 
 const CreateMessageSchema = z.object({
@@ -26,9 +36,17 @@ const CreateMessageSchema = z.object({
   delayDays: z.number().int().min(0).default(3),
 });
 
-campaignsRouter.get("/", async (_req, res, next) => {
+const UpdateMessageSchema = z.object({
+  sequenceOrder: z.number().int().min(0).optional(),
+  bodyTemplate: z.string().min(1).optional(),
+  variantGroup: z.string().min(1).optional(),
+  delayDays: z.number().int().min(0).optional(),
+});
+
+campaignsRouter.get("/", async (req, res, next) => {
   try {
     const campaigns = await prisma.campaign.findMany({
+      where: { account: { userId: req.user.id } },
       include: { _count: { select: { leads: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -41,6 +59,10 @@ campaignsRouter.get("/", async (_req, res, next) => {
 campaignsRouter.post("/", async (req, res, next) => {
   try {
     const data = CreateCampaignSchema.parse(req.body);
+    await prisma.account.findFirstOrThrow({
+      where: { id: data.accountId, userId: req.user.id },
+      select: { id: true },
+    });
     const campaign = await prisma.campaign.create({ data });
     res.status(201).json(campaign);
   } catch (err) {
@@ -48,10 +70,62 @@ campaignsRouter.post("/", async (req, res, next) => {
   }
 });
 
+campaignsRouter.post("/:id/duplicate", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      name: z.string().min(1).optional(),
+    });
+    const { name } = schema.parse(req.body);
+    const source = await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
+      include: {
+        messages: { orderBy: { sequenceOrder: "asc" } },
+        contentSignalConfig: true,
+      },
+    });
+
+    const copy = await prisma.campaign.create({
+      data: {
+        name: name ?? `${source.name} Copy`,
+        accountId: source.accountId,
+        type: source.type,
+        status: CampaignStatus.PAUSED,
+        dailyLimit: source.dailyLimit,
+        messages: {
+          create: source.messages.map((message) => ({
+            sequenceOrder: message.sequenceOrder,
+            bodyTemplate: message.bodyTemplate,
+            variantGroup: message.variantGroup,
+            delayDays: message.delayDays,
+          })),
+        },
+        contentSignalConfig: source.contentSignalConfig
+          ? {
+              create: {
+                keyword: source.contentSignalConfig.keyword,
+                dateRangeDays: source.contentSignalConfig.dateRangeDays,
+                maxLeads: source.contentSignalConfig.maxLeads,
+                titleFilter: source.contentSignalConfig.titleFilter,
+                companyFilter: source.contentSignalConfig.companyFilter,
+                connectionNoteTemplate:
+                  source.contentSignalConfig.connectionNoteTemplate,
+              },
+            }
+          : undefined,
+      },
+      include: { _count: { select: { leads: true } } },
+    });
+
+    res.status(201).json(copy);
+  } catch (err) {
+    next(err);
+  }
+});
+
 campaignsRouter.get("/:id", async (req, res, next) => {
   try {
-    const campaign = await prisma.campaign.findUniqueOrThrow({
-      where: { id: req.params.id },
+    const campaign = await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
       include: {
         leads: { include: { lead: true, postSignal: true } },
         messages: { orderBy: { sequenceOrder: "asc" } },
@@ -66,9 +140,17 @@ campaignsRouter.get("/:id", async (req, res, next) => {
 
 campaignsRouter.put("/:id", async (req, res, next) => {
   try {
-    const campaign = await prisma.campaign.update({
-      where: { id: req.params.id },
-      data: req.body,
+    const data = UpdateCampaignSchema.parse(req.body);
+    const result = await prisma.campaign.updateMany({
+      where: { id: req.params.id, account: { userId: req.user.id } },
+      data,
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+    const campaign = await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
     });
     res.json(campaign);
   } catch (err) {
@@ -79,6 +161,10 @@ campaignsRouter.put("/:id", async (req, res, next) => {
 campaignsRouter.delete("/:id", async (req, res, next) => {
   try {
     const id = req.params.id;
+    await prisma.campaign.findFirstOrThrow({
+      where: { id, account: { userId: req.user.id } },
+      select: { id: true },
+    });
     // Delete children in FK-safe order — no cascade configured in schema
     await prisma.campaignLead.deleteMany({ where: { campaignId: id } });
     await prisma.postSignal.deleteMany({ where: { campaignId: id } });
@@ -95,6 +181,10 @@ campaignsRouter.delete("/:id", async (req, res, next) => {
 
 campaignsRouter.get("/:id/messages", async (req, res, next) => {
   try {
+    await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
+      select: { id: true },
+    });
     const messages = await prisma.message.findMany({
       where: { campaignId: req.params.id },
       orderBy: [{ sequenceOrder: "asc" }, { variantGroup: "asc" }],
@@ -109,6 +199,10 @@ campaignsRouter.post("/:id/messages", async (req, res, next) => {
   try {
     const data = CreateMessageSchema.parse(req.body);
     validateTemplate(data.bodyTemplate);
+    await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
+      select: { id: true },
+    });
     const message = await prisma.message.create({
       data: { campaignId: req.params.id, ...data },
     });
@@ -122,10 +216,14 @@ campaignsRouter.put("/:id/messages/reorder", async (req, res, next) => {
   try {
     const schema = z.object({ ids: z.array(z.string()) });
     const { ids } = schema.parse(req.body);
+    await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
+      select: { id: true },
+    });
     await Promise.all(
       ids.map((msgId, index) =>
         prisma.message.update({
-          where: { id: msgId },
+          where: { id: msgId, campaignId: req.params.id },
           data: { sequenceOrder: index },
         })
       )
@@ -138,12 +236,17 @@ campaignsRouter.put("/:id/messages/reorder", async (req, res, next) => {
 
 campaignsRouter.put("/:id/messages/:msgId", async (req, res, next) => {
   try {
-    if (req.body.bodyTemplate) {
-      validateTemplate(req.body.bodyTemplate);
+    const data = UpdateMessageSchema.parse(req.body);
+    if (data.bodyTemplate) {
+      validateTemplate(data.bodyTemplate);
     }
+    await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
+      select: { id: true },
+    });
     const message = await prisma.message.update({
-      where: { id: req.params.msgId },
-      data: req.body,
+      where: { id: req.params.msgId, campaignId: req.params.id },
+      data,
     });
     res.json(message);
   } catch (err) {
@@ -153,7 +256,11 @@ campaignsRouter.put("/:id/messages/:msgId", async (req, res, next) => {
 
 campaignsRouter.delete("/:id/messages/:msgId", async (req, res, next) => {
   try {
-    await prisma.message.delete({ where: { id: req.params.msgId } });
+    await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
+      select: { id: true },
+    });
+    await prisma.message.delete({ where: { id: req.params.msgId, campaignId: req.params.id } });
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -175,13 +282,18 @@ const AddLeadSchema = z.object({
 campaignsRouter.post("/:id/leads", async (req, res, next) => {
   try {
     const data = AddLeadSchema.parse(req.body);
-    const campaign = await prisma.campaign.findUniqueOrThrow({
-      where: { id: req.params.id },
+    const campaign = await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
     });
 
     const lead = await prisma.lead.upsert({
-      where: { linkedinUrl: data.linkedinUrl },
-      create: { ...data, accountId: campaign.accountId },
+      where: {
+        userId_linkedinUrl: {
+          userId: req.user.id,
+          linkedinUrl: data.linkedinUrl,
+        },
+      },
+      create: { ...data, userId: req.user.id, accountId: campaign.accountId },
       update: {},
     });
 
@@ -204,8 +316,8 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
     const schema = z.object({ searchUrl: z.string().url() });
     const { searchUrl } = schema.parse(req.body);
 
-    const campaign = await prisma.campaign.findUniqueOrThrow({
-      where: { id: req.params.id },
+    const campaign = await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
     });
 
     // Queue a search-scrape job to crawl results pages and discover profiles
@@ -225,13 +337,14 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
 
 campaignsRouter.post("/:id/start", async (req, res, next) => {
   try {
-    const fullCampaign = await prisma.campaign.findUniqueOrThrow({
-      where: { id: req.params.id },
+    const fullCampaign = await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
       include: {
         messages: { orderBy: { sequenceOrder: "asc" } },
         leads: {
           where: {
             OR: [{ nextActionAt: null }, { nextActionAt: { lte: new Date() } }],
+            jobStatus: { notIn: ["QUEUED", "RUNNING"] },
           },
           include: { lead: true },
         },
@@ -253,10 +366,29 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
       const lead = cl.lead;
 
       if (fullCampaign.type === CampaignType.CONNECT) {
-        await connectQueue.add("connect", {
-          accountId: fullCampaign.accountId,
-          leadId: lead.id,
-          linkedinUrl: lead.linkedinUrl,
+        const note = fullCampaign.connectionNoteTemplate
+          ? renderTemplate(fullCampaign.connectionNoteTemplate, {
+              firstName: lead.firstName,
+              lastName: lead.lastName,
+              company: lead.company,
+              title: lead.title,
+            })
+          : undefined;
+        const jobId = `campaign-${fullCampaign.id}-lead-${lead.id}-connect`;
+        await connectQueue.add(
+          "connect",
+          {
+            accountId: fullCampaign.accountId,
+            leadId: lead.id,
+            linkedinUrl: lead.linkedinUrl,
+            note,
+            campaignLeadId: cl.id,
+          },
+          { jobId }
+        );
+        await prisma.campaignLead.update({
+          where: { id: cl.id },
+          data: { jobStatus: "QUEUED", queuedJobId: jobId, lastJobError: null },
         });
       } else if (fullCampaign.type === CampaignType.MESSAGE) {
         // Assign a variant group to this lead (random from available groups)
@@ -297,20 +429,39 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
           data: { nextActionAt },
         });
 
-        await messageQueue.add("message", {
-          accountId: fullCampaign.accountId,
-          leadId: lead.id,
-          linkedinUrl: lead.linkedinUrl,
-          messageBody,
-          campaignLeadId: cl.id,
-          sequenceStep: 0,
-          company: lead.company,
+        const jobId = `campaign-${fullCampaign.id}-lead-${lead.id}-message-0`;
+        await messageQueue.add(
+          "message",
+          {
+            accountId: fullCampaign.accountId,
+            leadId: lead.id,
+            linkedinUrl: lead.linkedinUrl,
+            messageBody,
+            campaignLeadId: cl.id,
+            sequenceStep: 0,
+            company: lead.company,
+          },
+          { jobId }
+        );
+        await prisma.campaignLead.update({
+          where: { id: cl.id },
+          data: { jobStatus: "QUEUED", queuedJobId: jobId, lastJobError: null },
         });
       } else if (fullCampaign.type === CampaignType.SCRAPE) {
-        await scrapeQueue.add("scrape", {
-          accountId: fullCampaign.accountId,
-          linkedinUrl: lead.linkedinUrl,
-          campaignId: fullCampaign.id,
+        const jobId = `campaign-${fullCampaign.id}-lead-${lead.id}-scrape`;
+        await scrapeQueue.add(
+          "scrape",
+          {
+            accountId: fullCampaign.accountId,
+            linkedinUrl: lead.linkedinUrl,
+            campaignId: fullCampaign.id,
+            campaignLeadId: cl.id,
+          },
+          { jobId }
+        );
+        await prisma.campaignLead.update({
+          where: { id: cl.id },
+          data: { jobStatus: "QUEUED", queuedJobId: jobId, lastJobError: null },
         });
       }
 
@@ -329,20 +480,76 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
         });
         return;
       }
-      await contentSignalQueue.add("content-signal-scrape", {
-        accountId: fullCampaign.accountId,
-        campaignId: fullCampaign.id,
-        keyword: config.keyword,
-        dateRangeDays: config.dateRangeDays,
-        maxLeads: config.maxLeads,
-        titleFilter: config.titleFilter,
-        companyFilter: config.companyFilter,
-        connectionNoteTemplate: config.connectionNoteTemplate,
-      });
+      await contentSignalQueue.add(
+        "content-signal-scrape",
+        {
+          accountId: fullCampaign.accountId,
+          campaignId: fullCampaign.id,
+          keyword: config.keyword,
+          dateRangeDays: config.dateRangeDays,
+          maxLeads: config.maxLeads,
+          titleFilter: config.titleFilter,
+          companyFilter: config.companyFilter,
+          connectionNoteTemplate: config.connectionNoteTemplate,
+        },
+        { jobId: `campaign-${fullCampaign.id}-content-signal` }
+      );
       dispatched.push(`content-signal:${config.keyword}`);
     }
 
     res.json({ dispatched: dispatched.length, urls: dispatched });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /campaigns/:id/stats — conversion funnel for this campaign
+campaignsRouter.get("/:id/stats", async (req, res, next) => {
+  try {
+    const campaignId = req.params.id;
+    await prisma.campaign.findFirstOrThrow({
+      where: { id: campaignId, account: { userId: req.user.id } },
+      select: { id: true },
+    });
+
+    const [totalLeads, connected, pending, replied] = await Promise.all([
+      prisma.campaignLead.count({ where: { campaignId } }),
+      prisma.campaignLead.count({
+        where: { campaignId, lead: { connectionStatus: "CONNECTED" } },
+      }),
+      prisma.campaignLead.count({
+        where: { campaignId, lead: { connectionStatus: "PENDING" } },
+      }),
+      prisma.campaignLead.count({
+        where: { campaignId, repliedAt: { not: null } },
+      }),
+    ]);
+
+    const requestsSent = connected + pending;
+    const acceptanceRate =
+      requestsSent > 0 ? Math.round((connected / requestsSent) * 100) : 0;
+    const replyRate =
+      connected > 0 ? Math.round((replied / connected) * 100) : 0;
+
+    res.json({ totalLeads, connected, pending, replied, acceptanceRate, replyRate });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /campaigns/:id/leads/:leadId/mark-replied — manually mark a lead as replied
+campaignsRouter.post("/:id/leads/:leadId/mark-replied", async (req, res, next) => {
+  try {
+    await prisma.campaignLead.updateMany({
+      where: {
+        campaignId: req.params.id,
+        leadId: req.params.leadId,
+        campaign: { account: { userId: req.user.id } },
+        repliedAt: null,
+      },
+      data: { repliedAt: new Date() },
+    });
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

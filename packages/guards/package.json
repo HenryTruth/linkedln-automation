@@ -17,10 +17,11 @@
   },
   "dependencies": {
     "@linkedin-automation/db": "workspace:*",
-    "playwright": "^1.46.0"
+    "playwright": "^1.46.0",
+    "resend": "^4.8.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
   }
 }

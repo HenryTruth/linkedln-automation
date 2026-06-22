@@ -1,8 +1,7 @@
 import type { Job } from "bullmq";
 import { prisma, AccountStatus } from "@linkedin-automation/db";
 import {
-  checkDailyCap,
-  incrementDailyCap,
+  claimDailyCap,
   assertWarmUpAllowed,
   checkActionWindow,
   checkDuplicate,
@@ -17,7 +16,7 @@ import type { ConnectJobData } from "../queues.js";
 export async function connectProcessor(
   job: Job<ConnectJobData>
 ): Promise<void> {
-  const { accountId, linkedinUrl, note } = job.data;
+  const { accountId, linkedinUrl, note, campaignLeadId } = job.data;
 
   const [account, lead] = await Promise.all([
     prisma.account.findUniqueOrThrow({
@@ -35,12 +34,18 @@ export async function connectProcessor(
   }
 
   if (lead.blacklisted) {
+    if (campaignLeadId) {
+      await prisma.campaignLead.update({
+        where: { id: campaignLeadId },
+        data: { jobStatus: "SKIPPED", lastJobError: "Lead is blacklisted" },
+      });
+    }
     return; // silently skip — blacklisted leads are never acted on
   }
 
   try {
-    await checkDailyCap(accountId, "connection");
     assertWarmUpAllowed(accountId, account.warmUpPhase, "connection");
+    await claimDailyCap(accountId, "connection");
     await checkActionWindow(accountId);
     await checkSessionErrorRate(accountId);
     await checkDuplicate(accountId, linkedinUrl, "connect");
@@ -57,8 +62,6 @@ export async function connectProcessor(
     const page = await worker.getPage();
     await sendConnect(page, linkedinUrl, note);
 
-    await incrementDailyCap(accountId, "connection");
-
     await Promise.all([
       prisma.lead.update({
         where: { id: job.data.leadId },
@@ -72,7 +75,26 @@ export async function connectProcessor(
           result: "success",
         },
       }),
+      campaignLeadId
+        ? prisma.campaignLead.update({
+            where: { id: campaignLeadId },
+            data: {
+              jobStatus: "SENT",
+              lastActionAt: new Date(),
+              lastJobError: null,
+            },
+          })
+        : Promise.resolve(),
     ]);
+  } catch (err) {
+    const artifact = await worker.captureFailureArtifacts(`connect-${job.id ?? "unknown"}`);
+    if (campaignLeadId && artifact) {
+      await prisma.campaignLead.update({
+        where: { id: campaignLeadId },
+        data: { lastJobError: `${(err as Error).message}\nArtifact: ${artifact}` },
+      }).catch(() => {});
+    }
+    throw err;
   } finally {
     await worker.close();
   }

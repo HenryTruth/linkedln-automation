@@ -44,10 +44,19 @@ export async function scrapeProfile(
   await delays.betweenActions();
 
   const profile = await extractProfile(page);
+  const account = await prisma.account.findUniqueOrThrow({
+    where: { id: accountId },
+    select: { userId: true },
+  });
 
   await prisma.lead.upsert({
-    where: { linkedinUrl },
-    create: { linkedinUrl, accountId, ...profile },
+    where: {
+      userId_linkedinUrl: {
+        userId: account.userId,
+        linkedinUrl,
+      },
+    },
+    create: { linkedinUrl, accountId, userId: account.userId, ...profile },
     update: { ...profile },
   });
 }

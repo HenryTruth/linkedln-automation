@@ -1,10 +1,30 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
+const TOKEN_KEY = "linkedin_auto_token";
+
+function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function setAuthToken(token: string) {
+  window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearAuthToken() {
+  window.localStorage.removeItem(TOKEN_KEY);
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAuthToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init?.headers,
+    },
   });
   if (!res.ok) {
     const body = await res.text();
@@ -31,12 +51,37 @@ export interface Proxy {
   lastSessionStartedAt?: string | null;
 }
 
+export type CapKey = "connection" | "message" | "profileView" | "searchPage";
+
+export const SYSTEM_CAPS: Record<CapKey, number> = {
+  connection: 15,
+  message: 40,
+  profileView: 60,
+  searchPage: 10,
+};
+
+export const HARD_CEILING: Record<CapKey, number> = {
+  connection: 50,
+  message: 150,
+  profileView: 250,
+  searchPage: 40,
+};
+
+export const CAP_LABELS: Record<CapKey, string> = {
+  connection: "Connections",
+  message: "Messages",
+  profileView: "Profile Views",
+  searchPage: "Search Pages",
+};
+
 export interface Account {
   id: string;
   email: string;
   status: "ACTIVE" | "PAUSED" | "RESTRICTED";
   warmUpPhase: "MANUAL" | "WEEK2" | "WEEK3" | "WEEK4" | "FULL";
   dailyCaps: Record<string, Record<string, number>>;
+  maxDailyCaps: Record<CapKey, number>;
+  cookiesConsentAt?: string | null;
   timezone: string;
   proxy?: Proxy | null;
   createdAt: string;
@@ -49,6 +94,7 @@ export interface Campaign {
   type: "CONNECT" | "MESSAGE" | "SCRAPE" | "CONTENT_SIGNAL";
   status: "ACTIVE" | "PAUSED" | "COMPLETED";
   dailyLimit: number;
+  connectionNoteTemplate?: string | null;
   _count?: { leads: number };
   createdAt: string;
 }
@@ -67,6 +113,8 @@ export interface Lead {
   createdAt: string;
 }
 
+export type CampaignLeadJobStatus = "IDLE" | "QUEUED" | "RUNNING" | "SENT" | "SKIPPED" | "FAILED";
+
 export interface CampaignLead {
   id: string;
   campaignId: string;
@@ -76,6 +124,8 @@ export interface CampaignLead {
   lastActionAt?: string | null;
   nextActionAt?: string | null;
   repliedAt?: string | null;
+  jobStatus: CampaignLeadJobStatus;
+  lastJobError?: string | null;
   postSignalId?: string | null;
   postSignal?: PostSignal | null;
   lead: Lead;
@@ -171,9 +221,68 @@ export interface ActivityPage {
   limit: number;
 }
 
+export interface CampaignStats {
+  totalLeads: number;
+  connected: number;
+  pending: number;
+  replied: number;
+  acceptanceRate: number;
+  replyRate: number;
+}
+
+export interface AppSettings {
+  alert_webhook_url: string | null;
+  resend_api_key: string | null;
+  alert_email_to: string | null;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  plan: "FREE_FOREVER" | string;
+  hasAllFeatures: boolean;
+}
+
+export type JobState = "failed" | "waiting" | "active" | "delayed" | "completed";
+
+export interface QueueJob {
+  id?: string;
+  queue: string;
+  name: string;
+  state: JobState;
+  attemptsMade: number;
+  failedReason: string | null;
+  timestamp: number;
+  processedOn: number | null;
+  finishedOn: number | null;
+  data: Record<string, unknown>;
+}
+
+export interface JobsPage {
+  jobs: QueueJob[];
+  state: JobState;
+  queue: string;
+  limit: number;
+}
+
 // ─── API functions ─────────────────────────────────────────────────────────────
 
 export const api = {
+  auth: {
+    signup: (data: { email: string; password: string }) =>
+      apiFetch<{ user: AuthUser; token: string; expiresAt: string }>("/auth/signup", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    login: (data: { email: string; password: string }) =>
+      apiFetch<{ user: AuthUser; token: string; expiresAt: string }>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    me: () => apiFetch<{ user: AuthUser; expiresAt: string }>("/auth/me"),
+    logout: () => apiFetch<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+  },
+
   stats: {
     get: () => apiFetch<Stats>("/stats"),
   },
@@ -189,13 +298,18 @@ export const api = {
       apiFetch<Account>(`/accounts/${id}/pause`, { method: "POST" }),
     resume: (id: string) =>
       apiFetch<Account>(`/accounts/${id}/resume`, { method: "POST" }),
-    uploadCookies: (id: string, cookies: string) =>
+    uploadCookies: (id: string, cookies: string, consent: boolean) =>
       apiFetch<{ ok: boolean }>(`/accounts/${id}/cookies`, {
         method: "POST",
-        body: JSON.stringify({ cookies }),
+        body: JSON.stringify({ cookies, consent }),
       }),
     advanceWarmup: (id: string) =>
       apiFetch<Account>(`/accounts/${id}/advance-warmup`, { method: "POST" }),
+    updateCaps: (id: string, caps: Partial<Record<CapKey, number>>) =>
+      apiFetch<Account>(`/accounts/${id}/caps`, {
+        method: "PUT",
+        body: JSON.stringify(caps),
+      }),
   },
 
   proxies: {
@@ -233,6 +347,7 @@ export const api = {
       accountId: string;
       type: string;
       dailyLimit?: number;
+      connectionNoteTemplate?: string | null;
     }) =>
       apiFetch<Campaign>("/campaigns", {
         method: "POST",
@@ -240,7 +355,7 @@ export const api = {
       }),
     update: (
       id: string,
-      data: Partial<Pick<Campaign, "name" | "status" | "dailyLimit">>
+      data: Partial<Pick<Campaign, "name" | "status" | "dailyLimit" | "connectionNoteTemplate">>
     ) =>
       apiFetch<Campaign>(`/campaigns/${id}`, {
         method: "PUT",
@@ -271,6 +386,11 @@ export const api = {
       apiFetch<{ queued: number }>(`/campaigns/${campaignId}/search-urls`, {
         method: "POST",
         body: JSON.stringify({ searchUrl }),
+      }),
+    stats: (id: string) => apiFetch<CampaignStats>(`/campaigns/${id}/stats`),
+    markReplied: (campaignId: string, leadId: string) =>
+      apiFetch<{ ok: boolean }>(`/campaigns/${campaignId}/leads/${leadId}/mark-replied`, {
+        method: "POST",
       }),
     messages: {
       create: (
@@ -342,6 +462,19 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    exportUrl: (params?: {
+      status?: string;
+      company?: string;
+      campaignId?: string;
+      keyword?: string;
+    }) => {
+      const q = new URLSearchParams();
+      if (params?.status) q.set("status", params.status);
+      if (params?.company) q.set("company", params.company);
+      if (params?.campaignId) q.set("campaignId", params.campaignId);
+      if (params?.keyword) q.set("keyword", params.keyword);
+      return `${API_BASE}/leads/export?${q}`;
+    },
     blacklist: (id: string, reason?: string) =>
       apiFetch<Lead>(`/leads/${id}/blacklist`, {
         method: "POST",
@@ -400,6 +533,27 @@ export const api = {
       if (params?.accountId) q.set("accountId", params.accountId);
       if (params?.actionType) q.set("actionType", params.actionType);
       return `${API_BASE}/activity/export?${q}`;
+    },
+  },
+
+  settings: {
+    get: () => apiFetch<AppSettings>("/settings"),
+    update: (data: Partial<AppSettings>) =>
+      apiFetch<{ ok: boolean }>("/settings", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    testAlert: () =>
+      apiFetch<{ ok: boolean }>("/settings/test-alert", { method: "POST" }),
+  },
+
+  jobs: {
+    list: (params?: { queue?: string; state?: JobState; limit?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.queue) q.set("queue", params.queue);
+      if (params?.state) q.set("state", params.state);
+      if (params?.limit) q.set("limit", String(params.limit));
+      return apiFetch<JobsPage>(`/jobs?${q}`);
     },
   },
 };

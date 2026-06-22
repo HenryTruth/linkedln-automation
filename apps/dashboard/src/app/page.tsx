@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HeroCTA } from "@/components/HeroCTA";
 
 const stats = [
   { value: "15/day", label: "connection safety cap" },
@@ -66,6 +67,7 @@ const safetyControls = [
   "Proxy health monitoring",
   "Open checkpoint alerts",
   "Automatic pause on risk",
+  "Webhook & email alert delivery",
 ];
 
 const productAreas = [
@@ -93,6 +95,11 @@ const productAreas = [
     title: "Checkpoints",
     text: "Resolve LinkedIn security checks with a clear history of detected, resolved, and unresolved events.",
     href: "/checkpoints",
+  },
+  {
+    title: "Jobs",
+    text: "Inspect queue state, failed reasons, retry attempts, and job payloads across every automation worker.",
+    href: "/jobs",
   },
 ];
 
@@ -131,20 +138,7 @@ export default function LandingPage() {
               sequence building, content-signal prospecting, health monitoring,
               and fast checkpoint response.
             </p>
-            <div
-              className="animate-fade-up mt-8 flex flex-wrap gap-3"
-              style={{ animationDelay: "0.24s" }}
-            >
-              <Link href="/dashboard" className="btn-accent">
-                Enter Dashboard
-              </Link>
-              <Link
-                href="/campaigns/new"
-                className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/[0.15]"
-              >
-                Create Campaign
-              </Link>
-            </div>
+            <HeroCTA />
           </div>
 
           <div className="mt-14 grid gap-4 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
@@ -391,7 +385,7 @@ export default function LandingPage() {
             Explore dashboard
           </Link>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {productAreas.map((area) => (
             <Link
               key={area.title}
@@ -414,6 +408,63 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+        <div className="text-center mb-10">
+          <p className="page-kicker">Pricing</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+            One plan. Everything included.
+          </h2>
+          <p className="mt-4 text-sm leading-6 text-slate-600 max-w-xl mx-auto">
+            No tiers, no feature gates, no credit card required. Every account gets the full platform — campaigns, automation, safety guards, and all.
+          </p>
+        </div>
+        <div className="mx-auto max-w-lg">
+          <div className="relative overflow-hidden rounded-3xl bg-slate-950 px-8 py-10 text-white shadow-2xl shadow-slate-900/20">
+            <div className="absolute -right-10 -top-10 h-56 w-56 rounded-full bg-teal-400/20 blur-3xl" />
+            <div className="relative">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex rounded-full bg-teal-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-teal-300 ring-1 ring-teal-300/20">
+                  Free Forever
+                </span>
+                <span className="text-4xl font-bold">$0</span>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-slate-300">
+                Full access. No expiry. No hidden upgrade prompt. If pricing ever changes, existing accounts are grandfathered.
+              </p>
+              <ul className="mt-6 space-y-3">
+                {[
+                  "Unlimited campaigns (Connect, Message, Scrape, Content Signal)",
+                  "Unlimited lead imports and CSV exports",
+                  "Multi-account management with proxy support",
+                  "Warm-up phase enforcement and daily cap controls",
+                  "Anomaly detection and checkpoint alerts",
+                  "Activity log, reply tracking, and health monitoring",
+                  "Job queue visibility with per-lead failure diagnostics",
+                  "Webhook and email alert delivery (Slack, Discord, Resend)",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-3 text-sm text-slate-200">
+                    <span className="mt-1 h-4 w-4 shrink-0 rounded-full bg-teal-400/20 text-center text-[10px] font-bold text-teal-300">✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8">
+                <Link href="/signup" className="btn-accent w-full text-center block">
+                  Get started free
+                </Link>
+                <p className="mt-3 text-center text-xs text-slate-400">
+                  Already have an account?{" "}
+                  <Link href="/login" className="text-teal-300 hover:text-teal-200 font-medium">
+                    Sign in
+                  </Link>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
         <div className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-10 text-white shadow-2xl shadow-slate-900/15 lg:px-10">
           <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-teal-400/20 blur-3xl" />
@@ -428,14 +479,14 @@ export default function LandingPage() {
               </h2>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href="/campaigns/new" className="btn-accent">
-                Create Campaign
+              <Link href="/signup" className="btn-accent">
+                Get started free
               </Link>
               <Link
-                href="/accounts"
+                href="/login"
                 className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/[0.15]"
               >
-                Add Account
+                Sign in
               </Link>
             </div>
           </div>
@@ -487,6 +538,12 @@ export default function LandingPage() {
               </Link>
               <Link href="/checkpoints" className="hover:text-slate-950">
                 Checkpoints
+              </Link>
+              <Link href="/jobs" className="hover:text-slate-950">
+                Jobs
+              </Link>
+              <Link href="/settings" className="hover:text-slate-950">
+                Settings
               </Link>
               <Link href="/campaigns/new" className="hover:text-slate-950">
                 New Campaign

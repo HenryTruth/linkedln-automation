@@ -1,5 +1,4 @@
 import type { Page } from "playwright";
-import { prisma, ConnectionStatus } from "@linkedin-automation/db";
 import { delays, humanDelay } from "@linkedin-automation/guards";
 import { navigateTo } from "./navigate.js";
 
@@ -35,9 +34,4 @@ export async function sendConnect(
   const sendBtn = page.locator("button:has-text('Send'), button:has-text('Send without a note')").first();
   await sendBtn.click();
   await humanDelay(2_000, 4_000);
-
-  await prisma.lead.updateMany({
-    where: { linkedinUrl },
-    data: { connectionStatus: ConnectionStatus.PENDING },
-  });
 }

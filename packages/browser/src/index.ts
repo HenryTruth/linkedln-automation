@@ -14,5 +14,7 @@ export { sendConnect } from "./actions/sendConnect.js";
 export { sendMessage } from "./actions/sendMessage.js";
 export { withdrawPendingConnections } from "./actions/withdrawConnect.js";
 export { checkReply } from "./actions/checkReply.js";
+export { checkConnectionStatus } from "./actions/checkConnectionStatus.js";
+export type { DetectedConnectionStatus } from "./actions/checkConnectionStatus.js";
 export { scrapeContentSearch } from "./actions/scrapeContentSearch.js";
 export type { CollectedLead } from "./actions/scrapeContentSearch.js";

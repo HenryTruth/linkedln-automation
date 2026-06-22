@@ -2,10 +2,34 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, type CampaignDetail, type Lead } from "@/lib/api";
+import { api, type CampaignDetail, type CampaignLeadJobStatus, type CampaignStats, type Lead } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { SequenceBuilder } from "@/components/SequenceBuilder";
 import { ContentSignalPanel } from "@/components/ContentSignalPanel";
+
+const JOB_STATUS_STYLES: Record<CampaignLeadJobStatus, string> = {
+  IDLE:    "bg-slate-100 text-slate-500",
+  QUEUED:  "bg-amber-100 text-amber-700",
+  RUNNING: "bg-blue-100 text-blue-700",
+  SENT:    "bg-emerald-100 text-emerald-700",
+  SKIPPED: "bg-slate-100 text-slate-400",
+  FAILED:  "bg-red-100 text-red-700",
+};
+
+function JobStatusBadge({ status, error }: { status: CampaignLeadJobStatus; error?: string | null }) {
+  return (
+    <div>
+      <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${JOB_STATUS_STYLES[status]}`}>
+        {status}
+      </span>
+      {error && (
+        <p className="mt-0.5 max-w-xs truncate text-[11px] text-red-500" title={error}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 // Warning shown after adding a lead whose status doesn't match the campaign type
 function statusMismatchWarning(
@@ -30,6 +54,7 @@ export default function CampaignDetailPage() {
   const router = useRouter();
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
+  const [stats, setStats] = useState<CampaignStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,6 +69,11 @@ export default function CampaignDetailPage() {
   const [editLimit, setEditLimit] = useState(10);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Connection note editor state
+  const [noteText, setNoteText] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
 
   // Add-lead / add-profile form
   const [leadUrl, setLeadUrl] = useState("");
@@ -62,8 +92,17 @@ export default function CampaignDetailPage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showSearchForm, setShowSearchForm] = useState(false);
 
+  // Bulk CSV import
+  const [showCsvImport, setShowCsvImport] = useState(false);
+  const [csvText, setCsvText] = useState("");
+  const [importingCsv, setImportingCsv] = useState(false);
+  const [csvResult, setCsvResult] = useState<{ imported: number; errors: { row: number; error: string }[] } | null>(null);
+
   function reload() {
-    return api.campaigns.get(id).then(setCampaign);
+    return Promise.all([
+      api.campaigns.get(id).then(setCampaign),
+      api.campaigns.stats(id).then(setStats).catch(() => {}),
+    ]);
   }
 
   useEffect(() => {
@@ -72,10 +111,36 @@ export default function CampaignDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  useEffect(() => {
+    if (campaign?.type === "CONNECT") {
+      setNoteText(campaign.connectionNoteTemplate ?? "");
+    }
+  }, [campaign?.id]);
+
   function startEditing() {
     setEditName(campaign!.name);
     setEditLimit(campaign!.dailyLimit);
     setEditing(true);
+  }
+
+  async function handleSaveNote() {
+    setNoteSaving(true);
+    setNoteSaved(false);
+    try {
+      await api.campaigns.update(id, {
+        connectionNoteTemplate: noteText.trim() || null,
+      });
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 3000);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setNoteSaving(false);
+    }
+  }
+
+  function insertNoteVariable(v: string) {
+    setNoteText((t) => t + v);
   }
 
   async function handleSaveEdit(e: React.FormEvent) {
@@ -186,6 +251,24 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handleImportCsv(e: React.FormEvent) {
+    e.preventDefault();
+    setImportingCsv(true);
+    setCsvResult(null);
+    try {
+      const result = await api.leads.importCsv({ csvText, campaignId: id });
+      setCsvResult(result);
+      if (result.imported > 0) {
+        setCsvText("");
+        await reload();
+      }
+    } catch (e) {
+      setCsvResult({ imported: 0, errors: [{ row: 0, error: (e as Error).message }] });
+    } finally {
+      setImportingCsv(false);
+    }
+  }
+
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
   if (error || !campaign)
     return <p className="text-sm text-red-600">{error ?? "Not found"}</p>;
@@ -193,6 +276,7 @@ export default function CampaignDetailPage() {
   const isMessage = campaign.type === "MESSAGE";
   const isScrape = campaign.type === "SCRAPE";
   const isContentSignal = campaign.type === "CONTENT_SIGNAL";
+  const isConnect = campaign.type === "CONNECT";
 
   return (
     <div className="space-y-8">
@@ -307,6 +391,123 @@ export default function CampaignDetailPage() {
         )}
       </section>
 
+      {/* Conversion funnel stats */}
+      {stats && (
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {[
+            { label: "Total leads", value: stats.totalLeads, color: "text-slate-950" },
+            { label: "Pending", value: stats.pending, color: "text-amber-600" },
+            { label: "Connected", value: stats.connected, color: "text-teal-700" },
+            { label: "Replied", value: stats.replied, color: "text-emerald-700" },
+            { label: "Acceptance", value: `${stats.acceptanceRate}%`, color: stats.acceptanceRate >= 30 ? "text-emerald-700" : "text-amber-600" },
+            { label: "Reply rate", value: `${stats.replyRate}%`, color: stats.replyRate >= 10 ? "text-emerald-700" : "text-slate-600" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="app-panel p-4 text-center">
+              <p className={`text-2xl font-semibold ${color}`}>{value}</p>
+              <p className="mt-1 text-xs font-medium text-slate-400">{label}</p>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Connection note editor (CONNECT campaigns only) */}
+      {isConnect && (
+        <section className="app-panel p-6">
+          <div className="mb-4">
+            <p className="page-kicker">Personalisation</p>
+            <h2 className="mt-1 text-xl font-semibold text-slate-950">
+              Connection Note
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+              Sent with every connection request in this campaign. Use dynamic
+              variables to personalise each note automatically. LinkedIn limits
+              notes to{" "}
+              <span className="font-semibold text-slate-700">
+                300 characters
+              </span>
+              . Leave blank to send without a note.
+            </p>
+          </div>
+
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {[
+              { label: "{{firstName}}", tip: "e.g. Sarah" },
+              { label: "{{lastName}}", tip: "e.g. Johnson" },
+              { label: "{{company}}", tip: "e.g. Acme Corp" },
+              { label: "{{title}}", tip: "e.g. Head of Product" },
+            ].map(({ label, tip }) => (
+              <button
+                key={label}
+                type="button"
+                title={tip}
+                onClick={() => insertNoteVariable(label)}
+                className="rounded-lg border border-teal-200 bg-teal-50 px-2 py-0.5 font-mono text-xs font-semibold text-teal-700 hover:bg-teal-100"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <textarea
+            rows={5}
+            maxLength={300}
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            placeholder={`Hi {{firstName}}, I came across your work at {{company}} and would love to connect!`}
+            className="field w-full resize-none font-mono text-sm"
+          />
+
+          <div className="mt-2 flex items-center justify-between gap-4">
+            <p
+              className={`text-xs font-medium ${
+                noteText.length > 280 ? "text-red-500" : "text-slate-400"
+              }`}
+            >
+              {noteText.length}/300
+            </p>
+            <div className="flex items-center gap-3">
+              {noteSaved && (
+                <span className="text-xs font-semibold text-emerald-600">
+                  Saved
+                </span>
+              )}
+              {noteText.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setNoteText("")}
+                  className="text-xs font-semibold text-slate-400 hover:text-red-500"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveNote}
+                disabled={noteSaving}
+                className="btn-primary px-4 py-1.5 text-sm"
+              >
+                {noteSaving ? "Saving..." : "Save note"}
+              </button>
+            </div>
+          </div>
+
+          {noteText.trim() && (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="mb-1 text-xs font-semibold text-slate-400">
+                Preview (example lead)
+              </p>
+              <p className="text-sm text-slate-700">
+                {noteText
+                  .replace(/\{\{firstName\}\}/g, "Sarah")
+                  .replace(/\{\{lastName\}\}/g, "Johnson")
+                  .replace(/\{\{company\}\}/g, "Acme Corp")
+                  .replace(/\{\{title\}\}/g, "Head of Product")}
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Content Signal config + post signal list */}
       {isContentSignal && (
         <section>
@@ -385,22 +586,37 @@ export default function CampaignDetailPage() {
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {isScrape && (
               <button
                 onClick={() => {
                   setShowSearchForm((v) => !v);
                   setShowLeadForm(false);
+                  setShowCsvImport(false);
                 }}
                 className="btn-secondary px-3 py-1.5 text-violet-700"
               >
                 {showSearchForm ? "Cancel" : "Search URL"}
               </button>
             )}
+            {!isScrape && (
+              <button
+                onClick={() => {
+                  setShowCsvImport((v) => !v);
+                  setShowLeadForm(false);
+                  setShowSearchForm(false);
+                  setCsvResult(null);
+                }}
+                className="btn-secondary px-3 py-1.5 text-indigo-700"
+              >
+                {showCsvImport ? "Cancel" : "Import CSV"}
+              </button>
+            )}
             <button
               onClick={() => {
                 setShowLeadForm((v) => !v);
                 setShowSearchForm(false);
+                setShowCsvImport(false);
               }}
               className="btn-secondary px-3 py-1.5 text-teal-700"
             >
@@ -425,6 +641,53 @@ export default function CampaignDetailPage() {
               Close
             </button>
           </div>
+        )}
+
+        {/* Bulk CSV import */}
+        {showCsvImport && (
+          <form
+            onSubmit={handleImportCsv}
+            className="mb-4 space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4"
+          >
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">
+                Paste CSV
+              </label>
+              <p className="mb-2 text-xs leading-5 text-slate-500">
+                Required column: <code className="rounded bg-white px-1 font-mono">linkedinUrl</code>.
+                Optional: <code className="rounded bg-white px-1 font-mono">firstName</code>,{" "}
+                <code className="rounded bg-white px-1 font-mono">lastName</code>,{" "}
+                <code className="rounded bg-white px-1 font-mono">company</code>,{" "}
+                <code className="rounded bg-white px-1 font-mono">title</code>.
+                All imported leads are added to this campaign.
+              </p>
+              <textarea
+                required
+                rows={6}
+                value={csvText}
+                onChange={(e) => setCsvText(e.target.value)}
+                placeholder={"linkedinUrl,firstName,lastName,company,title\nhttps://linkedin.com/in/alice,Alice,Smith,Acme,CEO"}
+                className="field w-full font-mono text-xs"
+              />
+            </div>
+            {csvResult && (
+              <div className={`rounded-xl border p-3 text-sm ${csvResult.errors.length > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                {csvResult.imported > 0 && (
+                  <p className="font-semibold text-emerald-700">{csvResult.imported} lead{csvResult.imported !== 1 ? "s" : ""} imported.</p>
+                )}
+                {csvResult.errors.length > 0 && (
+                  <ul className="mt-1 space-y-1 text-amber-800">
+                    {csvResult.errors.map((e, i) => (
+                      <li key={i} className="text-xs">Row {e.row}: {e.error}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            <button type="submit" disabled={importingCsv} className="btn-primary">
+              {importingCsv ? "Importing…" : "Import leads"}
+            </button>
+          </form>
         )}
 
         {/* Add search URL form (SCRAPE only) */}
@@ -531,8 +794,8 @@ export default function CampaignDetailPage() {
             <thead className="table-head">
               <tr>
                 {(isScrape
-                  ? ["Profile URL", "Name", "Company", "Title", "Stage"]
-                  : ["Name", "Company", "Connection", "Stage", "Replied", "Last Action"]
+                  ? ["Profile URL", "Name", "Company", "Title", "Stage", "Status"]
+                  : ["Name", "Company", "Connection", "Stage", "Replied", "Last Action", "Status"]
                 ).map((h) => (
                   <th
                     key={h}
@@ -547,7 +810,7 @@ export default function CampaignDetailPage() {
               {campaign.leads.length === 0 && (
                 <tr>
                   <td
-                    colSpan={isScrape ? 5 : 6}
+                    colSpan={isScrape ? 6 : 7}
                     className="px-6 py-10 text-center text-sm text-slate-400"
                   >
                     {isScrape
@@ -588,6 +851,9 @@ export default function CampaignDetailPage() {
                       </td>
                       <td className="table-cell text-slate-600">
                         Step {cl.stage}
+                      </td>
+                      <td className="table-cell">
+                        <JobStatusBadge status={cl.jobStatus} error={cl.lastJobError} />
                       </td>
                     </>
                   ) : (
@@ -637,6 +903,9 @@ export default function CampaignDetailPage() {
                           ? new Date(cl.lastActionAt).toLocaleDateString()
                           : "-"}
                       </td>
+                      <td className="table-cell">
+                        <JobStatusBadge status={cl.jobStatus} error={cl.lastJobError} />
+                      </td>
                     </>
                   )}
                 </tr>
@@ -645,7 +914,7 @@ export default function CampaignDetailPage() {
               {isContentSignal && campaign.leads.map((cl) =>
                 cl.postSignal ? (
                   <tr key={`${cl.id}-signal`} className="bg-teal-50/40">
-                    <td colSpan={6} className="px-6 py-2">
+                    <td colSpan={7} className="px-6 py-2">
                       <div className="flex items-start gap-2 rounded-2xl border border-teal-100 bg-teal-50 p-3 text-xs text-teal-800">
                         <span className="shrink-0 font-medium">Post:</span>
                         <span className="italic line-clamp-2">&quot;{cl.postSignal.excerpt}&quot;</span>

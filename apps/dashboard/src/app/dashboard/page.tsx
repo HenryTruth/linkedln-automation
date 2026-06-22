@@ -13,19 +13,27 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    Promise.all([
+  function fetchAll() {
+    return Promise.all([
       api.stats.get(),
       api.activity.list({ limit: 10 }),
       api.checkpoints.list({ unresolved: true }),
-    ])
-      .then(([s, a, c]) => {
-        setStats(s);
-        setActivity(a.logs);
-        setOpenCheckpoints(c);
-      })
+    ]).then(([s, a, c]) => {
+      setStats(s);
+      setActivity(a.logs);
+      setOpenCheckpoints(c);
+    });
+  }
+
+  useEffect(() => {
+    fetchAll()
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
+
+    const id = setInterval(() => {
+      fetchAll().catch(() => {});
+    }, 30_000);
+    return () => clearInterval(id);
   }, []);
 
   if (loading)

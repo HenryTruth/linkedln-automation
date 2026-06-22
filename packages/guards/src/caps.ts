@@ -1,5 +1,6 @@
-import { prisma } from "@linkedin-automation/db";
-import { DailyCapExceededError } from "./errors.js";
+import { prisma, type WarmUpPhase } from "@linkedin-automation/db";
+import { DailyCapExceededError, WarmUpError } from "./errors.js";
+import { warmUpCap } from "./warmup.js";
 
 export type ActionType =
   | "connection"
@@ -7,11 +8,21 @@ export type ActionType =
   | "profileView"
   | "searchPage";
 
-const BASE_CAPS: Record<ActionType, number> = {
+// Conservative defaults for new / unknown accounts.
+// Per-account overrides stored in Account.maxDailyCaps take precedence.
+export const SYSTEM_CAPS: Record<ActionType, number> = {
   connection: 15,
   message: 40,
   profileView: 60,
   searchPage: 10,
+};
+
+// Hard ceilings — no account can exceed these regardless of override.
+export const HARD_CEILING: Record<ActionType, number> = {
+  connection: 50,
+  message: 150,
+  profileView: 250,
+  searchPage: 40,
 };
 
 const ACTIVE_HOURS = { start: 8, end: 19 }; // 8am–7pm
@@ -35,12 +46,59 @@ function isActiveHour(timezone: string): boolean {
   }
 }
 
-async function getEffectiveCap(accountId: string, action: ActionType): Promise<number> {
-  const base = isWeekend() ? Math.floor(BASE_CAPS[action] * 0.5) : BASE_CAPS[action];
+type CapAccount = {
+  dailyCaps?: unknown;
+  maxDailyCaps?: unknown;
+  timezone: string;
+  warmUpPhase: WarmUpPhase;
+};
+
+type CapReader = {
+  checkpoint: {
+    count: typeof prisma.checkpoint.count;
+  };
+};
+
+function asCaps(value: unknown): Record<string, Record<string, number>> {
+  return (value as Record<string, Record<string, number>> | null) ?? {};
+}
+
+function asOverrides(value: unknown): Record<string, number> {
+  return (value as Record<string, number> | null) ?? {};
+}
+
+async function getEffectiveCap(
+  accountId: string,
+  action: ActionType
+): Promise<number> {
+  const account = await prisma.account.findUniqueOrThrow({
+    where: { id: accountId },
+    select: { maxDailyCaps: true, warmUpPhase: true },
+  });
+
+  return effectiveCapFromAccount(accountId, action, account, prisma);
+}
+
+async function effectiveCapFromAccount(
+  accountId: string,
+  action: ActionType,
+  account: Pick<CapAccount, "maxDailyCaps" | "warmUpPhase">,
+  tx: CapReader
+): Promise<number> {
+  const overrides = asOverrides(account.maxDailyCaps);
+  const configured = overrides[action] ?? SYSTEM_CAPS[action];
+  // Clamp to the hard ceiling so no UI mistake can exceed safe bounds
+  const clamped = Math.min(configured, HARD_CEILING[action]);
+  const phaseCap = warmUpCap(account.warmUpPhase, action);
+  if (phaseCap === 0) {
+    throw new WarmUpError(accountId, action, account.warmUpPhase);
+  }
+  const warmupClamped = Math.min(clamped, phaseCap);
+  const base = isWeekend() ? Math.floor(warmupClamped * 0.5) : warmupClamped;
 
   // Guard 6: accounts with 2+ checkpoints in the last 30 days run at 50% of normal caps
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const recentCheckpoints = await prisma.checkpoint.count({
+  const recentCheckpoints = await tx.checkpoint.count({
     where: { accountId, detectedAt: { gte: cutoff } },
   });
 
@@ -60,7 +118,7 @@ export async function remainingDailyCap(
     select: { dailyCaps: true },
   });
 
-  const caps = account.dailyCaps as Record<string, Record<string, number>>;
+  const caps = asCaps(account.dailyCaps);
   const today = todayKey();
   const used = caps?.[today]?.[action] ?? 0;
   const limit = await getEffectiveCap(accountId, action);
@@ -73,7 +131,7 @@ export async function checkDailyCap(
 ): Promise<void> {
   const account = await prisma.account.findUniqueOrThrow({
     where: { id: accountId },
-    select: { dailyCaps: true, timezone: true },
+    select: { dailyCaps: true, timezone: true, maxDailyCaps: true },
   });
 
   if (!isActiveHour(account.timezone)) {
@@ -83,7 +141,7 @@ export async function checkDailyCap(
     );
   }
 
-  const caps = account.dailyCaps as Record<string, Record<string, number>>;
+  const caps = asCaps(account.dailyCaps);
   const today = todayKey();
   const used = caps?.[today]?.[action] ?? 0;
   const limit = await getEffectiveCap(accountId, action);
@@ -102,7 +160,7 @@ export async function incrementDailyCap(
     select: { dailyCaps: true },
   });
 
-  const caps = (account.dailyCaps as Record<string, Record<string, number>>) ?? {};
+  const caps = asCaps(account.dailyCaps);
   const today = todayKey();
 
   if (!caps[today]) caps[today] = {};
@@ -116,5 +174,51 @@ export async function incrementDailyCap(
   await prisma.account.update({
     where: { id: accountId },
     data: { dailyCaps: caps },
+  });
+}
+
+export async function claimDailyCap(
+  accountId: string,
+  action: ActionType
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<CapAccount[]>`
+      SELECT "dailyCaps", "maxDailyCaps", "timezone", "warmUpPhase"
+      FROM "Account"
+      WHERE "id" = ${accountId}
+      FOR UPDATE
+    `;
+    const account = rows[0];
+    if (!account) {
+      throw new Error(`Account not found: ${accountId}`);
+    }
+
+    if (!isActiveHour(account.timezone)) {
+      throw new DailyCapExceededError(
+        accountId,
+        `${action} (outside active hours)`
+      );
+    }
+
+    const caps = asCaps(account.dailyCaps);
+    const today = todayKey();
+    const used = caps?.[today]?.[action] ?? 0;
+    const limit = await effectiveCapFromAccount(accountId, action, account, tx);
+
+    if (used >= limit) {
+      throw new DailyCapExceededError(accountId, action);
+    }
+
+    if (!caps[today]) caps[today] = {};
+    caps[today][action] = used + 1;
+
+    for (const key of Object.keys(caps)) {
+      if (key < today) delete caps[key];
+    }
+
+    await tx.account.update({
+      where: { id: accountId },
+      data: { dailyCaps: caps },
+    });
   });
 }

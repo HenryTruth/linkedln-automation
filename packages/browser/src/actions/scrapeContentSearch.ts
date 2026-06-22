@@ -152,6 +152,10 @@ export async function scrapeContentSearch(
   let skipped = 0;
   const newLeads: CollectedLead[] = [];
   const seenPostUrls = new Set<string>();
+  const account = await prisma.account.findUniqueOrThrow({
+    where: { id: accountId },
+    select: { userId: true },
+  });
 
   // Guard A: max 3 pages per session
   const pagesToScrape = Math.min(MAX_PAGES_PER_SESSION, Math.ceil(maxLeads / 10));
@@ -195,9 +199,15 @@ export async function scrapeContentSearch(
 
       // Upsert lead
       const lead = await prisma.lead.upsert({
-        where: { linkedinUrl: card.authorUrl },
+        where: {
+          userId_linkedinUrl: {
+            userId: account.userId,
+            linkedinUrl: card.authorUrl,
+          },
+        },
         create: {
           linkedinUrl: card.authorUrl,
+          userId: account.userId,
           firstName: card.firstName,
           lastName: card.lastName,
           title: card.title,

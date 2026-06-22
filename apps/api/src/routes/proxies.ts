@@ -6,15 +6,22 @@ import {
   createProxySessionId,
   detectProxyIp,
 } from "@linkedin-automation/browser";
+import { encrypt } from "@linkedin-automation/guards";
 
 export const proxiesRouter: IRouter = Router();
 
-proxiesRouter.get("/", async (_req, res, next) => {
+function publicProxy<T extends { password?: string }>(proxy: T): Omit<T, "password"> {
+  const { password: _password, ...safeProxy } = proxy;
+  return safeProxy;
+}
+
+proxiesRouter.get("/", async (req, res, next) => {
   try {
     const proxies = await prisma.proxy.findMany({
+      where: { userId: req.user.id },
       orderBy: { createdAt: "desc" },
     });
-    res.json(proxies);
+    res.json(proxies.map(publicProxy));
   } catch (err) {
     next(err);
   }
@@ -43,8 +50,10 @@ proxiesRouter.post("/", async (req, res, next) => {
       });
       return;
     }
-    const proxy = await prisma.proxy.create({ data });
-    res.status(201).json(proxy);
+    const proxy = await prisma.proxy.create({
+      data: { ...data, password: encrypt(data.password), userId: req.user.id },
+    });
+    res.status(201).json(publicProxy(proxy));
   } catch (err) {
     next(err);
   }
@@ -74,11 +83,18 @@ proxiesRouter.patch("/:id", async (req, res, next) => {
       });
       return;
     }
-    const proxy = await prisma.proxy.update({
-      where: { id: req.params.id },
-      data,
+    const result = await prisma.proxy.updateMany({
+      where: { id: req.params.id, userId: req.user.id },
+      data: data.password ? { ...data, password: encrypt(data.password) } : data,
     });
-    res.json(proxy);
+    if (result.count === 0) {
+      res.status(404).json({ error: "Proxy not found" });
+      return;
+    }
+    const proxy = await prisma.proxy.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
+    });
+    res.json(publicProxy(proxy));
   } catch (err) {
     next(err);
   }
@@ -87,8 +103,8 @@ proxiesRouter.patch("/:id", async (req, res, next) => {
 // POST /proxies/:id/check - verifies provider gateway and exit IP.
 proxiesRouter.post("/:id/check", async (req, res, next) => {
   try {
-    const proxy = await prisma.proxy.findUniqueOrThrow({
-      where: { id: req.params.id },
+    const proxy = await prisma.proxy.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
     });
 
     const sessionId =
@@ -109,7 +125,7 @@ proxiesRouter.post("/:id/check", async (req, res, next) => {
         lastUsed: new Date(),
       },
     });
-    res.json({ reachable, healthStatus, exitIp, sessionId, proxy: updated });
+    res.json({ reachable, healthStatus, exitIp, sessionId, proxy: publicProxy(updated) });
   } catch (err) {
     next(err);
   }
@@ -117,7 +133,16 @@ proxiesRouter.post("/:id/check", async (req, res, next) => {
 
 proxiesRouter.delete("/:id", async (req, res, next) => {
   try {
-    await prisma.proxy.delete({ where: { id: req.params.id } });
+    const inUse = await prisma.account.count({
+      where: { proxyId: req.params.id, userId: req.user.id },
+    });
+    if (inUse > 0) {
+      res.status(409).json({ error: "Proxy is assigned to one or more accounts" });
+      return;
+    }
+    await prisma.proxy.deleteMany({
+      where: { id: req.params.id, userId: req.user.id },
+    });
     res.status(204).send();
   } catch (err) {
     next(err);

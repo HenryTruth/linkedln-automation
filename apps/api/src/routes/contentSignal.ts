@@ -22,6 +22,10 @@ const ConfigSchema = z.object({
 // GET /content-signal/:campaignId — get config for a campaign
 contentSignalRouter.get("/:campaignId", async (req, res, next) => {
   try {
+    await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.campaignId, account: { userId: req.user.id } },
+      select: { id: true },
+    });
     const config = await prisma.contentSignalConfig.findUnique({
       where: { campaignId: req.params.campaignId },
     });
@@ -39,6 +43,10 @@ contentSignalRouter.get("/:campaignId", async (req, res, next) => {
 contentSignalRouter.post("/:campaignId", async (req, res, next) => {
   try {
     const data = ConfigSchema.parse(req.body);
+    await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.campaignId, account: { userId: req.user.id } },
+      select: { id: true },
+    });
 
     // Guard E — keyword must be unique across active campaigns
     try {
@@ -80,6 +88,10 @@ contentSignalRouter.post("/:campaignId", async (req, res, next) => {
 contentSignalRouter.put("/:campaignId", async (req, res, next) => {
   try {
     const data = ConfigSchema.partial().parse(req.body);
+    await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.campaignId, account: { userId: req.user.id } },
+      select: { id: true },
+    });
 
     if (data.keyword) {
       try {
@@ -107,8 +119,8 @@ contentSignalRouter.put("/:campaignId", async (req, res, next) => {
 // POST /content-signal/:campaignId/run — trigger a scrape job
 contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
   try {
-    const campaign = await prisma.campaign.findUniqueOrThrow({
-      where: { id: req.params.campaignId },
+    const campaign = await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.campaignId, account: { userId: req.user.id } },
       include: { contentSignalConfig: true },
     });
 
@@ -123,16 +135,20 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
       return;
     }
 
-    await contentSignalQueue.add("content-signal-scrape", {
-      accountId: campaign.accountId,
-      campaignId: campaign.id,
-      keyword: config.keyword,
-      dateRangeDays: config.dateRangeDays,
-      maxLeads: config.maxLeads,
-      titleFilter: config.titleFilter,
-      companyFilter: config.companyFilter,
-      connectionNoteTemplate: config.connectionNoteTemplate,
-    });
+    await contentSignalQueue.add(
+      "content-signal-scrape",
+      {
+        accountId: campaign.accountId,
+        campaignId: campaign.id,
+        keyword: config.keyword,
+        dateRangeDays: config.dateRangeDays,
+        maxLeads: config.maxLeads,
+        titleFilter: config.titleFilter,
+        companyFilter: config.companyFilter,
+        connectionNoteTemplate: config.connectionNoteTemplate,
+      },
+      { jobId: `campaign-${campaign.id}-content-signal` }
+    );
 
     res.json({ queued: true, keyword: config.keyword });
   } catch (err) {
@@ -143,6 +159,10 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
 // GET /content-signal/:campaignId/signals — list post signals collected
 contentSignalRouter.get("/:campaignId/signals", async (req, res, next) => {
   try {
+    await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.campaignId, account: { userId: req.user.id } },
+      select: { id: true },
+    });
     const signals = await prisma.postSignal.findMany({
       where: { campaignId: req.params.campaignId },
       include: { lead: true },

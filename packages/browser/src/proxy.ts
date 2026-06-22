@@ -1,5 +1,15 @@
 import { prisma, type Proxy } from "@linkedin-automation/db";
+import { decrypt } from "@linkedin-automation/guards";
 import { randomBytes } from "crypto";
+
+function proxyPassword(proxy: Proxy): string {
+  try {
+    return decrypt(proxy.password);
+  } catch {
+    // Password was stored before encryption was introduced — use as-is.
+    return proxy.password;
+  }
+}
 
 export interface PlaywrightProxy {
   server: string;
@@ -39,13 +49,13 @@ export function buildPlaywrightProxy(
   return {
     server: `http://${proxy.host}:${proxy.port}`,
     username: renderProxyUsername(proxy, sessionId),
-    password: proxy.password,
+    password: proxyPassword(proxy),
   };
 }
 
 function buildProxyUrl(proxy: Proxy, sessionId?: string): string {
   const username = encodeURIComponent(renderProxyUsername(proxy, sessionId));
-  const password = encodeURIComponent(proxy.password);
+  const password = encodeURIComponent(proxyPassword(proxy));
   return `http://${username}:${password}@${proxy.host}:${proxy.port}`;
 }
 

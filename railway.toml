@@ -1,0 +1,26 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/api/Dockerfile"
+
+[deploy]
+startCommand = "sh -c 'cd packages/db && npx prisma migrate deploy && cd /app && xvfb-run --server-args=\"-screen 0 1280x800x24\" node apps/api/dist/index.js'"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[[services]]
+name = "api"
+
+[services.variables]
+NODE_ENV = "production"
+PORT = "3001"
+HEADLESS = "false"
+START_WORKERS = "true"
+# Set these in the Railway dashboard:
+# DATABASE_URL = "postgresql://..."
+# REDIS_URL = "redis://..."
+# ENCRYPTION_KEY = "64-hex-char secret for cookie encryption"
+# ALLOWED_ORIGINS = "https://your-dashboard.vercel.app"
+# START_WORKERS = "true"  # required for this single-service Railway setup
+# ALERT_WEBHOOK_URL = "https://hooks.slack.com/..."  (optional)

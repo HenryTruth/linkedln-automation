@@ -3,8 +3,7 @@ import { prisma, AccountStatus } from "@linkedin-automation/db";
 import {
   assertWarmUpAllowed,
   checkActionWindow,
-  remainingDailyCap,
-  incrementDailyCap,
+  claimDailyCap,
   pauseAccountForAnomaly,
   AccountPausedError,
   AnomalyError,
@@ -20,7 +19,7 @@ export async function searchScrapeProcessor(
 
   const account = await prisma.account.findUniqueOrThrow({
     where: { id: accountId },
-    select: { status: true, warmUpPhase: true },
+    select: { status: true, warmUpPhase: true, userId: true },
   });
 
   if (account.status === AccountStatus.PAUSED) {
@@ -37,12 +36,17 @@ export async function searchScrapeProcessor(
     throw err;
   }
 
-  const remaining = await remainingDailyCap(accountId, "searchPage");
-  if (remaining === 0) {
-    throw new DailyCapExceededError(accountId, "searchPage");
+  let pagesToScrape = 0;
+  for (let i = 0; i < maxPages; i++) {
+    try {
+      await claimDailyCap(accountId, "searchPage");
+      pagesToScrape++;
+    } catch (err) {
+      if (i === 0) throw err;
+      break;
+    }
   }
-
-  const pagesToScrape = Math.min(maxPages, remaining);
+  if (pagesToScrape === 0) throw new DailyCapExceededError(accountId, "searchPage");
 
   const worker = new BrowserWorker(accountId);
   try {
@@ -54,11 +58,6 @@ export async function searchScrapeProcessor(
       accountId,
       pagesToScrape
     );
-
-    // Increment cap once per page actually visited
-    for (let i = 0; i < pagesScraped; i++) {
-      await incrementDailyCap(accountId, "searchPage");
-    }
 
     await prisma.activityLog.create({
       data: {
@@ -72,7 +71,12 @@ export async function searchScrapeProcessor(
     if (campaignId && urls.length > 0) {
       for (const linkedinUrl of urls) {
         const lead = await prisma.lead.findUnique({
-          where: { linkedinUrl },
+          where: {
+            userId_linkedinUrl: {
+              userId: account.userId,
+              linkedinUrl,
+            },
+          },
           select: { id: true },
         });
         if (!lead) continue;
@@ -84,6 +88,19 @@ export async function searchScrapeProcessor(
         });
       }
     }
+  } catch (err) {
+    const artifact = await worker.captureFailureArtifacts(`search-${job.id ?? "unknown"}`);
+    if (artifact) {
+      await prisma.activityLog.create({
+        data: {
+          accountId,
+          actionType: "searchScrape",
+          targetUrl: searchUrl,
+          result: `failed: ${(err as Error).message}; artifact: ${artifact}`,
+        },
+      }).catch(() => {});
+    }
+    throw err;
   } finally {
     await worker.close();
   }

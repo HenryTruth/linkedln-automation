@@ -20,8 +20,11 @@ activityRouter.get("/export", async (req, res, next) => {
     });
     const { accountId, actionType } = schema.parse(req.query);
 
-    const where: Record<string, unknown> = {};
-    if (accountId) where.accountId = accountId;
+    const where: Record<string, unknown> = { account: { userId: req.user.id } };
+    if (accountId) {
+      where.accountId = accountId;
+      where.account = { userId: req.user.id, id: accountId };
+    }
     if (actionType) where.actionType = actionType;
 
     const logs = await prisma.activityLog.findMany({
@@ -60,8 +63,11 @@ activityRouter.get("/", async (req, res, next) => {
     const { accountId, actionType, page, limit } =
       ActivityFilterSchema.parse(req.query);
 
-    const where: Record<string, unknown> = {};
-    if (accountId) where.accountId = accountId;
+    const where: Record<string, unknown> = { account: { userId: req.user.id } };
+    if (accountId) {
+      where.accountId = accountId;
+      where.account = { userId: req.user.id, id: accountId };
+    }
     if (actionType) where.actionType = actionType;
 
     const [logs, total] = await Promise.all([

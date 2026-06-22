@@ -13,6 +13,8 @@ const LeadFilterSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+const LeadExportFilterSchema = LeadFilterSchema.omit({ page: true, limit: true });
+
 const HEADER_ALIASES: Record<string, string[]> = {
   linkedinUrl: [
     "url",
@@ -145,16 +147,42 @@ function compactLeadData(data: {
   };
 }
 
+function csvCell(value: unknown): string {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function leadWhere(filters: {
+  userId: string;
+  status?: string;
+  company?: string;
+  campaignId?: string;
+  keyword?: string;
+}) {
+  const where: Record<string, unknown> = { userId: filters.userId };
+  if (filters.status) where.connectionStatus = filters.status;
+  if (filters.company) where.company = { contains: filters.company, mode: "insensitive" };
+  if (filters.campaignId) {
+    where.campaigns = {
+      some: {
+        campaignId: filters.campaignId,
+        campaign: { account: { userId: filters.userId } },
+      },
+    };
+  }
+  if (filters.keyword) {
+    where.postSignals = {
+      some: { keyword: { contains: filters.keyword, mode: "insensitive" } },
+    };
+  }
+  return where;
+}
+
 leadsRouter.get("/", async (req, res, next) => {
   try {
     const { status, company, campaignId, keyword, page, limit } =
       LeadFilterSchema.parse(req.query);
 
-    const where: Record<string, unknown> = {};
-    if (status) where.connectionStatus = status;
-    if (company) where.company = { contains: company, mode: "insensitive" };
-    if (campaignId) where.campaigns = { some: { campaignId } };
-    if (keyword) where.postSignals = { some: { keyword: { contains: keyword, mode: "insensitive" } } };
+    const where = leadWhere({ userId: req.user.id, status, company, campaignId, keyword });
 
     const [leads, total] = await Promise.all([
       prisma.lead.findMany({
@@ -172,6 +200,52 @@ leadsRouter.get("/", async (req, res, next) => {
   }
 });
 
+leadsRouter.get("/export", async (req, res, next) => {
+  try {
+    const filters = LeadExportFilterSchema.parse(req.query);
+    const leads = await prisma.lead.findMany({
+      where: leadWhere({ userId: req.user.id, ...filters }),
+      include: {
+        campaigns: {
+          include: { campaign: { select: { name: true } } },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+    });
+
+    const lines = [
+      "id,linkedinUrl,firstName,lastName,title,company,connectionStatus,blacklisted,replyStatus,campaigns,createdAt",
+      ...leads.map((lead) => {
+        const replied = lead.campaigns.some((campaignLead) => campaignLead.repliedAt);
+        return [
+          lead.id,
+          csvCell(lead.linkedinUrl),
+          csvCell(lead.firstName),
+          csvCell(lead.lastName),
+          csvCell(lead.title),
+          csvCell(lead.company),
+          lead.connectionStatus,
+          lead.blacklisted,
+          replied ? "REPLIED" : "NO_REPLY",
+          csvCell(lead.campaigns.map((cl) => cl.campaign.name).join("; ")),
+          lead.createdAt.toISOString(),
+        ].join(",");
+      }),
+    ];
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="leads-${new Date().toISOString().slice(0, 10)}.csv"`
+    );
+    res.send(lines.join("\n"));
+  } catch (err) {
+    next(err);
+  }
+});
+
 leadsRouter.post("/import-csv", async (req, res, next) => {
   try {
     const schema = z.object({
@@ -179,6 +253,12 @@ leadsRouter.post("/import-csv", async (req, res, next) => {
       campaignId: z.string().optional(),
     });
     const { csvText, campaignId } = schema.parse(req.body);
+    const campaign = campaignId
+      ? await prisma.campaign.findFirstOrThrow({
+          where: { id: campaignId, account: { userId: req.user.id } },
+          select: { id: true, accountId: true },
+        })
+      : null;
     const { rows, errors } = parseCsv(csvText);
 
     const uniqueRows = new Map<string, (typeof rows)[number]>();
@@ -197,7 +277,7 @@ leadsRouter.post("/import-csv", async (req, res, next) => {
 
     const urls = [...uniqueRows.keys()];
     const existing = await prisma.lead.findMany({
-      where: { linkedinUrl: { in: urls } },
+      where: { userId: req.user.id, linkedinUrl: { in: urls } },
       select: { linkedinUrl: true },
     });
     const existingUrls = new Set(existing.map((lead) => lead.linkedinUrl));
@@ -211,8 +291,17 @@ leadsRouter.post("/import-csv", async (req, res, next) => {
       const existed = existingUrls.has(row.linkedinUrl);
 
       const lead = await prisma.lead.upsert({
-        where: { linkedinUrl: row.linkedinUrl },
-        create: data,
+        where: {
+          userId_linkedinUrl: {
+            userId: req.user.id,
+            linkedinUrl: row.linkedinUrl,
+          },
+        },
+        create: {
+          ...data,
+          userId: req.user.id,
+          accountId: campaign?.accountId,
+        },
         update: {
           firstName: data.firstName,
           lastName: data.lastName,
@@ -224,10 +313,10 @@ leadsRouter.post("/import-csv", async (req, res, next) => {
       if (existed) updated++;
       else created++;
 
-      if (campaignId) {
+      if (campaign) {
         await prisma.campaignLead.upsert({
-          where: { campaignId_leadId: { campaignId, leadId: lead.id } },
-          create: { campaignId, leadId: lead.id },
+          where: { campaignId_leadId: { campaignId: campaign.id, leadId: lead.id } },
+          create: { campaignId: campaign.id, leadId: lead.id },
           update: {},
         });
         attached++;
@@ -259,17 +348,38 @@ leadsRouter.post("/", async (req, res, next) => {
       campaignId: z.string().optional(),
     });
     const { campaignId, ...data } = schema.parse(req.body);
+    const campaign = campaignId
+      ? await prisma.campaign.findFirstOrThrow({
+          where: { id: campaignId, account: { userId: req.user.id } },
+          select: { id: true, accountId: true },
+        })
+      : null;
+    if (data.accountId) {
+      await prisma.account.findFirstOrThrow({
+        where: { id: data.accountId, userId: req.user.id },
+        select: { id: true },
+      });
+    }
 
     const lead = await prisma.lead.upsert({
-      where: { linkedinUrl: data.linkedinUrl },
-      create: data,
+      where: {
+        userId_linkedinUrl: {
+          userId: req.user.id,
+          linkedinUrl: data.linkedinUrl,
+        },
+      },
+      create: {
+        ...data,
+        userId: req.user.id,
+        accountId: data.accountId ?? campaign?.accountId,
+      },
       update: {},
     });
 
-    if (campaignId) {
+    if (campaign) {
       await prisma.campaignLead.upsert({
-        where: { campaignId_leadId: { campaignId, leadId: lead.id } },
-        create: { campaignId, leadId: lead.id },
+        where: { campaignId_leadId: { campaignId: campaign.id, leadId: lead.id } },
+        create: { campaignId: campaign.id, leadId: lead.id },
         update: {},
       });
     }
@@ -282,8 +392,8 @@ leadsRouter.post("/", async (req, res, next) => {
 
 leadsRouter.get("/:id", async (req, res, next) => {
   try {
-    const lead = await prisma.lead.findUniqueOrThrow({
-      where: { id: req.params.id },
+    const lead = await prisma.lead.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
       include: {
         campaigns: {
           include: {
@@ -308,9 +418,16 @@ leadsRouter.post("/:id/blacklist", async (req, res, next) => {
   try {
     const schema = z.object({ reason: z.string().optional() });
     const { reason } = schema.parse(req.body);
-    const lead = await prisma.lead.update({
-      where: { id: req.params.id },
+    const result = await prisma.lead.updateMany({
+      where: { id: req.params.id, userId: req.user.id },
       data: { blacklisted: true, blacklistReason: reason ?? "Manually blacklisted" },
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const lead = await prisma.lead.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
     });
     res.json(lead);
   } catch (err) {
@@ -320,9 +437,16 @@ leadsRouter.post("/:id/blacklist", async (req, res, next) => {
 
 leadsRouter.delete("/:id/blacklist", async (req, res, next) => {
   try {
-    const lead = await prisma.lead.update({
-      where: { id: req.params.id },
+    const result = await prisma.lead.updateMany({
+      where: { id: req.params.id, userId: req.user.id },
       data: { blacklisted: false, blacklistReason: null },
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const lead = await prisma.lead.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
     });
     res.json(lead);
   } catch (err) {

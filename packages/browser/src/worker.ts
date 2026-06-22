@@ -1,5 +1,7 @@
 import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import { prisma, AccountStatus, type Proxy } from "@linkedin-automation/db";
 import { detectCheckpoint, sendAlert, IpMismatchError } from "@linkedin-automation/guards";
 import { saveCookies, loadCookies } from "./session.js";
@@ -19,6 +21,12 @@ function randomSessionMaxMs(): number {
 
 // How often (in getPage() calls) to re-verify the proxy exit IP mid-session.
 const IP_CHECK_INTERVAL = 10;
+const ARTIFACT_DIR =
+  process.env.BROWSER_ARTIFACT_DIR ?? "/tmp/linkedin-automation-artifacts";
+
+function safeName(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 120);
+}
 
 export class BrowserWorker {
   private browser: Browser | null = null;
@@ -109,6 +117,7 @@ export class BrowserWorker {
       timezoneId: account.timezone,
       extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
     });
+    await this.context.tracing.start({ screenshots: true, snapshots: true });
 
     const cookies = await loadCookies(this.accountId);
     if (cookies?.length) {
@@ -117,6 +126,29 @@ export class BrowserWorker {
 
     this.page = await this.context.newPage();
     this.sessionStart = Date.now();
+  }
+
+  async captureFailureArtifacts(label: string): Promise<string | null> {
+    if (!this.context) return null;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const baseName = safeName(`${stamp}-${this.accountId}-${label}`);
+    await mkdir(ARTIFACT_DIR, { recursive: true });
+    const screenshotPath = path.join(ARTIFACT_DIR, `${baseName}.png`);
+    const tracePath = path.join(ARTIFACT_DIR, `${baseName}.zip`);
+
+    try {
+      await this.page?.screenshot({ path: screenshotPath, fullPage: true });
+    } catch {
+      // Screenshot is best-effort; trace capture below is still useful.
+    }
+
+    try {
+      await this.context.tracing.stop({ path: tracePath });
+    } catch {
+      return screenshotPath;
+    }
+
+    return tracePath;
   }
 
   async getPage(): Promise<Page> {

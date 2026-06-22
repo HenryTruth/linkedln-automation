@@ -13,6 +13,7 @@ export interface ConnectJobData {
   leadId: string;
   linkedinUrl: string;
   note?: string;
+  campaignLeadId?: string;
 }
 
 export interface MessageJobData {
@@ -36,6 +37,7 @@ export interface ScrapeJobData {
   accountId: string;
   linkedinUrl: string;
   campaignId?: string;
+  campaignLeadId?: string;
 }
 
 export interface WithdrawJobData {
@@ -93,5 +95,23 @@ export const sequenceDispatchQueue = new Queue<SequenceDispatchJobData>(
 
 export const contentSignalQueue = new Queue<ContentSignalJobData>(
   "contentSignal",
+  { connection: getConnection(), defaultJobOptions }
+);
+
+export interface AnomalyCheckJobData {
+  _tick: true;
+}
+
+export const anomalyCheckQueue = new Queue<AnomalyCheckJobData>(
+  "anomalyCheck",
+  { connection: getConnection(), defaultJobOptions }
+);
+
+export interface SyncStatusJobData {
+  _tick: true;
+}
+
+export const syncStatusQueue = new Queue<SyncStatusJobData>(
+  "syncStatus",
   { connection: getConnection(), defaultJobOptions }
 );

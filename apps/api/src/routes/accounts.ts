@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { prisma, AccountStatus, WarmUpPhase } from "@linkedin-automation/db";
 import { scheduleWithdrawalForAccount } from "@linkedin-automation/queue";
-import { encrypt } from "@linkedin-automation/guards";
+import { encrypt, SYSTEM_CAPS, HARD_CEILING } from "@linkedin-automation/guards";
 
 const WARMUP_ORDER: WarmUpPhase[] = [
   WarmUpPhase.MANUAL,
@@ -21,9 +21,21 @@ const CreateAccountSchema = z.object({
   userAgent: z.string().optional(),
 });
 
-accountsRouter.get("/", async (_req, res, next) => {
+const UpdateAccountSchema = z.object({
+  email: z.string().email().optional(),
+  proxyId: z.string().nullable().optional(),
+  timezone: z.string().min(1).optional(),
+  userAgent: z.string().nullable().optional(),
+  viewportWidth: z.number().int().min(320).max(3840).optional(),
+  viewportHeight: z.number().int().min(320).max(2160).optional(),
+  warmUpPhase: z.nativeEnum(WarmUpPhase).optional(),
+  status: z.nativeEnum(AccountStatus).optional(),
+});
+
+accountsRouter.get("/", async (req, res, next) => {
   try {
     const accounts = await prisma.account.findMany({
+      where: { userId: req.user.id },
       include: { proxy: true },
       orderBy: { createdAt: "desc" },
     });
@@ -36,7 +48,15 @@ accountsRouter.get("/", async (_req, res, next) => {
 accountsRouter.post("/", async (req, res, next) => {
   try {
     const data = CreateAccountSchema.parse(req.body);
-    const account = await prisma.account.create({ data });
+    if (data.proxyId) {
+      await prisma.proxy.findFirstOrThrow({
+        where: { id: data.proxyId, userId: req.user.id },
+        select: { id: true },
+      });
+    }
+    const account = await prisma.account.create({
+      data: { ...data, userId: req.user.id },
+    });
     await scheduleWithdrawalForAccount(account.id);
     res.status(201).json(account);
   } catch (err) {
@@ -46,8 +66,8 @@ accountsRouter.post("/", async (req, res, next) => {
 
 accountsRouter.get("/:id", async (req, res, next) => {
   try {
-    const account = await prisma.account.findUniqueOrThrow({
-      where: { id: req.params.id },
+    const account = await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
       include: { proxy: true },
     });
     res.json(account);
@@ -58,9 +78,24 @@ accountsRouter.get("/:id", async (req, res, next) => {
 
 accountsRouter.put("/:id", async (req, res, next) => {
   try {
-    const account = await prisma.account.update({
-      where: { id: req.params.id },
-      data: req.body,
+    const data = UpdateAccountSchema.parse(req.body);
+    if (data.proxyId) {
+      await prisma.proxy.findFirstOrThrow({
+        where: { id: data.proxyId, userId: req.user.id },
+        select: { id: true },
+      });
+    }
+    const result = await prisma.account.updateMany({
+      where: { id: req.params.id, userId: req.user.id },
+      data,
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: "Account not found" });
+      return;
+    }
+    const account = await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
+      include: { proxy: true },
     });
     res.json(account);
   } catch (err) {
@@ -70,7 +105,9 @@ accountsRouter.put("/:id", async (req, res, next) => {
 
 accountsRouter.delete("/:id", async (req, res, next) => {
   try {
-    await prisma.account.delete({ where: { id: req.params.id } });
+    await prisma.account.deleteMany({
+      where: { id: req.params.id, userId: req.user.id },
+    });
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -79,9 +116,16 @@ accountsRouter.delete("/:id", async (req, res, next) => {
 
 accountsRouter.post("/:id/pause", async (req, res, next) => {
   try {
-    const account = await prisma.account.update({
-      where: { id: req.params.id },
+    const result = await prisma.account.updateMany({
+      where: { id: req.params.id, userId: req.user.id },
       data: { status: AccountStatus.PAUSED },
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: "Account not found" });
+      return;
+    }
+    const account = await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
     });
     res.json(account);
   } catch (err) {
@@ -92,12 +136,24 @@ accountsRouter.post("/:id/pause", async (req, res, next) => {
 // POST /accounts/:id/cookies — store session cookies after manual login
 accountsRouter.post("/:id/cookies", async (req, res, next) => {
   try {
-    const schema = z.object({ cookies: z.string().min(1) });
-    const { cookies } = schema.parse(req.body);
-    await prisma.account.update({
-      where: { id: req.params.id },
-      data: { cookiesEncrypted: encrypt(cookies) },
+    const schema = z.object({
+      cookies: z.string().min(1),
+      consent: z.literal(true, {
+        errorMap: () => ({
+          message:
+            "Cookie storage consent is required before session cookies can be saved.",
+        }),
+      }),
     });
+    const { cookies } = schema.parse(req.body);
+    const result = await prisma.account.updateMany({
+      where: { id: req.params.id, userId: req.user.id },
+      data: { cookiesEncrypted: encrypt(cookies), cookiesConsentAt: new Date() },
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: "Account not found" });
+      return;
+    }
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -107,8 +163,8 @@ accountsRouter.post("/:id/cookies", async (req, res, next) => {
 // POST /accounts/:id/advance-warmup — move to next warm-up phase
 accountsRouter.post("/:id/advance-warmup", async (req, res, next) => {
   try {
-    const account = await prisma.account.findUniqueOrThrow({
-      where: { id: req.params.id },
+    const account = await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
       select: { warmUpPhase: true },
     });
     const currentIndex = WARMUP_ORDER.indexOf(account.warmUpPhase);
@@ -116,9 +172,12 @@ accountsRouter.post("/:id/advance-warmup", async (req, res, next) => {
       res.status(409).json({ error: "Account is already at full automation (FULL phase)" });
       return;
     }
-    const updated = await prisma.account.update({
-      where: { id: req.params.id },
+    await prisma.account.updateMany({
+      where: { id: req.params.id, userId: req.user.id },
       data: { warmUpPhase: WARMUP_ORDER[currentIndex + 1] },
+    });
+    const updated = await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
       include: { proxy: true },
     });
     res.json(updated);
@@ -127,10 +186,59 @@ accountsRouter.post("/:id/advance-warmup", async (req, res, next) => {
   }
 });
 
+// PUT /accounts/:id/caps — set per-account daily cap overrides
+accountsRouter.put("/:id/caps", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      connection:  z.number().int().min(1).max(HARD_CEILING.connection).optional(),
+      message:     z.number().int().min(1).max(HARD_CEILING.message).optional(),
+      profileView: z.number().int().min(1).max(HARD_CEILING.profileView).optional(),
+      searchPage:  z.number().int().min(1).max(HARD_CEILING.searchPage).optional(),
+    });
+    const caps = schema.parse(req.body);
+    const result = await prisma.account.updateMany({
+      where: { id: req.params.id, userId: req.user.id },
+      data: { maxDailyCaps: caps },
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: "Account not found" });
+      return;
+    }
+    const account = await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
+      include: { proxy: true },
+    });
+    res.json(account);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /accounts/:id/caps — return current overrides + system defaults + hard ceilings
+accountsRouter.get("/:id/caps", async (req, res, next) => {
+  try {
+    const account = await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
+      select: { maxDailyCaps: true },
+    });
+    res.json({
+      overrides: account.maxDailyCaps,
+      systemDefaults: SYSTEM_CAPS,
+      hardCeilings: HARD_CEILING,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 accountsRouter.post("/:id/resume", async (req, res, next) => {
   try {
     const openCheckpoint = await prisma.checkpoint.findFirst({
-      where: { accountId: req.params.id, resolvedAt: null },
+      where: {
+        accountId: req.params.id,
+        resolvedAt: null,
+        account: { userId: req.user.id },
+      },
     });
     if (openCheckpoint) {
       res.status(409).json({
@@ -139,9 +247,16 @@ accountsRouter.post("/:id/resume", async (req, res, next) => {
       });
       return;
     }
-    const account = await prisma.account.update({
-      where: { id: req.params.id },
+    const result = await prisma.account.updateMany({
+      where: { id: req.params.id, userId: req.user.id },
       data: { status: AccountStatus.ACTIVE },
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: "Account not found" });
+      return;
+    }
+    const account = await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
     });
     res.json(account);
   } catch (err) {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type JobState, type QueueJob } from "@/lib/api";
 
-const states: JobState[] = ["failed", "waiting", "active", "delayed", "completed"];
+const states: JobState[] = ["active", "waiting", "delayed", "completed", "failed"];
 const queues = [
   "all",
   "connect",
@@ -17,6 +17,14 @@ const queues = [
   "syncStatus",
 ];
 
+const STATE_STYLES: Record<JobState, string> = {
+  active:    "bg-blue-100 text-blue-700",
+  waiting:   "bg-amber-100 text-amber-700",
+  delayed:   "bg-slate-100 text-slate-500",
+  completed: "bg-emerald-100 text-emerald-700",
+  failed:    "bg-red-100 text-red-700",
+};
+
 function fmt(value: number | null | undefined) {
   if (!value) return "-";
   return new Date(value).toLocaleString();
@@ -24,10 +32,12 @@ function fmt(value: number | null | undefined) {
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<QueueJob[]>([]);
-  const [state, setState] = useState<JobState>("failed");
+  const [state, setState] = useState<JobState>("active");
   const [queue, setQueue] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [clearMsg, setClearMsg] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -46,9 +56,25 @@ export default function JobsPage() {
     }
   }
 
+  async function handleClearFailed() {
+    setClearing(true);
+    setClearMsg(null);
+    try {
+      await api.jobs.clearFailed();
+      setClearMsg("All failed jobs cleared.");
+      if (state === "failed") setJobs([]);
+    } catch (err) {
+      setClearMsg((err as Error).message);
+    } finally {
+      setClearing(false);
+    }
+  }
+
   useEffect(() => {
     load();
   }, [state, queue]);
+
+  const failedCount = state === "failed" ? jobs.length : null;
 
   return (
     <div className="space-y-6">
@@ -61,10 +87,22 @@ export default function JobsPage() {
               Inspect queue state, failed reasons, attempts, and payloads for automation work.
             </p>
           </div>
-          <button onClick={load} className="btn-secondary" disabled={loading}>
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleClearFailed}
+              disabled={clearing}
+              className="btn-secondary text-red-600 hover:border-red-200 hover:bg-red-50"
+            >
+              {clearing ? "Clearing…" : "Clear failed jobs"}
+            </button>
+            <button onClick={load} className="btn-secondary" disabled={loading}>
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
         </div>
+        {clearMsg && (
+          <p className="mt-3 text-sm font-medium text-emerald-600">{clearMsg}</p>
+        )}
       </section>
 
       <section className="app-panel p-4">
@@ -106,16 +144,24 @@ export default function JobsPage() {
         <table className="min-w-full divide-y divide-slate-100">
           <thead className="table-head">
             <tr>
-              {["Queue", "Job", "Attempts", "Reason", "Updated", "Payload"].map((h) => (
+              {["Queue", "Job", "State", "Attempts", "Reason", "Updated", "Payload"].map((h) => (
                 <th key={h} className="px-6 py-3">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr><td className="table-cell" colSpan={6}>Loading...</td></tr>
+              <tr><td className="table-cell text-center" colSpan={7}>Loading…</td></tr>
             ) : jobs.length === 0 ? (
-              <tr><td className="table-cell" colSpan={6}>No jobs found.</td></tr>
+              <tr>
+                <td className="px-6 py-10 text-center text-sm text-slate-400" colSpan={7}>
+                  {state === "active"
+                    ? "No jobs running right now — the queue is idle."
+                    : state === "failed"
+                    ? "No failed jobs. Everything is healthy."
+                    : `No ${state} jobs.`}
+                </td>
+              </tr>
             ) : (
               jobs.map((job) => (
                 <tr key={`${job.queue}-${job.id}`} className="align-top hover:bg-slate-50/80">
@@ -124,15 +170,26 @@ export default function JobsPage() {
                     <div className="font-semibold text-slate-900">{job.name}</div>
                     <div className="mt-1 font-mono text-xs text-slate-400">{job.id ?? "-"}</div>
                   </td>
+                  <td className="table-cell">
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATE_STYLES[job.state]}`}>
+                      {job.state}
+                    </span>
+                  </td>
                   <td className="table-cell text-slate-600">{job.attemptsMade}</td>
-                  <td className="table-cell max-w-md whitespace-pre-wrap text-slate-600">
-                    {job.failedReason ?? "-"}
+                  <td className="table-cell max-w-xs">
+                    {job.failedReason ? (
+                      <p className="whitespace-pre-wrap text-sm text-red-600 line-clamp-4" title={job.failedReason}>
+                        {job.failedReason}
+                      </p>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
                   </td>
                   <td className="table-cell text-slate-500">
                     {fmt(job.finishedOn ?? job.processedOn ?? job.timestamp)}
                   </td>
                   <td className="table-cell">
-                    <pre className="max-w-sm overflow-auto rounded-lg bg-slate-50 p-2 text-xs text-slate-600">
+                    <pre className="max-w-xs overflow-auto rounded-lg bg-slate-50 p-2 text-xs text-slate-600">
                       {JSON.stringify(job.data, null, 2)}
                     </pre>
                   </td>
@@ -141,6 +198,18 @@ export default function JobsPage() {
             )}
           </tbody>
         </table>
+        {failedCount !== null && failedCount > 0 && (
+          <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3">
+            <p className="text-sm text-slate-500">{failedCount} failed job{failedCount !== 1 ? "s" : ""} shown</p>
+            <button
+              onClick={handleClearFailed}
+              disabled={clearing}
+              className="text-sm font-semibold text-red-500 hover:text-red-700"
+            >
+              {clearing ? "Clearing…" : "Clear all failed"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

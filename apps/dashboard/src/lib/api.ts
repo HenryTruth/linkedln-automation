@@ -555,5 +555,6 @@ export const api = {
       if (params?.limit) q.set("limit", String(params.limit));
       return apiFetch<JobsPage>(`/jobs?${q}`);
     },
+    clearFailed: () => apiFetch<{ ok: boolean }>("/jobs/failed", { method: "DELETE" }),
   },
 };

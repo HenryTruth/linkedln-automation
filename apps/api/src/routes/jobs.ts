@@ -89,3 +89,13 @@ jobsRouter.get("/", async (req, res, next) => {
     next(err);
   }
 });
+
+// DELETE /jobs/failed — drain all failed jobs from every queue
+jobsRouter.delete("/failed", async (_req, res, next) => {
+  try {
+    await Promise.all(Object.values(queues).map((q) => q.clean(0, 1000, "failed")));
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});

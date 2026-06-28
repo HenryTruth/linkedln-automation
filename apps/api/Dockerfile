@@ -1,11 +1,18 @@
 # ── Stage 1: build ──────────────────────────────────────────────────────────
 FROM node:20-slim AS builder
 
+# Prisma needs OpenSSL during client generation.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install pnpm. Keep this pinned: pnpm 11 requires newer Node built-ins than
 # the Node 20 runtime used by this image.
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
+
+ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
 
 # Copy workspace manifest first for layer caching
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
@@ -22,6 +29,9 @@ RUN pnpm install --frozen-lockfile
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
+# Generate Prisma client before TypeScript builds that import Prisma enums.
+RUN cd packages/db && npx prisma generate
+
 # Build all workspace packages in dependency order
 RUN pnpm --filter @linkedin-automation/db build
 RUN pnpm --filter @linkedin-automation/guards build
@@ -37,12 +47,15 @@ FROM mcr.microsoft.com/playwright:v1.44.0-jammy AS runner
 
 # Install Xvfb for virtual display (required when HEADLESS=false)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
+
+ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
 
 # Copy workspace manifests for production install
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./

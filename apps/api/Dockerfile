@@ -30,7 +30,7 @@ COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
 # Generate Prisma client before TypeScript builds that import Prisma enums.
-RUN cd packages/db && npx prisma generate
+RUN cd packages/db && pnpm exec prisma generate
 
 # Build all workspace packages in dependency order
 RUN pnpm --filter @linkedin-automation/db build
@@ -77,7 +77,7 @@ COPY --from=builder /app/packages/queue/dist ./packages/queue/dist
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
 # Generate Prisma client
-RUN cd packages/db && npx prisma generate
+RUN cd packages/db && pnpm exec prisma generate
 
 ENV NODE_ENV=production
 ENV PORT=3001
@@ -88,4 +88,4 @@ EXPOSE 3001
 # xvfb-run starts a virtual X11 display so Chromium can run non-headless.
 # The display is only used when HEADLESS=false (which is required in production
 # to avoid LinkedIn's bot detection).
-CMD ["sh", "-c", "cd packages/db && npx prisma migrate deploy && cd /app && xvfb-run --server-args='-screen 0 1280x800x24' node apps/api/dist/index.js"]
+CMD ["sh", "-c", "cd packages/db && pnpm exec prisma migrate deploy && cd /app && xvfb-run --server-args='-screen 0 1280x800x24' node apps/api/dist/index.js"]

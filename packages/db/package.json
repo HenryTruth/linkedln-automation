@@ -20,11 +20,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "^5.17.0"
+    "@prisma/client": "^5.17.0",
+    "prisma": "^5.17.0"
   },
   "devDependencies": {
     "dotenv-cli": "^7.4.2",
-    "prisma": "^5.17.0",
     "typescript": "^5.5.0",
     "@types/node": "^22.0.0"
   }

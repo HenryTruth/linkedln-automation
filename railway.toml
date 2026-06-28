@@ -3,7 +3,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "apps/api/Dockerfile"
 
 [deploy]
-startCommand = "sh -c 'cd packages/db && npx prisma migrate deploy && cd /app && xvfb-run --server-args=\"-screen 0 1280x800x24\" node apps/api/dist/index.js'"
+startCommand = "sh -c 'cd packages/db && pnpm exec prisma migrate deploy && cd /app && xvfb-run --server-args=\"-screen 0 1280x800x24\" node apps/api/dist/index.js'"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

@@ -58,7 +58,7 @@ export default function CampaignsPage() {
   const totalLeads = campaigns.reduce((sum, c) => sum + (c._count?.leads ?? 0), 0);
 
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
-  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (error) return <p className="text-sm text-red-400">{error}</p>;
 
   return (
     <div className="space-y-8">
@@ -76,17 +76,17 @@ export default function CampaignsPage() {
             New Campaign
           </Link>
         </div>
-        <div className="grid border-t border-slate-200 bg-slate-50/70 sm:grid-cols-3">
+        <div className="grid border-t border-white/[0.06] bg-slate-950/40 sm:grid-cols-3">
           {[
             ["Total campaigns", campaigns.length],
             ["Active", active],
             ["Assigned leads", totalLeads],
           ].map(([label, value]) => (
-            <div key={label} className="border-slate-200 p-5 sm:border-r last:border-r-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <div key={label} className="border-white/[0.06] p-5 sm:border-r last:border-r-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
                 {label}
               </p>
-              <p className="mt-2 text-3xl font-semibold text-slate-950">
+              <p className="mt-2 text-3xl font-semibold text-white">
                 {value}
               </p>
             </div>
@@ -95,7 +95,7 @@ export default function CampaignsPage() {
       </section>
 
       <div className="table-shell">
-        <table className="min-w-full divide-y divide-slate-100">
+        <table className="min-w-full divide-y divide-white/[0.06]">
           <thead className="table-head">
             <tr>
               {["Name", "Type", "Status", "Leads", "Daily Limit", "Actions"].map(
@@ -107,12 +107,12 @@ export default function CampaignsPage() {
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-white/[0.06]">
             {campaigns.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-14 text-center text-sm text-slate-500">
+                <td colSpan={6} className="px-6 py-14 text-center text-sm text-slate-400">
                   No campaigns yet.{" "}
-                  <Link href="/campaigns/new" className="font-semibold text-teal-700 underline underline-offset-4">
+                  <Link href="/campaigns/new" className="font-semibold text-teal-400 underline underline-offset-4">
                     Create one
                   </Link>{" "}
                   to start the workflow.
@@ -120,8 +120,8 @@ export default function CampaignsPage() {
               </tr>
             )}
             {campaigns.map((c) => (
-              <tr key={c.id} className="hover:bg-slate-50/80">
-                <td className="table-cell font-semibold text-slate-950">
+              <tr key={c.id} className="hover:bg-white/[0.03]">
+                <td className="table-cell font-semibold text-white">
                   {c.name}
                 </td>
                 <td className="table-cell">
@@ -130,10 +130,10 @@ export default function CampaignsPage() {
                 <td className="table-cell">
                   <Badge value={c.status} />
                 </td>
-                <td className="table-cell text-slate-600">
+                <td className="table-cell text-slate-400">
                   {c._count?.leads ?? 0}
                 </td>
-                <td className="table-cell text-slate-600">{c.dailyLimit}/day</td>
+                <td className="table-cell text-slate-400">{c.dailyLimit}/day</td>
                 <td className="table-cell">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link href={`/campaigns/${c.id}`} className="btn-secondary px-3 py-1.5">

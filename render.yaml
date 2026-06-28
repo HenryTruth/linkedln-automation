@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: linkedin-automation-dashboard
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && corepack prepare pnpm@9 --activate && pnpm install --frozen-lockfile && pnpm --filter @linkedin-automation/dashboard build
+    startCommand: corepack enable && pnpm --filter @linkedin-automation/dashboard start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NEXT_PUBLIC_API_URL
+        sync: false

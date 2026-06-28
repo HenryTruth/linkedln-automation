@@ -62,13 +62,13 @@ export default function NewCampaignPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_0.7fr]">
         <form onSubmit={submit} className="app-panel space-y-5 p-6">
           {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
               {error}
             </div>
           )}
 
           <div>
-            <label className="mb-1 block text-sm font-semibold text-slate-700">
+            <label className="mb-1 block text-sm font-semibold text-slate-300">
               Campaign name
             </label>
             <input
@@ -81,7 +81,7 @@ export default function NewCampaignPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-semibold text-slate-700">
+            <label className="mb-1 block text-sm font-semibold text-slate-300">
               LinkedIn account
             </label>
             <select
@@ -104,7 +104,7 @@ export default function NewCampaignPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-300">
               Campaign type
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -115,12 +115,12 @@ export default function NewCampaignPage() {
                   onClick={() => setForm((f) => ({ ...f, type: value }))}
                   className={`rounded-2xl border p-4 text-left transition ${
                     form.type === value
-                      ? "border-teal-300 bg-teal-50 text-teal-900 ring-4 ring-teal-100"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                      ? "border-teal-500/50 bg-teal-500/10 text-teal-200 ring-2 ring-teal-500/30"
+                      : "border-white/[0.08] bg-slate-800/40 text-slate-300 hover:border-white/10"
                   }`}
                 >
                   <span className="block text-sm font-semibold">{label}</span>
-                  <span className="mt-1 block text-xs text-slate-500">
+                  <span className="mt-1 block text-xs text-slate-400">
                     {value.replace("_", " ")}
                   </span>
                 </button>
@@ -129,7 +129,7 @@ export default function NewCampaignPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-semibold text-slate-700">
+            <label className="mb-1 block text-sm font-semibold text-slate-300">
               Daily limit
             </label>
             <input
@@ -142,7 +142,7 @@ export default function NewCampaignPage() {
               }
               className="field w-full"
             />
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-slate-400">
               Queue guardrails still enforce hard account caps regardless of
               this dispatch limit.
             </p>
@@ -150,11 +150,11 @@ export default function NewCampaignPage() {
 
           {form.type === "CONNECT" && (
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">
+              <label className="mb-1 block text-sm font-semibold text-slate-300">
                 Connection note{" "}
                 <span className="font-normal text-slate-400">(optional)</span>
               </label>
-              <p className="mb-2 text-xs leading-5 text-slate-500">
+              <p className="mb-2 text-xs leading-5 text-slate-400">
                 Personalise each request with dynamic variables. LinkedIn limits
                 notes to 300 characters. Leave blank to send without a note.
               </p>
@@ -171,7 +171,7 @@ export default function NewCampaignPage() {
                             f.connectionNoteTemplate + v,
                         }))
                       }
-                      className="rounded-lg border border-teal-200 bg-teal-50 px-2 py-0.5 font-mono text-xs font-semibold text-teal-700 hover:bg-teal-100"
+                      className="rounded-lg border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 font-mono text-xs font-semibold text-teal-400 hover:bg-teal-500/20"
                     >
                       {v}
                     </button>

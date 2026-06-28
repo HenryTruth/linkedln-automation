@@ -61,12 +61,12 @@ export default function CheckpointsPage() {
               account can safely resume automation.
             </p>
           </div>
-          <label className="inline-flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm">
+          <label className="inline-flex cursor-pointer items-center gap-3 rounded-2xl border border-white/[0.08] bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-200 shadow-sm">
             <input
               type="checkbox"
               checked={showUnresolved}
               onChange={(e) => setShowUnresolved(e.target.checked)}
-              className="rounded border-slate-300 text-teal-600"
+              className="rounded border-slate-600 text-teal-500"
             />
             Unresolved only
           </label>
@@ -74,19 +74,19 @@ export default function CheckpointsPage() {
       </section>
 
       {open.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-red-200 bg-red-50/90 shadow-sm">
-          <div className="flex items-center justify-between gap-4 border-b border-red-200 bg-red-100/80 px-6 py-4">
+        <div className="overflow-hidden rounded-2xl border border-red-500/30 bg-red-500/10 shadow-sm">
+          <div className="flex items-center justify-between gap-4 border-b border-red-500/20 bg-red-500/10 px-6 py-4">
             <div>
-              <p className="text-sm font-semibold text-red-800">
+              <p className="text-sm font-semibold text-red-300">
                 {open.length} open checkpoint{open.length > 1 ? "s" : ""}
               </p>
-              <p className="mt-1 text-xs text-red-700">
+              <p className="mt-1 text-xs text-red-400">
                 Affected accounts are paused until manually resolved.
               </p>
             </div>
           </div>
-          <table className="min-w-full divide-y divide-red-100">
-            <thead className="text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-red-700">
+          <table className="min-w-full divide-y divide-red-500/20">
+            <thead className="text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-red-400">
               <tr>
                 {["Account", "Detected", "Action"].map((h) => (
                   <th key={h} className="px-6 py-3">
@@ -95,13 +95,13 @@ export default function CheckpointsPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-red-100 bg-white/60">
+            <tbody className="divide-y divide-red-500/20">
               {open.map((cp) => (
                 <tr key={cp.id}>
-                  <td className="px-6 py-4 text-sm font-semibold text-slate-950">
+                  <td className="px-6 py-4 text-sm font-semibold text-white">
                     {cp.account?.email ?? cp.accountId}
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
+                  <td className="px-6 py-4 text-sm text-slate-400">
                     {new Date(cp.detectedAt).toLocaleString()}
                   </td>
                   <td className="px-6 py-4">
@@ -122,7 +122,7 @@ export default function CheckpointsPage() {
 
       {open.length === 0 && (
         <div className="app-panel p-8 text-center">
-          <p className="text-lg font-semibold text-emerald-700">
+          <p className="text-lg font-semibold text-emerald-400">
             {showUnresolved ? "No unresolved checkpoints" : "All clear"}
           </p>
           <p className="mt-2 text-sm text-slate-500">
@@ -132,7 +132,7 @@ export default function CheckpointsPage() {
       )}
 
       {open.length > 0 && (
-        <div className="app-panel border-amber-200 bg-amber-50/90 p-5 text-sm text-amber-900">
+        <div className="app-panel border-amber-500/30 bg-amber-500/10 p-5 text-sm text-amber-300">
           <p className="font-semibold">Resolution flow</p>
           <ol className="mt-3 grid gap-2 sm:grid-cols-2">
             {[
@@ -141,7 +141,7 @@ export default function CheckpointsPage() {
               "Confirm the account is accessible and not restricted.",
               'Click "Mark Resolved" to resume automation.',
             ].map((step, index) => (
-              <li key={step} className="rounded-xl bg-white/70 p-3">
+              <li key={step} className="rounded-xl bg-white/[0.05] p-3">
                 <span className="font-semibold">{index + 1}.</span> {step}
               </li>
             ))}
@@ -153,12 +153,12 @@ export default function CheckpointsPage() {
         <div>
           <div className="mb-3">
             <p className="page-kicker">History</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">
+            <h2 className="mt-1 text-xl font-semibold text-white">
               Resolved checkpoints
             </h2>
           </div>
           <div className="table-shell">
-            <table className="min-w-full divide-y divide-slate-100">
+            <table className="min-w-full divide-y divide-white/[0.06]">
               <thead className="table-head">
                 <tr>
                   {["Account", "Detected", "Resolved", "By"].map((h) => (
@@ -168,21 +168,21 @@ export default function CheckpointsPage() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-white/[0.06]">
                 {resolved.map((cp) => (
-                  <tr key={cp.id} className="hover:bg-slate-50/80">
-                    <td className="table-cell font-medium text-slate-950">
+                  <tr key={cp.id} className="hover:bg-white/[0.03]">
+                    <td className="table-cell font-medium text-white">
                       {cp.account?.email ?? cp.accountId}
                     </td>
-                    <td className="table-cell text-slate-500">
+                    <td className="table-cell text-slate-400">
                       {new Date(cp.detectedAt).toLocaleString()}
                     </td>
-                    <td className="table-cell text-slate-500">
+                    <td className="table-cell text-slate-400">
                       {cp.resolvedAt
                         ? new Date(cp.resolvedAt).toLocaleString()
                         : "-"}
                     </td>
-                    <td className="table-cell text-slate-500">
+                    <td className="table-cell text-slate-400">
                       {cp.resolvedBy ?? "-"}
                     </td>
                   </tr>
@@ -196,7 +196,7 @@ export default function CheckpointsPage() {
       <p className="text-xs text-slate-500">
         Accounts with 2+ checkpoints in 30 days are automatically limited to 50%
         of normal caps.{" "}
-        <Link href="/accounts" className="font-semibold text-teal-700 underline underline-offset-4">
+        <Link href="/accounts" className="font-semibold text-teal-400 underline underline-offset-4">
           View account health
         </Link>
       </p>

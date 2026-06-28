@@ -131,6 +131,45 @@ const TIMEZONES = [
   "Africa/Lagos",
 ];
 
+const TIMEZONE_COUNTRIES: Record<string, string[]> = {
+  "America/New_York": ["US", "USA", "United States"],
+  "America/Chicago": ["US", "USA", "United States"],
+  "America/Denver": ["US", "USA", "United States"],
+  "America/Los_Angeles": ["US", "USA", "United States"],
+  "America/Toronto": ["CA", "Canada"],
+  "America/Vancouver": ["CA", "Canada"],
+  "Europe/London": ["GB", "UK", "United Kingdom"],
+  "Europe/Paris": ["FR", "France"],
+  "Europe/Berlin": ["DE", "Germany"],
+  "Europe/Amsterdam": ["NL", "Netherlands"],
+  "Asia/Singapore": ["SG", "Singapore"],
+  "Asia/Tokyo": ["JP", "Japan"],
+  "Asia/Shanghai": ["CN", "China"],
+  "Australia/Sydney": ["AU", "Australia"],
+  "Africa/Lagos": ["NG", "Nigeria"],
+};
+
+function normalizeLocation(value?: string | null): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function expectedCountries(timezone: string): string[] {
+  return TIMEZONE_COUNTRIES[timezone] ?? [];
+}
+
+function proxyMatchesTimezone(proxy: Proxy | null | undefined, timezone: string): boolean {
+  if (!proxy) return true;
+  const expected = expectedCountries(timezone).map(normalizeLocation);
+  if (expected.length === 0) return true;
+  return expected.includes(normalizeLocation(proxy.country));
+}
+
+function locationMismatchMessage(proxy: Proxy | null | undefined, timezone: string): string | null {
+  if (!proxy || proxyMatchesTimezone(proxy, timezone)) return null;
+  const expected = expectedCountries(timezone).join(" or ");
+  return `Timezone ${timezone} usually maps to ${expected}, but this proxy is ${proxy.country}. Use the location the account normally logs in from.`;
+}
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -147,14 +186,14 @@ function CapBar({ label, used, cap }: { label: string; used: number; cap: number
     <div>
       <div className="mb-1 flex justify-between text-xs font-medium text-slate-500">
         <span>{label}</span>
-        <span className={danger ? "text-red-600 font-medium" : ""}>
+        <span className={danger ? "font-medium text-red-400" : ""}>
           {used} / {cap}
         </span>
       </div>
-      <div className="h-2 rounded-full bg-slate-100">
+      <div className="h-2 rounded-full bg-slate-800">
         <div
           className={`h-2 rounded-full transition-all ${
-            danger ? "bg-red-400" : "bg-teal-500"
+            danger ? "bg-red-500" : "bg-teal-500"
           }`}
           style={{ width: `${pct}%` }}
         />
@@ -183,18 +222,18 @@ function AccountActionButton({
   onClick: () => void;
 }) {
   const toneClasses = {
-    slate: "border-slate-200 bg-white text-slate-900 hover:border-slate-300",
-    teal: "border-teal-200 bg-teal-50/70 text-teal-950 hover:border-teal-300",
-    violet: "border-violet-200 bg-violet-50/70 text-violet-950 hover:border-violet-300",
-    amber: "border-amber-200 bg-amber-50/80 text-amber-950 hover:border-amber-300",
-    red: "border-red-200 bg-red-50/80 text-red-950 hover:border-red-300",
+    slate: "border-white/10 bg-slate-800 text-slate-100 hover:border-white/20 hover:bg-slate-700",
+    teal: "border-teal-500/30 bg-teal-500/10 text-teal-100 hover:border-teal-500/50",
+    violet: "border-violet-500/30 bg-violet-500/10 text-violet-100 hover:border-violet-500/50",
+    amber: "border-amber-500/30 bg-amber-500/10 text-amber-100 hover:border-amber-500/50",
+    red: "border-red-500/30 bg-red-500/10 text-red-100 hover:border-red-500/50",
   };
   const dotClasses = {
     slate: "bg-slate-400",
-    teal: "bg-teal-500",
-    violet: "bg-violet-500",
-    amber: "bg-amber-500",
-    red: "bg-red-500",
+    teal: "bg-teal-400",
+    violet: "bg-violet-400",
+    amber: "bg-amber-400",
+    red: "bg-red-400",
   };
 
   return (
@@ -202,15 +241,15 @@ function AccountActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-[6.75rem] rounded-2xl border p-3 text-left shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`min-h-[6.75rem] rounded-2xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
         toneClasses[tone]
-      } ${active ? "ring-4 ring-slate-200/70" : ""}`}
+      } ${active ? "ring-2 ring-white/20" : ""}`}
     >
       <span className="flex items-start gap-2">
         <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${dotClasses[tone]}`} />
         <span className="min-w-0">
           <span className="block text-sm font-semibold leading-5">{title}</span>
-          <span className="mt-1 block text-xs leading-5 text-slate-500">
+          <span className="mt-1 block text-xs leading-5 text-slate-400">
             {description}
           </span>
           {detail && (
@@ -258,6 +297,11 @@ export default function AccountsPage() {
   const [newProxyId, setNewProxyId] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const selectedProxy = proxies.find((proxy) => proxy.id === newProxyId) ?? null;
+  const selectedProxyLocationWarning = locationMismatchMessage(
+    selectedProxy,
+    newTimezone
+  );
 
   function setAccountNotice(
     accountId: string,
@@ -477,7 +521,7 @@ export default function AccountsPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
+  if (loading) return <p className="text-sm text-slate-400">Loading...</p>;
 
   const today = todayKey();
 
@@ -506,24 +550,24 @@ export default function AccountsPage() {
       {showForm && (
         <form
           onSubmit={handleAddAccount}
-          className="app-panel max-w-2xl space-y-4 border-teal-200 bg-teal-50/70 p-5"
+          className="app-panel max-w-2xl space-y-4 border-teal-500/30 bg-teal-500/5 p-5"
         >
-          <h2 className="text-sm font-semibold text-teal-950">
+          <h2 className="text-sm font-semibold text-teal-300">
             Add LinkedIn Account
           </h2>
-          <p className="text-xs leading-5 text-teal-800">
+          <p className="text-xs leading-5 text-teal-400">
             After adding, log in manually on LinkedIn once to generate cookies.
             The account will auto-resume from saved cookies on subsequent runs.
           </p>
 
           {addError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
               {addError}
             </div>
           )}
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">
+            <label className="mb-1 block text-xs font-semibold text-slate-300">
               LinkedIn email *
             </label>
             <input
@@ -537,7 +581,7 @@ export default function AccountsPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">
+            <label className="mb-1 block text-xs font-semibold text-slate-300">
               Timezone (determines active hours 8am-7pm)
             </label>
             <select
@@ -554,15 +598,15 @@ export default function AccountsPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">
-              Proxy (optional - assign a residential proxy for this account)
+            <label className="mb-1 block text-xs font-semibold text-slate-300">
+              Proxy (required before automation starts)
             </label>
             <select
               value={newProxyId}
               onChange={(e) => setNewProxyId(e.target.value)}
               className="field w-full"
             >
-              <option value="">No proxy</option>
+              <option value="">No proxy yet</option>
               {proxies.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.country}
@@ -571,6 +615,23 @@ export default function AccountsPage() {
                 </option>
               ))}
             </select>
+            {newProxyId ? (
+              selectedProxyLocationWarning ? (
+                <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                  {selectedProxyLocationWarning}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-slate-500">
+                  Proxy location matches the selected timezone. Still use the
+                  location this account normally logs in from.
+                </p>
+              )
+            ) : (
+              <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                You can save the account now, but jobs will not run until a
+                stable residential proxy is assigned.
+              </p>
+            )}
           </div>
 
           <button
@@ -585,8 +646,8 @@ export default function AccountsPage() {
 
       {/* No accounts state */}
       {accounts.length === 0 && !showForm && (
-        <div className="app-panel border-dashed p-12 text-center">
-          <p className="mb-2 font-semibold text-slate-700">
+        <div className="app-panel border-dashed border-white/10 p-12 text-center">
+          <p className="mb-2 font-semibold text-slate-300">
             No LinkedIn accounts added yet
           </p>
           <p className="mb-4 text-sm text-slate-500">
@@ -623,15 +684,18 @@ export default function AccountsPage() {
           const canResume =
             account.status === "PAUSED" || account.status === "RESTRICTED";
           const isRestricted = account.status === "RESTRICTED";
+          const accountProxyWarning = account.proxy
+            ? locationMismatchMessage(account.proxy, account.timezone)
+            : null;
 
           return (
             <div
               key={account.id}
               className={`app-panel space-y-5 p-6 ${
                 openCount > 0 || account.status === "RESTRICTED"
-                  ? "border-red-300 ring-4 ring-red-100"
+                  ? "border-red-500/40 ring-2 ring-red-500/20"
                   : account.status === "PAUSED"
-                  ? "border-amber-200"
+                  ? "border-amber-500/30"
                   : ""
               }`}
             >
@@ -640,7 +704,7 @@ export default function AccountsPage() {
                 <HealthScore account={account} checkpoints={checkpoints} />
 
                 <div className="flex-1 min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-950">
+                  <p className="truncate text-sm font-semibold text-white">
                     {account.email}
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -648,7 +712,7 @@ export default function AccountsPage() {
                     <Badge value={account.warmUpPhase} />
                   </div>
                   {openCount > 0 && (
-                    <p className="mt-2 text-xs font-semibold text-red-600">
+                    <p className="mt-2 text-xs font-semibold text-red-400">
                       {openCount} open checkpoint
                       {openCount > 1 ? "s" : ""} - automation paused
                     </p>
@@ -656,7 +720,7 @@ export default function AccountsPage() {
                 </div>
 
                 <div className="hidden shrink-0 sm:block">
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                  <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300">
                     {account.status === "ACTIVE" ? "Running" : "Needs attention"}
                   </span>
                 </div>
@@ -666,10 +730,10 @@ export default function AccountsPage() {
                 <div
                   className={`rounded-2xl border p-3 text-sm ${
                     accountNotice.type === "success"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
                       : accountNotice.type === "info"
-                      ? "border-sky-200 bg-sky-50 text-sky-700"
-                      : "border-red-200 bg-red-50 text-red-700"
+                      ? "border-sky-500/30 bg-sky-500/10 text-sky-400"
+                      : "border-red-500/30 bg-red-500/10 text-red-400"
                   }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -687,10 +751,10 @@ export default function AccountsPage() {
                 </div>
               )}
 
-              <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-3">
+              <div className="rounded-3xl border border-white/[0.06] bg-slate-950/40 p-3">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
                       Account actions
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
@@ -698,7 +762,7 @@ export default function AccountsPage() {
                     </p>
                   </div>
                   {accountBusy && (
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-500">
+                    <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300">
                       Working...
                     </span>
                   )}
@@ -777,12 +841,12 @@ export default function AccountsPage() {
 
                 {/* Cap editor panel */}
                 {showCapsFor === account.id && (
-                  <div className="mt-3 space-y-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                  <div className="mt-3 space-y-4 rounded-2xl border border-violet-500/30 bg-violet-500/5 p-4">
                     <div>
-                      <p className="text-xs font-semibold text-violet-900">
+                      <p className="text-xs font-semibold text-violet-300">
                         Daily limit overrides
                       </p>
-                      <p className="mt-0.5 text-xs leading-5 text-violet-700">
+                      <p className="mt-0.5 text-xs leading-5 text-violet-400">
                         Pick your account type to pre-fill safe recommended values, or set custom numbers.
                         Hard ceilings are enforced by the server.
                       </p>
@@ -799,14 +863,14 @@ export default function AccountsPage() {
                             onClick={() => applyPreset(account.id, preset)}
                             className={`rounded-xl border px-3 py-2 text-left transition-all ${
                               active
-                                ? "border-violet-500 bg-violet-100 ring-2 ring-violet-300"
-                                : "border-violet-200 bg-white hover:border-violet-400 hover:bg-violet-50"
+                                ? "border-violet-400/60 bg-violet-500/20 ring-2 ring-violet-500/30"
+                                : "border-white/10 bg-slate-800 hover:border-violet-500/40 hover:bg-violet-500/10"
                             }`}
                           >
-                            <p className="text-xs font-semibold text-violet-900">
+                            <p className="text-xs font-semibold text-violet-200">
                               {preset.label}
                             </p>
-                            <p className="mt-0.5 text-[10px] text-violet-500">
+                            <p className="mt-0.5 text-[10px] text-violet-400">
                               {preset.badge}
                             </p>
                           </button>
@@ -820,13 +884,13 @@ export default function AccountsPage() {
                         (p) => p.id === selectedPreset[account.id]
                       )!;
                       return (
-                        <div className="space-y-2 rounded-xl border border-violet-200 bg-white/70 p-3">
-                          <p className="text-xs leading-5 text-slate-700">
+                        <div className="space-y-2 rounded-xl border border-white/[0.06] bg-slate-800/60 p-3">
+                          <p className="text-xs leading-5 text-slate-300">
                             {preset.description}
                           </p>
                           <ul className="space-y-1">
                             {preset.caveats.map((c) => (
-                              <li key={c} className="flex items-start gap-1.5 text-[11px] text-slate-500">
+                              <li key={c} className="flex items-start gap-1.5 text-[11px] text-slate-400">
                                 <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-violet-400" />
                                 {c}
                               </li>
@@ -837,7 +901,7 @@ export default function AccountsPage() {
                     })()}
 
                     {capError && (
-                      <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                      <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400">
                         {capError}
                       </div>
                     )}
@@ -850,10 +914,10 @@ export default function AccountsPage() {
                         const weekly = Math.round(val * 6);
                         const safeColor =
                           val <= info.safeZone
-                            ? "text-emerald-600"
+                            ? "text-emerald-400"
                             : val <= info.amberZone
-                            ? "text-amber-600"
-                            : "text-red-600";
+                            ? "text-amber-400"
+                            : "text-red-400";
                         const safeLabel =
                           val <= info.safeZone
                             ? "safe"
@@ -861,9 +925,9 @@ export default function AccountsPage() {
                             ? "borderline"
                             : "risky";
                         return (
-                          <div key={key} className="rounded-xl border border-violet-100 bg-white/60 p-3">
+                          <div key={key} className="rounded-xl border border-white/[0.06] bg-slate-800/60 p-3">
                             <div className="mb-1.5 flex items-center justify-between">
-                              <label className="text-xs font-semibold text-violet-900">
+                              <label className="text-xs font-semibold text-violet-300">
                                 {CAP_LABELS[key]}
                               </label>
                               <span className={`text-[10px] font-semibold ${safeColor}`}>
@@ -899,10 +963,10 @@ export default function AccountsPage() {
                                     : " — under LinkedIn's ~100/week soft cap"}
                                 </p>
                               )}
-                              <p className="text-[10px] text-slate-400">
+                              <p className="text-[10px] text-slate-500">
                                 {info.weeklyNote}
                               </p>
-                              <p className="text-[10px] text-slate-400">
+                              <p className="text-[10px] text-slate-500">
                                 System default {SYSTEM_CAPS[key]} · Hard ceiling {HARD_CEILING[key]}
                               </p>
                             </div>
@@ -936,15 +1000,15 @@ export default function AccountsPage() {
 
                 {/* Cookie upload panel */}
                 {showCookieFor === account.id && (
-                  <div className="mt-3 space-y-3 rounded-2xl border border-teal-200 bg-teal-50/70 p-4">
-                    <p className="text-xs font-semibold text-teal-900">
+                  <div className="mt-3 space-y-3 rounded-2xl border border-teal-500/30 bg-teal-500/5 p-4">
+                    <p className="text-xs font-semibold text-teal-300">
                       Paste session cookies (JSON array from browser devtools)
                     </p>
-                    <p className="text-xs leading-5 text-teal-700">
+                    <p className="text-xs leading-5 text-teal-400">
                       Open LinkedIn in your browser, open DevTools, then Application,
                       Cookies, copy all cookies as JSON, then paste below.
                     </p>
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-300">
                       Session cookies grant access to this LinkedIn session. They are
                       encrypted at rest and used only to run browser automation for
                       this account. Do not paste cookies unless you authorize that use.
@@ -961,7 +1025,7 @@ export default function AccountsPage() {
                       placeholder='[{"name":"li_at","value":"...","domain":".linkedin.com",...}]'
                       className="field w-full font-mono text-xs"
                     />
-                    <label className="flex items-start gap-2 rounded-xl border border-teal-200 bg-white/70 p-3 text-xs leading-5 text-teal-900">
+                    <label className="flex items-start gap-2 rounded-xl border border-white/[0.06] bg-slate-800/60 p-3 text-xs leading-5 text-teal-200">
                       <input
                         type="checkbox"
                         checked={cookieConsent[account.id] ?? false}
@@ -980,7 +1044,7 @@ export default function AccountsPage() {
                       </span>
                     </label>
                     {account.cookiesConsentAt && (
-                      <p className="text-[11px] text-teal-700">
+                      <p className="text-[11px] text-teal-400">
                         Last cookie consent recorded{" "}
                         {new Date(account.cookiesConsentAt).toLocaleString()}.
                       </p>
@@ -1001,29 +1065,39 @@ export default function AccountsPage() {
               </div>
 
               {/* Proxy row */}
-              <div className="flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-3 text-sm">
-                <span className="w-16 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+              <div className="flex items-center gap-2 rounded-2xl bg-slate-800/50 px-4 py-3 text-sm">
+                <span className="w-16 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                   Proxy
                 </span>
                 {account.proxy ? (
                   <>
-                    <span className="text-slate-700">
+                    <span className="text-slate-300">
                       {account.proxy.country}
                       {account.proxy.city ? ` - ${account.proxy.city}` : ""}
                     </span>
                     <Badge value={account.proxy.healthStatus} />
+                    {accountProxyWarning && (
+                      <span className="text-xs font-medium text-amber-400">
+                        Location mismatch
+                      </span>
+                    )}
                   </>
                 ) : (
                   <span className="text-xs italic text-slate-400">
-                    No proxy assigned - risk of detection without residential
-                    IP
+                    No proxy assigned - jobs are blocked until a residential IP
+                    is added
                   </span>
                 )}
               </div>
+              {accountProxyWarning && (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
+                  {accountProxyWarning}
+                </div>
+              )}
 
               {/* Timezone row */}
-              <div className="flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                <span className="w-16 font-semibold uppercase tracking-[0.12em] text-slate-400">TZ</span>
+              <div className="flex items-center gap-2 rounded-2xl bg-slate-800/50 px-4 py-3 text-xs text-slate-400">
+                <span className="w-16 font-semibold uppercase tracking-[0.12em] text-slate-500">TZ</span>
                 <span>
                   {account.timezone} - Actions fire 8am-7pm local time
                 </span>

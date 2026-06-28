@@ -38,14 +38,14 @@ function pctColor(pct: number) {
 }
 
 function pctTextColor(pct: number) {
-  if (pct >= 80) return "text-red-600 font-semibold";
-  if (pct >= 60) return "text-amber-600 font-medium";
-  return "text-slate-500";
+  if (pct >= 80) return "text-red-400 font-semibold";
+  if (pct >= 60) return "text-amber-400 font-medium";
+  return "text-slate-400";
 }
 
 function UtilBar({ pct }: { pct: number }) {
   return (
-    <div className="h-1.5 rounded-full bg-slate-100">
+    <div className="h-1.5 rounded-full bg-slate-800">
       <div
         className={`h-1.5 rounded-full transition-all ${pctColor(pct)}`}
         style={{ width: `${Math.min(100, pct)}%` }}
@@ -98,8 +98,8 @@ export default function RateLimitsPage() {
         <h1 className="page-title mt-2">Rate-Limit Dashboard</h1>
         <p className="page-copy">
           Daily action cap utilization across all accounts.{" "}
-          <span className="text-red-600 font-medium">Red ≥ 80%</span>,{" "}
-          <span className="text-amber-600 font-medium">amber ≥ 60%</span>.
+          <span className="text-red-400 font-medium">Red ≥ 80%</span>,{" "}
+          <span className="text-amber-400 font-medium">amber ≥ 60%</span>.
           Caps reset at midnight in each account&apos;s local timezone.
         </p>
       </section>
@@ -107,7 +107,7 @@ export default function RateLimitsPage() {
       {/* Summary chips */}
       <div className="grid grid-cols-3 gap-4 max-w-lg">
         <div className="app-panel p-5 text-center">
-          <p className="text-3xl font-semibold text-slate-950">
+          <p className="text-3xl font-semibold text-white">
             {accounts.length}
           </p>
           <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
@@ -115,10 +115,10 @@ export default function RateLimitsPage() {
           </p>
         </div>
         <div
-          className={`app-panel p-5 text-center ${atRisk > 0 ? "border-red-200 bg-red-50/70" : ""}`}
+          className={`app-panel p-5 text-center ${atRisk > 0 ? "border-red-500/30 bg-red-500/10" : ""}`}
         >
           <p
-            className={`text-3xl font-semibold ${atRisk > 0 ? "text-red-700" : "text-slate-950"}`}
+            className={`text-3xl font-semibold ${atRisk > 0 ? "text-red-400" : "text-white"}`}
           >
             {atRisk}
           </p>
@@ -127,10 +127,10 @@ export default function RateLimitsPage() {
           </p>
         </div>
         <div
-          className={`app-panel p-5 text-center ${atWarning > 0 ? "border-amber-200 bg-amber-50/70" : ""}`}
+          className={`app-panel p-5 text-center ${atWarning > 0 ? "border-amber-500/30 bg-amber-500/10" : ""}`}
         >
           <p
-            className={`text-3xl font-semibold ${atWarning > 0 ? "text-amber-700" : "text-slate-950"}`}
+            className={`text-3xl font-semibold ${atWarning > 0 ? "text-amber-400" : "text-white"}`}
           >
             {atWarning}
           </p>
@@ -143,7 +143,7 @@ export default function RateLimitsPage() {
       {accounts.length === 0 && (
         <div className="app-panel border-dashed p-12 text-center text-sm text-slate-400">
           No accounts yet.{" "}
-          <Link href="/accounts" className="font-semibold text-teal-700 hover:underline">
+          <Link href="/accounts" className="font-semibold text-teal-400 hover:underline">
             Add one
           </Link>{" "}
           to start tracking cap usage.
@@ -153,7 +153,7 @@ export default function RateLimitsPage() {
       {/* Today's utilization table */}
       {accounts.length > 0 && (
         <div>
-          <h2 className="mb-3 text-lg font-semibold tracking-tight text-slate-950">
+          <h2 className="mb-3 text-lg font-semibold tracking-tight text-white">
             Today&apos;s Cap Utilization
           </h2>
           <div className="table-shell">
@@ -169,20 +169,20 @@ export default function RateLimitsPage() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-white/[0.06]">
                 {accounts.map((account) => {
                   const utils = accountUtilization(account, today);
                   const worstPct = Math.max(...utils.map((u) => u.pct));
                   return (
                     <tr
                       key={account.id}
-                      className={`hover:bg-slate-50/80 ${
-                        worstPct >= 80 ? "bg-red-50/40" : worstPct >= 60 ? "bg-amber-50/30" : ""
+                      className={`hover:bg-white/[0.03] ${
+                        worstPct >= 80 ? "bg-red-500/[0.08]" : worstPct >= 60 ? "bg-amber-500/[0.06]" : ""
                       }`}
                     >
                       <td className="table-cell">
                         <div>
-                          <p className="max-w-[200px] truncate text-sm font-semibold text-slate-800">
+                          <p className="max-w-[200px] truncate text-sm font-semibold text-slate-100">
                             {account.email}
                           </p>
                           <p className="text-[11px] text-slate-400">
@@ -216,7 +216,7 @@ export default function RateLimitsPage() {
       {/* 7-day connection history per account */}
       {accounts.length > 0 && (
         <div>
-          <h2 className="mb-4 text-lg font-semibold tracking-tight text-slate-950">
+          <h2 className="mb-4 text-lg font-semibold tracking-tight text-white">
             7-Day Connection Usage
           </h2>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -232,7 +232,7 @@ export default function RateLimitsPage() {
               return (
                 <div key={account.id} className="app-panel p-5">
                   <div className="mb-3 flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-slate-900">
+                    <p className="truncate text-sm font-semibold text-white">
                       {account.email}
                     </p>
                     <Badge value={account.status} />
@@ -252,9 +252,9 @@ export default function RateLimitsPage() {
                           className="group relative flex flex-1 flex-col items-center"
                           style={{ height: "100%" }}
                         >
-                          <div className="flex w-full flex-col justify-end rounded-sm bg-slate-100" style={{ height: "44px" }}>
+                          <div className="flex w-full flex-col justify-end rounded-sm bg-slate-800" style={{ height: "44px" }}>
                             <div
-                              className={`w-full rounded-sm transition-all ${isToday ? pctColor(capPct) : "bg-slate-300"}`}
+                              className={`w-full rounded-sm transition-all ${isToday ? pctColor(capPct) : "bg-slate-600"}`}
                               style={{ height: `${heightPct}%` }}
                             />
                           </div>
@@ -281,12 +281,12 @@ export default function RateLimitsPage() {
 
       {/* Hard cap reference */}
       <div className="app-panel max-w-md p-5">
-        <h3 className="mb-3 text-sm font-semibold text-slate-700">
+        <h3 className="mb-3 text-sm font-semibold text-slate-200">
           Hard Caps Reference
         </h3>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100">
+            <tr className="border-b border-white/[0.06]">
               <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Action
               </th>
@@ -295,11 +295,11 @@ export default function RateLimitsPage() {
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody className="divide-y divide-white/[0.04]">
             {Object.entries(CAP_LABELS).map(([key, label]) => (
               <tr key={key}>
-                <td className="py-2 text-slate-700">{label}</td>
-                <td className="py-2 text-right font-semibold tabular-nums text-slate-950">
+                <td className="py-2 text-slate-300">{label}</td>
+                <td className="py-2 text-right font-semibold tabular-nums text-white">
                   {BASE_CAPS[key]}
                 </td>
               </tr>

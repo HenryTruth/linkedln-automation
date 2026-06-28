@@ -13,6 +13,7 @@ export {
   AccountPausedError,
   MessageBodyDedupError,
   IpMismatchError,
+  MissingProxyError,
 } from "./errors.js";
 export {
   renderTemplate,

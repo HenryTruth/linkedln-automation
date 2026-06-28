@@ -8,12 +8,12 @@ import { SequenceBuilder } from "@/components/SequenceBuilder";
 import { ContentSignalPanel } from "@/components/ContentSignalPanel";
 
 const JOB_STATUS_STYLES: Record<CampaignLeadJobStatus, string> = {
-  IDLE:    "bg-slate-100 text-slate-500",
-  QUEUED:  "bg-amber-100 text-amber-700",
-  RUNNING: "bg-blue-100 text-blue-700",
-  SENT:    "bg-emerald-100 text-emerald-700",
-  SKIPPED: "bg-slate-100 text-slate-400",
-  FAILED:  "bg-red-100 text-red-700",
+  IDLE:    "bg-slate-700/50 text-slate-400",
+  QUEUED:  "bg-amber-500/15 text-amber-400",
+  RUNNING: "bg-blue-500/15 text-blue-400",
+  SENT:    "bg-emerald-500/15 text-emerald-400",
+  SKIPPED: "bg-slate-700/40 text-slate-400",
+  FAILED:  "bg-red-500/15 text-red-400",
 };
 
 function JobStatusBadge({ status, error }: { status: CampaignLeadJobStatus; error?: string | null }) {
@@ -271,7 +271,7 @@ export default function CampaignDetailPage() {
 
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
   if (error || !campaign)
-    return <p className="text-sm text-red-600">{error ?? "Not found"}</p>;
+    return <p className="text-sm text-red-400">{error ?? "Not found"}</p>;
 
   const isMessage = campaign.type === "MESSAGE";
   const isScrape = campaign.type === "SCRAPE";
@@ -284,7 +284,7 @@ export default function CampaignDetailPage() {
       <section className="app-panel p-6 lg:p-8">
         <button
           onClick={() => router.push("/campaigns")}
-          className="mb-4 text-sm font-semibold text-slate-500 hover:text-slate-950"
+          className="mb-4 text-sm font-semibold text-slate-400 hover:text-white"
         >
           Back to Campaigns
         </button>
@@ -299,7 +299,7 @@ export default function CampaignDetailPage() {
                   className="field min-w-72 text-xl font-semibold"
                 />
                 <div className="flex items-center gap-1">
-                  <label className="text-xs font-semibold text-slate-500">Daily limit</label>
+                  <label className="text-xs font-semibold text-slate-400">Daily limit</label>
                   <input
                     type="number"
                     min={1}
@@ -330,7 +330,7 @@ export default function CampaignDetailPage() {
                   <h1 className="page-title">{campaign.name}</h1>
                   <button
                     onClick={startEditing}
-                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-500 hover:border-teal-200 hover:text-teal-700"
+                    className="rounded-lg border border-white/[0.08] px-2 py-1 text-xs font-semibold text-slate-400 hover:border-teal-500/40 hover:text-teal-400"
                   >
                     Edit
                   </button>
@@ -338,7 +338,7 @@ export default function CampaignDetailPage() {
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   <Badge value={campaign.type} />
                   <Badge value={campaign.status} />
-                  <span className="text-sm font-medium text-slate-500">
+                  <span className="text-sm font-medium text-slate-400">
                     {campaign.leads.length} lead
                     {campaign.leads.length !== 1 ? "s" : ""} -{" "}
                     {campaign.dailyLimit}/day limit
@@ -381,8 +381,8 @@ export default function CampaignDetailPage() {
           <div
             className={`mt-4 rounded-2xl p-3 text-sm ${
               startResult.ok
-                ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
-                : "bg-red-50 border border-red-200 text-red-700"
+                ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : "border border-red-500/30 bg-red-500/10 text-red-400"
             }`}
           >
             {startResult.ok ? "OK " : "Error "}
@@ -395,12 +395,12 @@ export default function CampaignDetailPage() {
       {stats && (
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {[
-            { label: "Total leads", value: stats.totalLeads, color: "text-slate-950" },
-            { label: "Pending", value: stats.pending, color: "text-amber-600" },
-            { label: "Connected", value: stats.connected, color: "text-teal-700" },
-            { label: "Replied", value: stats.replied, color: "text-emerald-700" },
-            { label: "Acceptance", value: `${stats.acceptanceRate}%`, color: stats.acceptanceRate >= 30 ? "text-emerald-700" : "text-amber-600" },
-            { label: "Reply rate", value: `${stats.replyRate}%`, color: stats.replyRate >= 10 ? "text-emerald-700" : "text-slate-600" },
+            { label: "Total leads", value: stats.totalLeads, color: "text-white" },
+            { label: "Pending", value: stats.pending, color: "text-amber-400" },
+            { label: "Connected", value: stats.connected, color: "text-teal-400" },
+            { label: "Replied", value: stats.replied, color: "text-emerald-400" },
+            { label: "Acceptance", value: `${stats.acceptanceRate}%`, color: stats.acceptanceRate >= 30 ? "text-emerald-400" : "text-amber-400" },
+            { label: "Reply rate", value: `${stats.replyRate}%`, color: stats.replyRate >= 10 ? "text-emerald-400" : "text-slate-400" },
           ].map(({ label, value, color }) => (
             <div key={label} className="app-panel p-4 text-center">
               <p className={`text-2xl font-semibold ${color}`}>{value}</p>
@@ -415,14 +415,14 @@ export default function CampaignDetailPage() {
         <section className="app-panel p-6">
           <div className="mb-4">
             <p className="page-kicker">Personalisation</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">
+            <h2 className="mt-1 text-xl font-semibold text-white">
               Connection Note
             </h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
               Sent with every connection request in this campaign. Use dynamic
               variables to personalise each note automatically. LinkedIn limits
               notes to{" "}
-              <span className="font-semibold text-slate-700">
+              <span className="font-semibold text-slate-200">
                 300 characters
               </span>
               . Leave blank to send without a note.
@@ -441,7 +441,7 @@ export default function CampaignDetailPage() {
                 type="button"
                 title={tip}
                 onClick={() => insertNoteVariable(label)}
-                className="rounded-lg border border-teal-200 bg-teal-50 px-2 py-0.5 font-mono text-xs font-semibold text-teal-700 hover:bg-teal-100"
+                className="rounded-lg border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 font-mono text-xs font-semibold text-teal-400 hover:bg-teal-500/20"
               >
                 {label}
               </button>
@@ -467,7 +467,7 @@ export default function CampaignDetailPage() {
             </p>
             <div className="flex items-center gap-3">
               {noteSaved && (
-                <span className="text-xs font-semibold text-emerald-600">
+                <span className="text-xs font-semibold text-emerald-400">
                   Saved
                 </span>
               )}
@@ -492,11 +492,11 @@ export default function CampaignDetailPage() {
           </div>
 
           {noteText.trim() && (
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mt-4 rounded-2xl border border-white/[0.06] bg-slate-800/50 p-4">
               <p className="mb-1 text-xs font-semibold text-slate-400">
                 Preview (example lead)
               </p>
-              <p className="text-sm text-slate-700">
+              <p className="text-sm text-slate-300">
                 {noteText
                   .replace(/\{\{firstName\}\}/g, "Sarah")
                   .replace(/\{\{lastName\}\}/g, "Johnson")
@@ -513,10 +513,10 @@ export default function CampaignDetailPage() {
         <section>
           <div className="mb-4">
             <p className="page-kicker">Signal targeting</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">
+            <h2 className="mt-1 text-xl font-semibold text-white">
               Content Signal Targeting
             </h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
               Configure the keyword to search, then run the scraper to find
               people who posted about it. Each collected author becomes a lead
               with their post stored as context for personalised outreach.
@@ -534,10 +534,10 @@ export default function CampaignDetailPage() {
         <section>
           <div className="mb-4">
             <p className="page-kicker">Sequence</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">
+            <h2 className="mt-1 text-xl font-semibold text-white">
               Message Sequence
             </h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
               Drag steps to reorder them. Click Edit to change content or
               delays. Each step fires after its delay has passed since the
               previous one.
@@ -555,10 +555,10 @@ export default function CampaignDetailPage() {
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="page-kicker">Audience</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">
+            <h2 className="mt-1 text-xl font-semibold text-white">
               {isScrape ? "Profiles to Scrape" : "Leads"}
             </h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
               {isScrape ? (
                 <>
                   Add specific profile URLs you found manually, or add a
@@ -569,7 +569,7 @@ export default function CampaignDetailPage() {
                 <>
                   Profiles to send connection requests to. Only add people you
                   are{" "}
-                  <span className="font-semibold text-slate-700">
+                  <span className="font-semibold text-slate-200">
                     not yet connected with
                   </span>{" "}
                   - already-connected profiles will be skipped.
@@ -577,7 +577,7 @@ export default function CampaignDetailPage() {
               ) : (
                 <>
                   Connected contacts to message. Only people who have{" "}
-                  <span className="font-semibold text-slate-700">
+                  <span className="font-semibold text-slate-200">
                     accepted your connection
                   </span>{" "}
                   can receive messages - unconnected profiles will be skipped.
@@ -594,7 +594,7 @@ export default function CampaignDetailPage() {
                   setShowLeadForm(false);
                   setShowCsvImport(false);
                 }}
-                className="btn-secondary px-3 py-1.5 text-violet-700"
+                className="btn-secondary px-3 py-1.5 text-violet-400"
               >
                 {showSearchForm ? "Cancel" : "Search URL"}
               </button>
@@ -607,7 +607,7 @@ export default function CampaignDetailPage() {
                   setShowSearchForm(false);
                   setCsvResult(null);
                 }}
-                className="btn-secondary px-3 py-1.5 text-indigo-700"
+                className="btn-secondary px-3 py-1.5 text-indigo-400"
               >
                 {showCsvImport ? "Cancel" : "Import CSV"}
               </button>
@@ -618,7 +618,7 @@ export default function CampaignDetailPage() {
                 setShowSearchForm(false);
                 setShowCsvImport(false);
               }}
-              className="btn-secondary px-3 py-1.5 text-teal-700"
+              className="btn-secondary px-3 py-1.5 text-teal-400"
             >
               {showLeadForm
                 ? "Cancel"
@@ -631,12 +631,12 @@ export default function CampaignDetailPage() {
 
         {/* Status mismatch warning (persists until dismissed) */}
         {leadWarning && (
-          <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <span className="mt-0.5 text-sm font-semibold text-amber-700">Warning:</span>
-            <div className="flex-1 text-sm text-amber-800">{leadWarning}</div>
+          <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <span className="mt-0.5 text-sm font-semibold text-amber-400">Warning:</span>
+            <div className="flex-1 text-sm text-amber-300">{leadWarning}</div>
             <button
               onClick={() => setLeadWarning(null)}
-              className="text-xs font-semibold text-amber-600 hover:text-amber-800"
+              className="text-xs font-semibold text-amber-400 hover:text-amber-300"
             >
               Close
             </button>
@@ -647,18 +647,18 @@ export default function CampaignDetailPage() {
         {showCsvImport && (
           <form
             onSubmit={handleImportCsv}
-            className="mb-4 space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4"
+            className="mb-4 space-y-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4"
           >
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 Paste CSV
               </label>
-              <p className="mb-2 text-xs leading-5 text-slate-500">
-                Required column: <code className="rounded bg-white px-1 font-mono">linkedinUrl</code>.
-                Optional: <code className="rounded bg-white px-1 font-mono">firstName</code>,{" "}
-                <code className="rounded bg-white px-1 font-mono">lastName</code>,{" "}
-                <code className="rounded bg-white px-1 font-mono">company</code>,{" "}
-                <code className="rounded bg-white px-1 font-mono">title</code>.
+              <p className="mb-2 text-xs leading-5 text-slate-400">
+                Required column: <code className="rounded bg-slate-800 px-1 font-mono">linkedinUrl</code>.
+                Optional: <code className="rounded bg-slate-800 px-1 font-mono">firstName</code>,{" "}
+                <code className="rounded bg-slate-800 px-1 font-mono">lastName</code>,{" "}
+                <code className="rounded bg-slate-800 px-1 font-mono">company</code>,{" "}
+                <code className="rounded bg-slate-800 px-1 font-mono">title</code>.
                 All imported leads are added to this campaign.
               </p>
               <textarea
@@ -671,12 +671,12 @@ export default function CampaignDetailPage() {
               />
             </div>
             {csvResult && (
-              <div className={`rounded-xl border p-3 text-sm ${csvResult.errors.length > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+              <div className={`rounded-xl border p-3 text-sm ${csvResult.errors.length > 0 ? "border-amber-500/30 bg-amber-500/10" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"}`}>
                 {csvResult.imported > 0 && (
-                  <p className="font-semibold text-emerald-700">{csvResult.imported} lead{csvResult.imported !== 1 ? "s" : ""} imported.</p>
+                  <p className="font-semibold text-emerald-400">{csvResult.imported} lead{csvResult.imported !== 1 ? "s" : ""} imported.</p>
                 )}
                 {csvResult.errors.length > 0 && (
-                  <ul className="mt-1 space-y-1 text-amber-800">
+                  <ul className="mt-1 space-y-1 text-amber-300">
                     {csvResult.errors.map((e, i) => (
                       <li key={i} className="text-xs">Row {e.row}: {e.error}</li>
                     ))}
@@ -694,13 +694,13 @@ export default function CampaignDetailPage() {
         {showSearchForm && (
           <form
             onSubmit={handleAddSearchUrl}
-            className="mb-4 space-y-3 rounded-2xl border border-violet-200 bg-violet-50/70 p-4"
+            className="mb-4 space-y-3 rounded-2xl border border-violet-500/30 bg-violet-500/5 p-4"
           >
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 LinkedIn search URL
               </label>
-              <p className="mb-2 text-xs leading-5 text-slate-500">
+              <p className="mb-2 text-xs leading-5 text-slate-400">
                 Go to LinkedIn to search for people to copy the URL from the
                 address bar. The scraper will crawl through the results pages
                 and save every profile it finds.
@@ -714,7 +714,7 @@ export default function CampaignDetailPage() {
               />
             </div>
             {searchError && (
-              <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+              <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
                 {searchError}
               </p>
             )}
@@ -732,15 +732,15 @@ export default function CampaignDetailPage() {
         {showLeadForm && (
           <form
             onSubmit={handleAddLead}
-            className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4"
+            className="mb-4 space-y-3 rounded-2xl border border-white/[0.06] bg-slate-800/40 p-4"
           >
             {leadError && (
-              <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+              <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
                 {leadError}
               </p>
             )}
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 LinkedIn profile URL *
               </label>
               <input
@@ -770,7 +770,7 @@ export default function CampaignDetailPage() {
               </div>
             )}
             {isScrape && (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-400">
                 Name, title, and company will be filled in automatically after
                 the scraper visits the profile.
               </p>
@@ -790,7 +790,7 @@ export default function CampaignDetailPage() {
         )}
 
         <div className="table-shell">
-          <table className="min-w-full divide-y divide-slate-100">
+          <table className="min-w-full divide-y divide-white/[0.06]">
             <thead className="table-head">
               <tr>
                 {(isScrape
@@ -806,7 +806,7 @@ export default function CampaignDetailPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-white/[0.06]">
               {campaign.leads.length === 0 && (
                 <tr>
                   <td
@@ -822,7 +822,7 @@ export default function CampaignDetailPage() {
                 </tr>
               )}
               {campaign.leads.map((cl) => (
-                <tr key={cl.id} className="hover:bg-slate-50/80">
+                <tr key={cl.id} className="hover:bg-white/[0.03]">
                   {isScrape ? (
                     <>
                       <td className="table-cell">
@@ -830,7 +830,7 @@ export default function CampaignDetailPage() {
                           href={cl.lead.linkedinUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="font-mono text-xs font-semibold text-teal-700 hover:underline"
+                          className="font-mono text-xs font-semibold text-teal-400 hover:underline"
                         >
                           {cl.lead.linkedinUrl.replace(
                             "https://www.linkedin.com/in/",
@@ -838,18 +838,18 @@ export default function CampaignDetailPage() {
                           )}
                         </a>
                       </td>
-                      <td className="table-cell text-slate-700">
+                      <td className="table-cell text-slate-300">
                         {cl.lead.firstName || cl.lead.lastName
                           ? `${cl.lead.firstName ?? ""} ${cl.lead.lastName ?? ""}`.trim()
                           : <span className="italic text-slate-300">pending</span>}
                       </td>
-                      <td className="table-cell text-slate-600">
+                      <td className="table-cell text-slate-400">
                         {cl.lead.company ?? <span className="italic text-slate-300">pending</span>}
                       </td>
-                      <td className="table-cell text-slate-600">
+                      <td className="table-cell text-slate-400">
                         {cl.lead.title ?? <span className="italic text-slate-300">pending</span>}
                       </td>
-                      <td className="table-cell text-slate-600">
+                      <td className="table-cell text-slate-400">
                         Step {cl.stage}
                       </td>
                       <td className="table-cell">
@@ -863,21 +863,21 @@ export default function CampaignDetailPage() {
                           href={cl.lead.linkedinUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="font-semibold text-teal-700 hover:underline"
+                          className="font-semibold text-teal-400 hover:underline"
                         >
                           {cl.lead.firstName || cl.lead.lastName
                             ? `${cl.lead.firstName ?? ""} ${cl.lead.lastName ?? ""}`.trim()
                             : "Unknown"}
                         </a>
                       </td>
-                      <td className="table-cell text-slate-600">
+                      <td className="table-cell text-slate-400">
                         {cl.lead.company ?? "-"}
                       </td>
                       <td className="table-cell">
                         <Badge value={cl.lead.connectionStatus} />
                         {campaign.type === "CONNECT" &&
                           cl.lead.connectionStatus === "CONNECTED" && (
-                            <span className="ml-1 text-xs font-medium text-amber-600">
+                            <span className="ml-1 text-xs font-medium text-amber-400">
                               already connected
                             </span>
                           )}
@@ -888,12 +888,12 @@ export default function CampaignDetailPage() {
                             </span>
                           )}
                       </td>
-                      <td className="table-cell text-slate-600">
+                      <td className="table-cell text-slate-400">
                         Step {cl.stage}
                       </td>
                       <td className="table-cell">
                         {cl.repliedAt ? (
-                          <span className="font-semibold text-emerald-600">Yes</span>
+                          <span className="font-semibold text-emerald-400">Yes</span>
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
@@ -913,16 +913,16 @@ export default function CampaignDetailPage() {
               {/* Post signal excerpts in dedicated rows to keep the table valid */}
               {isContentSignal && campaign.leads.map((cl) =>
                 cl.postSignal ? (
-                  <tr key={`${cl.id}-signal`} className="bg-teal-50/40">
+                  <tr key={`${cl.id}-signal`} className="bg-teal-500/[0.04]">
                     <td colSpan={7} className="px-6 py-2">
-                      <div className="flex items-start gap-2 rounded-2xl border border-teal-100 bg-teal-50 p-3 text-xs text-teal-800">
+                      <div className="flex items-start gap-2 rounded-2xl border border-teal-500/20 bg-teal-500/5 p-3 text-xs text-teal-300">
                         <span className="shrink-0 font-medium">Post:</span>
                         <span className="italic line-clamp-2">&quot;{cl.postSignal.excerpt}&quot;</span>
                         <a
                           href={cl.postSignal.postUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="ml-auto shrink-0 font-semibold text-teal-700 hover:underline"
+                          className="ml-auto shrink-0 font-semibold text-teal-400 hover:underline"
                         >
                           Open
                         </a>

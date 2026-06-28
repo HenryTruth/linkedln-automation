@@ -53,27 +53,26 @@ export function HealthScore({ account, checkpoints }: HealthScoreProps) {
   const label = healthLabel(score);
 
   const color =
-    score >= 80 ? "#22c55e" : score >= 50 ? "#eab308" : "#ef4444";
+    score >= 80 ? "#34d399" : score >= 50 ? "#fbbf24" : "#f87171";
   const textColor =
     score >= 80
-      ? "text-green-700"
+      ? "text-emerald-400"
       : score >= 50
-      ? "text-yellow-700"
-      : "text-red-700";
+      ? "text-amber-400"
+      : "text-red-400";
 
-  // Circle: r=26, circumference ~= 163.4
   const circumference = 2 * Math.PI * 26;
   const dash = (score / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center gap-1 w-16 shrink-0">
+    <div className="flex w-16 shrink-0 flex-col items-center gap-1">
       <svg width="64" height="64" viewBox="0 0 64 64">
         <circle
           cx="32"
           cy="32"
           r="26"
           fill="none"
-          stroke="#e5e7eb"
+          stroke="#1e293b"
           strokeWidth="6"
         />
         <circle
@@ -93,7 +92,7 @@ export function HealthScore({ account, checkpoints }: HealthScoreProps) {
           textAnchor="middle"
           fontSize="14"
           fontWeight="700"
-          fill="#111827"
+          fill="#e2e8f0"
         >
           {score}
         </text>

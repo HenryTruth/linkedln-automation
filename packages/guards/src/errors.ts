@@ -45,3 +45,12 @@ export class IpMismatchError extends Error {
     this.name = "IpMismatchError";
   }
 }
+
+export class MissingProxyError extends Error {
+  constructor(accountId: string) {
+    super(
+      `Account ${accountId} has no proxy assigned. Browser automation is blocked until a stable residential proxy is added.`
+    );
+    this.name = "MissingProxyError";
+  }
+}

@@ -98,7 +98,7 @@ export default function LeadDetailPage() {
 
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
   if (error || !lead)
-    return <p className="text-sm text-red-600">{error ?? "Lead not found"}</p>;
+    return <p className="text-sm text-red-400">{error ?? "Lead not found"}</p>;
 
   const displayName =
     lead.firstName || lead.lastName
@@ -111,14 +111,14 @@ export default function LeadDetailPage() {
       <section className="app-panel p-6 lg:p-8">
         <button
           onClick={() => router.push("/leads")}
-          className="mb-4 text-sm font-semibold text-slate-500 hover:text-slate-950"
+          className="mb-4 text-sm font-semibold text-slate-400 hover:text-white"
         >
           Back to Leads
         </button>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="page-title">{displayName}</h1>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-400">
               {lead.title && <span>{lead.title}</span>}
               {lead.title && lead.company && <span className="text-slate-300">·</span>}
               {lead.company && <span>{lead.company}</span>}
@@ -128,7 +128,7 @@ export default function LeadDetailPage() {
               {lead.blacklisted && <Badge value="BLACKLISTED" />}
             </div>
             {lead.blacklisted && lead.blacklistReason && (
-              <p className="mt-2 text-xs text-red-600">
+              <p className="mt-2 text-xs text-red-400">
                 Reason: {lead.blacklistReason}
               </p>
             )}
@@ -138,7 +138,7 @@ export default function LeadDetailPage() {
               href={lead.linkedinUrl}
               target="_blank"
               rel="noreferrer"
-              className="btn-secondary text-teal-700"
+              className="btn-secondary text-teal-400"
             >
               View LinkedIn Profile
             </a>
@@ -146,7 +146,7 @@ export default function LeadDetailPage() {
               <button
                 onClick={handleUnblacklist}
                 disabled={blacklistBusy}
-                className="btn-secondary text-emerald-700"
+                className="btn-secondary text-emerald-400"
               >
                 {blacklistBusy ? "..." : "Remove Blacklist"}
               </button>
@@ -163,9 +163,9 @@ export default function LeadDetailPage() {
         </div>
 
         {showBlacklistForm && !lead.blacklisted && (
-          <form onSubmit={handleBlacklist} className="mt-4 flex flex-wrap items-end gap-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+          <form onSubmit={handleBlacklist} className="mt-4 flex flex-wrap items-end gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
             <div className="flex-1 min-w-56">
-              <label className="mb-1 block text-xs font-semibold text-red-700">
+              <label className="mb-1 block text-xs font-semibold text-red-400">
                 Reason (optional)
               </label>
               <input
@@ -189,7 +189,7 @@ export default function LeadDetailPage() {
         {/* Post signals sidebar — the conversation context panel */}
         <aside className="lg:col-span-1 space-y-4">
           <div className="app-panel p-5">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
               Signal Context
             </p>
 
@@ -202,22 +202,22 @@ export default function LeadDetailPage() {
                 {lead.postSignals.map((sig) => (
                   <div
                     key={sig.id}
-                    className="space-y-2 rounded-2xl border border-teal-100 bg-teal-50/60 p-4"
+                    className="space-y-2 rounded-2xl border border-teal-500/20 bg-teal-500/5 p-4"
                   >
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-teal-700">
+                      <span className="font-semibold text-teal-400">
                         &quot;{sig.keyword}&quot;
                       </span>
                       <span className="text-slate-400">{relativeDate(sig.publishedAt)}</span>
                     </div>
-                    <p className="text-xs italic leading-5 text-slate-600 line-clamp-4">
+                    <p className="text-xs italic leading-5 text-slate-400 line-clamp-4">
                       &quot;{sig.excerpt}&quot;
                     </p>
                     <a
                       href={sig.postUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs font-semibold text-teal-700 hover:underline"
+                      className="text-xs font-semibold text-teal-400 hover:underline"
                     >
                       View original post ↗
                     </a>
@@ -229,7 +229,7 @@ export default function LeadDetailPage() {
 
           {/* Lead metadata */}
           <div className="app-panel p-5 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
               Details
             </p>
             <dl className="space-y-2 text-sm">
@@ -239,7 +239,7 @@ export default function LeadDetailPage() {
               ].map(([label, value]) => (
                 <div key={label} className="flex flex-col gap-0.5">
                   <dt className="text-xs font-semibold text-slate-400">{label}</dt>
-                  <dd className="break-all text-slate-700">{value}</dd>
+                  <dd className="break-all text-slate-300">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -248,7 +248,7 @@ export default function LeadDetailPage() {
 
         {/* Campaign membership */}
         <main className="lg:col-span-2 space-y-4">
-          <h2 className="text-base font-semibold text-slate-950">
+          <h2 className="text-base font-semibold text-white">
             Campaign Membership
           </h2>
 
@@ -264,7 +264,7 @@ export default function LeadDetailPage() {
                     <div>
                       <button
                         onClick={() => router.push(`/campaigns/${cl.campaign.id}`)}
-                        className="text-sm font-semibold text-teal-700 hover:underline text-left"
+                        className="text-sm font-semibold text-teal-400 hover:underline text-left"
                       >
                         {cl.campaign.name}
                       </button>
@@ -274,16 +274,16 @@ export default function LeadDetailPage() {
                       </div>
                     </div>
                     <div className="text-right text-xs shrink-0 space-y-1.5">
-                      <div className="text-slate-500">Stage {cl.stage}</div>
+                      <div className="text-slate-400">Stage {cl.stage}</div>
                       {cl.repliedAt ? (
-                        <div className="font-semibold text-emerald-600">
+                        <div className="font-semibold text-emerald-400">
                           Replied {new Date(cl.repliedAt).toLocaleDateString()}
                         </div>
                       ) : (
                         <button
                           onClick={() => handleMarkReplied(cl.campaign.id)}
                           disabled={markingReplied === cl.campaign.id}
-                          className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
                         >
                           {markingReplied === cl.campaign.id ? "..." : "Mark replied"}
                         </button>
@@ -293,14 +293,14 @@ export default function LeadDetailPage() {
 
                   {/* Post signal tied to this campaign membership */}
                   {cl.postSignal && (
-                    <div className="flex items-start gap-2 rounded-2xl border border-teal-100 bg-teal-50 p-3 text-xs text-teal-800">
+                    <div className="flex items-start gap-2 rounded-2xl border border-teal-500/20 bg-teal-500/5 p-3 text-xs text-teal-300">
                       <span className="shrink-0 font-semibold">Post:</span>
                       <span className="italic line-clamp-2">&quot;{cl.postSignal.excerpt}&quot;</span>
                       <a
                         href={cl.postSignal.postUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="ml-auto shrink-0 font-semibold text-teal-700 hover:underline"
+                        className="ml-auto shrink-0 font-semibold text-teal-400 hover:underline"
                       >
                         Open ↗
                       </a>

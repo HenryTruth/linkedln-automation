@@ -18,11 +18,11 @@ const queues = [
 ];
 
 const STATE_STYLES: Record<JobState, string> = {
-  active:    "bg-blue-100 text-blue-700",
-  waiting:   "bg-amber-100 text-amber-700",
-  delayed:   "bg-slate-100 text-slate-500",
-  completed: "bg-emerald-100 text-emerald-700",
-  failed:    "bg-red-100 text-red-700",
+  active:    "bg-blue-500/15 text-blue-400",
+  waiting:   "bg-amber-500/15 text-amber-400",
+  delayed:   "bg-slate-700/50 text-slate-400",
+  completed: "bg-emerald-500/15 text-emerald-400",
+  failed:    "bg-red-500/15 text-red-400",
 };
 
 function fmt(value: number | null | undefined) {
@@ -91,7 +91,7 @@ export default function JobsPage() {
             <button
               onClick={handleClearFailed}
               disabled={clearing}
-              className="btn-secondary text-red-600 hover:border-red-200 hover:bg-red-50"
+              className="btn-secondary text-red-400 hover:border-red-500/30 hover:bg-red-500/10"
             >
               {clearing ? "Clearing…" : "Clear failed jobs"}
             </button>
@@ -101,13 +101,13 @@ export default function JobsPage() {
           </div>
         </div>
         {clearMsg && (
-          <p className="mt-3 text-sm font-medium text-emerald-600">{clearMsg}</p>
+          <p className="mt-3 text-sm font-medium text-emerald-400">{clearMsg}</p>
         )}
       </section>
 
       <section className="app-panel p-4">
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="text-xs font-semibold text-slate-600">
+          <label className="text-xs font-semibold text-slate-300">
             State
             <select
               value={state}
@@ -119,7 +119,7 @@ export default function JobsPage() {
               ))}
             </select>
           </label>
-          <label className="text-xs font-semibold text-slate-600">
+          <label className="text-xs font-semibold text-slate-300">
             Queue
             <select
               value={queue}
@@ -135,13 +135,13 @@ export default function JobsPage() {
       </section>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
           {error}
         </div>
       )}
 
       <div className="table-shell">
-        <table className="min-w-full divide-y divide-slate-100">
+        <table className="min-w-full divide-y divide-white/[0.06]">
           <thead className="table-head">
             <tr>
               {["Queue", "Job", "State", "Attempts", "Reason", "Updated", "Payload"].map((h) => (
@@ -149,7 +149,7 @@ export default function JobsPage() {
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-white/[0.06]">
             {loading ? (
               <tr><td className="table-cell text-center" colSpan={7}>Loading…</td></tr>
             ) : jobs.length === 0 ? (
@@ -164,10 +164,10 @@ export default function JobsPage() {
               </tr>
             ) : (
               jobs.map((job) => (
-                <tr key={`${job.queue}-${job.id}`} className="align-top hover:bg-slate-50/80">
-                  <td className="table-cell font-semibold text-slate-800">{job.queue}</td>
+                <tr key={`${job.queue}-${job.id}`} className="align-top hover:bg-white/[0.03]">
+                  <td className="table-cell font-semibold text-slate-100">{job.queue}</td>
                   <td className="table-cell">
-                    <div className="font-semibold text-slate-900">{job.name}</div>
+                    <div className="font-semibold text-white">{job.name}</div>
                     <div className="mt-1 font-mono text-xs text-slate-400">{job.id ?? "-"}</div>
                   </td>
                   <td className="table-cell">
@@ -175,10 +175,10 @@ export default function JobsPage() {
                       {job.state}
                     </span>
                   </td>
-                  <td className="table-cell text-slate-600">{job.attemptsMade}</td>
+                  <td className="table-cell text-slate-400">{job.attemptsMade}</td>
                   <td className="table-cell max-w-xs">
                     {job.failedReason ? (
-                      <p className="whitespace-pre-wrap text-sm text-red-600 line-clamp-4" title={job.failedReason}>
+                      <p className="whitespace-pre-wrap text-sm text-red-400 line-clamp-4" title={job.failedReason}>
                         {job.failedReason}
                       </p>
                     ) : (
@@ -189,7 +189,7 @@ export default function JobsPage() {
                     {fmt(job.finishedOn ?? job.processedOn ?? job.timestamp)}
                   </td>
                   <td className="table-cell">
-                    <pre className="max-w-xs overflow-auto rounded-lg bg-slate-50 p-2 text-xs text-slate-600">
+                    <pre className="max-w-xs overflow-auto rounded-lg bg-slate-800 p-2 text-xs text-slate-300">
                       {JSON.stringify(job.data, null, 2)}
                     </pre>
                   </td>
@@ -199,12 +199,12 @@ export default function JobsPage() {
           </tbody>
         </table>
         {failedCount !== null && failedCount > 0 && (
-          <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3">
-            <p className="text-sm text-slate-500">{failedCount} failed job{failedCount !== 1 ? "s" : ""} shown</p>
+          <div className="flex items-center justify-between border-t border-white/[0.06] px-6 py-3">
+            <p className="text-sm text-slate-400">{failedCount} failed job{failedCount !== 1 ? "s" : ""} shown</p>
             <button
               onClick={handleClearFailed}
               disabled={clearing}
-              className="text-sm font-semibold text-red-500 hover:text-red-700"
+              className="text-sm font-semibold text-red-400 hover:text-red-300"
             >
               {clearing ? "Clearing…" : "Clear all failed"}
             </button>

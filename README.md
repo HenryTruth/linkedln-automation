@@ -146,6 +146,23 @@ low-risk test campaign.
 
 Keep `dailyLimit` and account caps low during validation.
 
+## Proxy Policy
+
+Browser automation requires a stable residential proxy by default. You can add a
+LinkedIn account before assigning a proxy, but workers will block browser
+sessions until one is attached. For local-only diagnostics, set
+`REQUIRE_PROXY=false`.
+
+Use the proxy location the account normally logs in from. The dashboard warns
+when the account timezone and proxy country look mismatched, but the user should
+make the final choice because they know the account's normal login history.
+
+For a future managed proxy add-on, do not infer location silently. Ask the user
+for the account's normal login country, city or region, and timezone, then
+provision a sticky residential proxy in that geography and keep it bound to the
+same LinkedIn account. If that location is unavailable, ask the user to approve a
+nearby fallback before any automation runs.
+
 ## Test Coverage
 
 Current tests cover:

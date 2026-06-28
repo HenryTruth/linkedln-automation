@@ -5,7 +5,7 @@ import { AuthProvider } from "@/contexts/auth";
 import { AuthGuard } from "@/components/AuthGuard";
 
 export const metadata: Metadata = {
-  title: "LinkedIn Auto",
+  title: "Vectra",
   description: "A polished command center for safe LinkedIn automation",
 };
 
@@ -15,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className="min-h-screen antialiased">
         <AuthProvider>
           <Navbar />

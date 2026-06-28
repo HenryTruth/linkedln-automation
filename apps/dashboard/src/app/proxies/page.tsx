@@ -4,6 +4,33 @@ import { useEffect, useState } from "react";
 import { api, type Proxy } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 
+type RotationMode = "STATIC" | "STICKY_SESSION";
+
+const rotationOptions: Array<{
+  value: RotationMode;
+  label: string;
+  badge: string;
+  tone: string;
+  description: string;
+}> = [
+  {
+    value: "STICKY_SESSION",
+    label: "Sticky residential",
+    badge: "Recommended",
+    tone: "border-teal-500/50 bg-teal-500/10 ring-2 ring-teal-500/50",
+    description:
+      "Keeps one residential exit IP during a browser session, then uses a fresh sticky session later.",
+  },
+  {
+    value: "STATIC",
+    label: "Static residential / ISP",
+    badge: "Advanced",
+    tone: "border-slate-500/50 bg-slate-500/10",
+    description:
+      "Only use this when the IP is residential or ISP. Avoid static datacenter proxies.",
+  },
+];
+
 export default function ProxiesPage() {
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,11 +45,12 @@ export default function ProxiesPage() {
   const [username, setUsername] = useState("");
   const [usernameTemplate, setUsernameTemplate] = useState("");
   const [password, setPassword] = useState("");
-  const [rotationMode, setRotationMode] = useState<"STATIC" | "STICKY_SESSION">(
-    "STICKY_SESSION"
-  );
+  const [rotationMode, setRotationMode] =
+    useState<RotationMode>("STICKY_SESSION");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const activeStickyUsername = usernameTemplate || username;
+  const stickyTokenPresent = activeStickyUsername.includes("{{sessionId}}");
 
   function reload() {
     return api.proxies.list().then(setProxies);
@@ -125,25 +153,26 @@ export default function ProxiesPage() {
       {showForm && (
         <form
           onSubmit={handleAdd}
-          className="app-panel max-w-2xl space-y-4 border-teal-200 bg-teal-50/70 p-5"
+          className="app-panel max-w-2xl space-y-4 border-teal-500/30 bg-teal-500/5 p-5"
         >
-          <h2 className="text-sm font-semibold text-teal-950">Add Proxy</h2>
-          <p className="text-xs leading-5 text-teal-800">
-            For providers like Smartproxy, Bright Data, and Oxylabs, enter the
-            gateway host plus a username template that includes
-            <code className="mx-1 rounded bg-teal-100 px-1">{"{{sessionId}}"}</code>
-            when using session-sticky rotation.
+          <h2 className="text-sm font-semibold text-teal-200">Add Proxy</h2>
+          <p className="text-xs leading-5 text-teal-300">
+            Use a residential proxy in the same country or city the LinkedIn
+            account normally logs in from. For sticky sessions, add a username
+            template that includes
+            <code className="mx-1 rounded bg-teal-900/50 px-1">{"{{sessionId}}"}</code>
+            unless the provider handles stickiness another way.
           </p>
 
           {addError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
               {addError}
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 Host *
               </label>
               <input
@@ -155,7 +184,7 @@ export default function ProxiesPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 Port *
               </label>
               <input
@@ -167,7 +196,7 @@ export default function ProxiesPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 Country *
               </label>
               <input
@@ -179,7 +208,7 @@ export default function ProxiesPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 City (optional)
               </label>
               <input
@@ -190,7 +219,7 @@ export default function ProxiesPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 Username *
               </label>
               <input
@@ -201,24 +230,55 @@ export default function ProxiesPage() {
                 className="field w-full"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
-                Rotation mode *
+            <div className="col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
+                Proxy mode *
               </label>
-              <select
-                value={rotationMode}
-                onChange={(e) =>
-                  setRotationMode(e.target.value as "STATIC" | "STICKY_SESSION")
-                }
-                className="field w-full"
-              >
-                <option value="STICKY_SESSION">Session-sticky rotation</option>
-                <option value="STATIC">Static credentials</option>
-              </select>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {rotationOptions.map((option) => {
+                  const selected = rotationMode === option.value;
+                  return (
+                    <label
+                      key={option.value}
+                      className={`cursor-pointer rounded-lg border p-4 transition ${
+                        selected
+                          ? option.tone
+                          : "border-white/[0.08] bg-slate-800/40 hover:border-white/10"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="rotationMode"
+                        value={option.value}
+                        checked={selected}
+                        onChange={() => setRotationMode(option.value)}
+                        className="sr-only"
+                      />
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold text-slate-100">
+                          {option.label}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            option.value === "STICKY_SESSION"
+                              ? "bg-teal-500/15 text-teal-400"
+                              : "bg-slate-700/50 text-slate-400"
+                          }`}
+                        >
+                          {option.badge}
+                        </span>
+                      </span>
+                      <span className="mt-2 block text-xs leading-5 text-slate-400">
+                        {option.description}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
             {rotationMode === "STICKY_SESSION" && (
               <div className="col-span-2">
-                <label className="mb-1 block text-xs font-semibold text-slate-700">
+                <label className="mb-1 block text-xs font-semibold text-slate-300">
                   Username template
                 </label>
                 <input
@@ -227,14 +287,26 @@ export default function ProxiesPage() {
                   placeholder="user-zone-us-session-{{sessionId}}"
                   className="field w-full"
                 />
-                <p className="mt-1 text-xs text-slate-500">
-                  Leave blank only if your provider handles sticky sessions
-                  without a username token.
-                </p>
+                {stickyTokenPresent ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Sticky session token detected.
+                  </p>
+                ) : (
+                  <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                    Add {"{{sessionId}}"} to the username or template unless
+                    your provider gives you a dedicated sticky endpoint.
+                  </p>
+                )}
+              </div>
+            )}
+            {rotationMode === "STATIC" && (
+              <div className="col-span-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-400">
+                Static is only appropriate for residential or ISP proxies.
+                Datacenter proxies are not recommended for LinkedIn accounts.
               </div>
             )}
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 Password *
               </label>
               <input
@@ -257,7 +329,7 @@ export default function ProxiesPage() {
       {/* Empty state */}
       {proxies.length === 0 && !showForm && (
         <div className="app-panel border-dashed p-12 text-center">
-          <p className="mb-2 font-semibold text-slate-700">No proxies configured</p>
+          <p className="mb-2 font-semibold text-slate-300">No proxies configured</p>
           <p className="mb-4 text-sm text-slate-500">
             Add a session-sticky residential proxy profile to protect each
             LinkedIn account from detection.
@@ -271,7 +343,7 @@ export default function ProxiesPage() {
       {/* Proxy table */}
       {proxies.length > 0 && (
         <div className="table-shell">
-          <table className="min-w-full divide-y divide-slate-100">
+          <table className="min-w-full divide-y divide-white/[0.06]">
             <thead className="table-head">
               <tr>
                 {[
@@ -289,26 +361,31 @@ export default function ProxiesPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-white/[0.06]">
               {proxies.map((proxy) => (
-                <tr key={proxy.id} className="hover:bg-slate-50/80">
-                  <td className="table-cell font-mono text-sm font-semibold text-slate-800">
+                <tr key={proxy.id} className="hover:bg-white/[0.03]">
+                  <td className="table-cell font-mono text-sm font-semibold text-slate-100">
                     {proxy.host}
                   </td>
-                  <td className="table-cell text-slate-600">{proxy.port}</td>
-                  <td className="table-cell text-slate-600">
+                  <td className="table-cell text-slate-400">{proxy.port}</td>
+                  <td className="table-cell text-slate-400">
                     {proxy.country}
                     {proxy.city ? ` - ${proxy.city}` : ""}
                   </td>
                   <td className="table-cell">
                     <Badge value={proxy.rotationMode} />
+                    {proxy.rotationMode === "STATIC" && (
+                      <p className="mt-1 text-xs text-amber-400">
+                        Use only if residential/ISP
+                      </p>
+                    )}
                     {proxy.currentSessionId && (
                       <p className="mt-1 font-mono text-xs text-slate-400">
                         {proxy.currentSessionId}
                       </p>
                     )}
                   </td>
-                  <td className="table-cell font-mono text-xs text-slate-600">
+                  <td className="table-cell font-mono text-xs text-slate-400">
                     {proxy.currentExitIp ?? "-"}
                   </td>
                   <td className="table-cell">
@@ -319,7 +396,7 @@ export default function ProxiesPage() {
                       <button
                         onClick={() => handleCheck(proxy.id)}
                         disabled={busy === proxy.id}
-                        className="text-xs font-semibold text-teal-700 hover:underline disabled:opacity-40"
+                        className="text-xs font-semibold text-teal-400 hover:underline disabled:opacity-40"
                       >
                         {busy === proxy.id ? "Checking..." : "Health Check"}
                       </button>

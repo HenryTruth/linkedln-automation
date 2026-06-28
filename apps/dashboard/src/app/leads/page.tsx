@@ -206,15 +206,15 @@ export default function LeadsPage() {
       {/* Add leads panel */}
       <div className="app-panel overflow-hidden">
         {/* Tabs */}
-        <div className="flex border-b border-slate-200 bg-slate-50/70 p-1">
+        <div className="flex border-b border-white/[0.06] bg-slate-950/40 p-1">
           {(["single", "csv"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`rounded-xl px-5 py-3 text-sm font-semibold transition-colors ${
                 tab === t
-                  ? "bg-white text-slate-950 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
+                  ? "bg-slate-800 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
               }`}
             >
               {t === "single" ? "Add Single Lead" : "Bulk CSV Import"}
@@ -227,17 +227,17 @@ export default function LeadsPage() {
           {tab === "single" && (
             <form onSubmit={handleAddOne} className="space-y-4">
               {addOneError && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
                   {addOneError}
                 </div>
               )}
               {addOneSuccess && (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">
                   Lead added successfully.
                 </div>
               )}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
+                <label className="mb-1 block text-xs font-semibold text-slate-300">
                   LinkedIn URL *
                 </label>
                 <input
@@ -256,7 +256,7 @@ export default function LeadsPage() {
                   { label: "Title", val: sTitle, set: setSTitle },
                 ].map(({ label, val, set }) => (
                   <div key={label}>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    <label className="mb-1 block text-xs font-semibold text-slate-300">
                       {label}
                     </label>
                     <input
@@ -270,7 +270,7 @@ export default function LeadsPage() {
               </div>
               <div className="flex items-end gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                  <label className="mb-1 block text-xs font-semibold text-slate-300">
                     Add to campaign (optional)
                   </label>
                   <select
@@ -300,14 +300,14 @@ export default function LeadsPage() {
           {/* Bulk CSV form */}
           {tab === "csv" && (
             <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+              <div className="rounded-2xl border border-white/[0.06] bg-slate-800/50 p-4 text-xs text-slate-300">
                 <p className="font-medium mb-1">Expected CSV format (first row = headers):</p>
                 <code className="block">
                   url,firstName,lastName,company,title
                   <br />
                   https://linkedin.com/in/johndoe,John,Doe,Acme Inc,CEO
                 </code>
-                <p className="mt-2 text-slate-500">
+                <p className="mt-2 text-slate-400">
                   Column names are flexible: &quot;url&quot; / &quot;linkedinUrl&quot; /
                   &quot;profile url&quot;, &quot;first name&quot; /
                   &quot;firstName&quot;, etc.
@@ -315,20 +315,20 @@ export default function LeadsPage() {
               </div>
 
               {importResult && (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">
                   {importResult}
                 </div>
               )}
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
+                <label className="mb-1 block text-xs font-semibold text-slate-300">
                   Upload CSV file
                 </label>
                 <input
                   type="file"
                   accept=".csv,text/csv"
                   onChange={(e) => handleCsvFile(e.target.files?.[0] ?? null)}
-                  className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-950 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
+                  className="block w-full text-sm text-slate-400 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-700 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-600"
                 />
               </div>
 
@@ -341,7 +341,7 @@ export default function LeadsPage() {
               />
 
               {importErrors.length > 0 && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
                   <p className="font-semibold">Import notes</p>
                   <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
                     {importErrors.slice(0, 20).map((err, index) => (
@@ -360,7 +360,7 @@ export default function LeadsPage() {
               )}
 
               {csvParsed.length > 0 && (
-                <p className="text-sm font-semibold text-teal-700">
+                <p className="text-sm font-semibold text-teal-400">
                   {csvParsed.length} lead{csvParsed.length !== 1 ? "s" : ""}{" "}
                   detected - first:{" "}
                   <span className="font-mono text-xs">
@@ -371,7 +371,7 @@ export default function LeadsPage() {
 
               <div className="flex items-end gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                  <label className="mb-1 block text-xs font-semibold text-slate-300">
                     Add all to campaign (optional)
                   </label>
                   <select
@@ -407,7 +407,7 @@ export default function LeadsPage() {
       {/* Filters */}
       <div className="app-panel flex flex-wrap items-end gap-3 p-4">
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500">
+          <label className="mb-1 block text-xs font-semibold text-slate-400">
             Status
           </label>
           <select
@@ -423,7 +423,7 @@ export default function LeadsPage() {
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500">
+          <label className="mb-1 block text-xs font-semibold text-slate-400">
             Company
           </label>
           <input
@@ -434,7 +434,7 @@ export default function LeadsPage() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500">
+          <label className="mb-1 block text-xs font-semibold text-slate-400">
             Campaign
           </label>
           <select
@@ -451,7 +451,7 @@ export default function LeadsPage() {
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500">
+          <label className="mb-1 block text-xs font-semibold text-slate-400">
             Signal keyword
           </label>
           <input
@@ -461,16 +461,16 @@ export default function LeadsPage() {
             className="field"
           />
         </div>
-        <span className="ml-auto self-center rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-500">
+        <span className="ml-auto self-center rounded-full bg-slate-800 px-3 py-1 text-sm font-semibold text-slate-300">
           {total} total
         </span>
       </div>
 
-      {tableError && <p className="text-sm text-red-600">{tableError}</p>}
+      {tableError && <p className="text-sm text-red-400">{tableError}</p>}
 
       {/* Leads table */}
       <div className="table-shell">
-        <table className="min-w-full divide-y divide-slate-100">
+        <table className="min-w-full divide-y divide-white/[0.06]">
           <thead className="table-head">
             <tr>
               {["Name", "Title", "Company", "Status", "Added"].map((h) => (
@@ -483,7 +483,7 @@ export default function LeadsPage() {
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-white/[0.06]">
             {loading && (
               <tr>
                 <td
@@ -505,21 +505,21 @@ export default function LeadsPage() {
               </tr>
             )}
             {leads.map((lead) => (
-              <tr key={lead.id} className="hover:bg-slate-50/80">
+              <tr key={lead.id} className="hover:bg-white/[0.03]">
                 <td className="table-cell">
                   <Link
                     href={`/leads/${lead.id}`}
-                    className="font-semibold text-teal-700 hover:underline"
+                    className="font-semibold text-teal-400 hover:underline"
                   >
                     {lead.firstName || lead.lastName
                       ? `${lead.firstName ?? ""} ${lead.lastName ?? ""}`.trim()
                       : "Unknown"}
                   </Link>
                 </td>
-                <td className="table-cell text-slate-600">
+                <td className="table-cell text-slate-400">
                   {lead.title ?? "-"}
                 </td>
-                <td className="table-cell text-slate-600">
+                <td className="table-cell text-slate-400">
                   {lead.company ?? "-"}
                 </td>
                 <td className="table-cell">
@@ -547,7 +547,7 @@ export default function LeadsPage() {
           >
             Previous
           </button>
-          <span className="text-sm font-semibold text-slate-600">
+          <span className="text-sm font-semibold text-slate-400">
             Page {page} of {totalPages}
           </span>
           <button

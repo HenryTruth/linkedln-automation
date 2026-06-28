@@ -1,490 +1,528 @@
 import Link from "next/link";
 import { HeroCTA } from "@/components/HeroCTA";
 
-const stats = [
-  { value: "15/day", label: "connection safety cap" },
-  { value: "40/day", label: "message guardrail" },
-  { value: "8-7", label: "local active hours" },
-];
-
-const features = [
+const problems = [
   {
-    title: "Campaign control",
-    text: "Create connect, message, scrape, and content-signal campaigns with daily limits and clear status controls.",
+    number: "01",
+    title: "Most tools are built to send. They get accounts banned.",
+    text: "LinkedIn's detection is pattern-based. Tools that blast connections at volume without warm-up, proxy discipline, or rate awareness don't last. Neither do the accounts running on them.",
   },
   {
-    title: "Lead operations",
-    text: "Add one lead, paste a CSV, attach leads to campaigns, and filter by status, company, or campaign.",
+    number: "02",
+    title: "You can't fix what you can't see.",
+    text: "Checkpoints, proxy failures, stalled job queues, and daily limits don't announce themselves. In most tools, you find out something went wrong after the account is already flagged.",
   },
   {
-    title: "Account safety",
-    text: "Watch health scores, proxy status, warm-up phase, daily cap usage, time zones, and restrictions in one view.",
+    number: "03",
+    title: "Generic outreach gets ignored. Or reported.",
+    text: "A connection note with no context looks like every other cold request. The accounts that actually get replies reach out with a reason, not just a template.",
   },
 ];
 
-const campaignModes = [
+const safetyGuards = [
   {
-    name: "Connect",
-    detail: "Send connection requests to new prospects while respecting daily caps.",
+    number: "01",
+    title: "Daily hard caps",
+    text: "15 connections, 40 messages, 60 profile views. Enforced at the queue level before any job runs, not just as a recommended guideline.",
   },
   {
-    name: "Message",
-    detail: "Run editable drip sequences for first-degree connections.",
+    number: "02",
+    title: "Warm-up phase enforcement",
+    text: "New accounts follow a 4-week ramp: manual-only → 5/day → 10/day → full caps. Jobs are rejected until the current phase is complete.",
   },
   {
-    name: "Scrape",
-    detail: "Collect profile data from profile URLs or LinkedIn people search URLs.",
+    number: "03",
+    title: "Timezone-aware scheduling",
+    text: "Actions only fire between 8am and 7pm in the account's local timezone. Weekend volume is automatically throttled to 50% of weekday caps.",
   },
   {
-    name: "Content Signal",
-    detail: "Find people posting about a keyword and keep post context for outreach.",
+    number: "04",
+    title: "Human-like timing",
+    text: "3–8 second delays between actions, 5–15 second gaps between page loads, 60–90 minute session limits with mandatory rest periods between runs.",
+  },
+  {
+    number: "05",
+    title: "Stealth browser fingerprinting",
+    text: "Consistent user agent, viewport, timezone, and language per account. No automation flags. Headed browser on virtual display, never raw headless mode.",
+  },
+  {
+    number: "06",
+    title: "Residential proxy binding",
+    text: "Each account is bound to one residential proxy location. Session-sticky rotation. Browser jobs are blocked until a proxy is assigned and its exit IP is verified.",
+  },
+  {
+    number: "07",
+    title: "Cookie-based sessions",
+    text: "No automated re-login attempts. If LinkedIn presents a checkpoint, all jobs for that account stop immediately and the account waits for human review.",
+  },
+  {
+    number: "08",
+    title: "Checkpoint detection and pause",
+    text: "Before every browser action, the worker checks for verification screens. Detection triggers an immediate stop across the entire account, not just the active job.",
+  },
+  {
+    number: "09",
+    title: "Message deduplication",
+    text: "The same message body cannot go to more than 3 recipients per day. People at the same company get a minimum 3-hour gap between messages.",
+  },
+  {
+    number: "10",
+    title: "Anomaly detection",
+    text: "More than 5 actions in 10 minutes, a repeated action on the same profile, an error rate above 20%, or an IP mismatch all trigger an immediate pause and alert.",
   },
 ];
 
 const workflow = [
   {
-    title: "Connect accounts",
-    text: "Assign time zones and optional residential proxies, then let the system track warm-up and health.",
+    step: "01",
+    title: "Add an account and a matching proxy",
+    text: "Upload LinkedIn cookies, assign a residential proxy in the same location as the account's normal usage, and confirm the timezone. The system validates the proxy before anything runs.",
   },
   {
-    title: "Build the audience",
-    text: "Import leads manually, paste CSV rows, scrape profiles, or discover authors from content signals.",
+    step: "02",
+    title: "Build your audience",
+    text: "Import leads from CSV, enter profiles manually, collect from LinkedIn search results, or create a Content Signal campaign that finds people who posted about a keyword in the last N days.",
   },
   {
-    title: "Launch campaigns",
-    text: "Choose a campaign mode, set a daily limit, build the sequence, and dispatch jobs to the queue.",
+    step: "03",
+    title: "Set up a campaign with explicit limits",
+    text: "Choose the campaign type: connect, message, scrape, or content signal. Write messaging sequences with dynamic fields. Set daily limits at or below the system hard caps.",
   },
   {
-    title: "Monitor and resolve",
-    text: "Review activity, reply rate, usage caps, checkpoints, and account restrictions before they become problems.",
+    step: "04",
+    title: "Monitor before you scale",
+    text: "Review cap usage, failed jobs, checkpoint history, proxy health, and activity logs. The system surfaces the risk signals. You decide when it's safe to go further.",
   },
-];
-
-const safetyControls = [
-  "Per-account daily caps",
-  "Local active-hour windows",
-  "Warm-up phase visibility",
-  "Proxy health monitoring",
-  "Open checkpoint alerts",
-  "Automatic pause on risk",
-  "Webhook & email alert delivery",
 ];
 
 const productAreas = [
   {
-    title: "Dashboard",
-    text: "A live operating picture for connections, messages, replies, leads, checkpoints, and recent activity.",
-    href: "/dashboard",
+    title: "Accounts",
+    text: "Health score, warm-up phase, proxy assignment, cookie status, daily cap usage, and pause/resume per LinkedIn account.",
+    href: "/accounts",
   },
   {
     title: "Campaigns",
-    text: "Start, pause, edit, delete, and inspect campaign performance from a focused table and detail view.",
+    text: "Create connect, message, scrape, or content signal campaigns with sequence editing, daily limits, and audience assignment.",
     href: "/campaigns",
   },
   {
     title: "Leads",
-    text: "Centralize prospects with CSV import, manual entry, filtering, campaign assignment, and LinkedIn links.",
+    text: "Manual entry, CSV import, campaign membership, connection status, LinkedIn deep links, and post signal context per lead.",
     href: "/leads",
   },
   {
-    title: "Accounts",
-    text: "Track account status, health score, proxy, warm-up phase, time zone, and today's cap usage.",
-    href: "/accounts",
-  },
-  {
-    title: "Checkpoints",
-    text: "Resolve LinkedIn security checks with a clear history of detected, resolved, and unresolved events.",
-    href: "/checkpoints",
+    title: "Proxies",
+    text: "Residential proxy profiles, sticky session configuration, health checks, exit IP visibility, and location-to-account matching.",
+    href: "/proxies",
   },
   {
     title: "Jobs",
-    text: "Inspect queue state, failed reasons, retry attempts, and job payloads across every automation worker.",
+    text: "Live queue state, failed job reasons, retry history, job payloads, and worker-level diagnostics for every automation action.",
     href: "/jobs",
+  },
+  {
+    title: "Activity",
+    text: "Searchable audit trail for every connect, message, scrape, withdrawal, error, and campaign event, with timestamps and account attribution.",
+    href: "/activity",
   },
 ];
 
+function DashboardPreview() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-white/15 bg-slate-950/90 shadow-2xl shadow-slate-950/40">
+      <div className="flex items-center gap-1.5 border-b border-white/10 px-4 py-3">
+        <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
+        <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
+        <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
+        <span className="ml-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          Vectra · Account overview
+        </span>
+      </div>
+
+      <div className="grid gap-3 p-4 sm:grid-cols-4">
+        {[
+          { label: "Connection cap", value: "15 / day", status: "9 used" },
+          { label: "Message cap", value: "40 / day", status: "22 used" },
+          { label: "Active window", value: "8am to 7pm", status: "In window" },
+          { label: "Warm-up phase", value: "Week 3", status: "10 / day max" },
+        ].map((item) => (
+          <div key={item.label} className="rounded-lg bg-white/[0.07] p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              {item.label}
+            </p>
+            <p className="mt-2 text-base font-semibold text-white">{item.value}</p>
+            <p className="mt-1 text-[11px] text-teal-300">{item.status}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-3 border-t border-white/10 p-4 lg:grid-cols-[1fr_0.85fr]">
+        <div className="space-y-2">
+          {[
+            { label: "Proxy", value: "Sticky residential", detail: "Exit IP verified · US/NY" },
+            { label: "Session", value: "Active · 42 min", detail: "Auto-close at 90 min" },
+            { label: "Last action", value: "Connect sent", detail: "3 min ago · guarded" },
+            { label: "Checkpoint", value: "None detected", detail: "All clear" },
+          ].map(({ label, value, detail }) => (
+            <div
+              key={label}
+              className="grid grid-cols-[6.5rem_1fr] gap-3 rounded-lg border border-white/10 bg-white/[0.045] px-3 py-2.5 text-sm"
+            >
+              <span className="text-xs font-semibold text-teal-200">{label}</span>
+              <span>
+                <span className="block text-xs font-semibold text-white">{value}</span>
+                <span className="mt-0.5 block text-[11px] text-slate-400">{detail}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-lg border border-white/10 bg-white/[0.045] p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            Campaign queue
+          </p>
+          <div className="mt-3 space-y-3">
+            {[
+              { label: "Content signal scrape", pct: 72 },
+              { label: "Connect requests", pct: 60 },
+              { label: "Follow-up sequence", pct: 38 },
+            ].map(({ label, pct }) => (
+              <div key={label}>
+                <div className="mb-1.5 flex justify-between text-[11px]">
+                  <span className="font-medium text-slate-300">{label}</span>
+                  <span className="text-slate-500">{pct}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-teal-500"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 rounded-md border border-emerald-400/20 bg-emerald-400/10 px-3 py-2">
+            <p className="text-[11px] font-semibold text-emerald-200">
+              All guards passing · 3 jobs running
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContentSignalPreview() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-white/15 bg-slate-900 shadow-2xl shadow-slate-950/40">
+      <div className="border-b border-white/10 px-5 py-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-300">
+          Content signal campaign
+        </p>
+        <p className="mt-1 text-sm font-semibold text-white">
+          Keyword: &ldquo;AI in sales&rdquo; · Last 7 days
+        </p>
+      </div>
+
+      <div className="p-5">
+        <div className="rounded-lg border border-white/10 bg-white/[0.05] p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white">
+              SK
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white">Sarah K. · Head of Sales @ Meridian</p>
+              <p className="mt-2 text-xs leading-5 text-slate-300 line-clamp-3">
+                &ldquo;AI is fundamentally changing how sales teams qualify leads. We&apos;ve seen
+                3× faster pipeline velocity since adopting signal-based outreach...&rdquo;
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">Posted 5 days ago · linkedin.com/posts/...</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <div className="h-px flex-1 bg-white/10" />
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Connection note generated</p>
+          <div className="h-px flex-1 bg-white/10" />
+        </div>
+
+        <div className="mt-3 rounded-lg border border-teal-500/30 bg-teal-500/10 p-4">
+          <p className="text-xs leading-5 text-teal-100">
+            Hi Sarah, I came across your post on AI in sales from 5 days ago. Your point about
+            pipeline velocity really stood out. Would love to connect and follow your content.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <span className="inline-flex rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
+              {"{{firstName}}"}
+            </span>
+            <span className="inline-flex rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
+              {"{{postTopic}}"}
+            </span>
+            <span className="inline-flex rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
+              {"{{postDate}}"}
+            </span>
+          </div>
+        </div>
+
+        <p className="mt-3 text-[11px] text-slate-500">
+          Post excerpt stored against lead · Available in conversation view
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   return (
-    <div className="relative left-1/2 -ml-[50vw] -mt-8 w-screen overflow-x-hidden">
-      <section className="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-slate-950 text-white">
+    <div className="relative left-1/2 -ml-[50vw] -mt-8 w-screen overflow-x-hidden bg-slate-50">
+
+      {/* ── Hero ───────────────────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden bg-slate-950 text-white">
         <div
-          className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=2400&q=85')] bg-cover bg-center opacity-25"
+          className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(148,163,184,1) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,1) 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
+          }}
           aria-hidden
         />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(2,6,23,0.96)_0%,rgba(15,23,42,0.88)_48%,rgba(15,23,42,0.48)_100%)]" />
-        <div className="animate-pulse-soft absolute left-[8%] top-[18%] h-56 w-56 rounded-full bg-teal-400/20 blur-3xl" />
-        <div
-          className="animate-pulse-soft absolute bottom-[12%] right-[10%] h-72 w-72 rounded-full bg-blue-500/20 blur-3xl"
-          style={{ animationDelay: "1.2s" }}
-        />
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-white/[0.06] to-transparent" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(20,184,166,0.18),transparent)]" />
 
-        <div className="relative mx-auto flex max-w-7xl flex-col px-4 pb-10 pt-16 sm:px-6 lg:px-8 lg:pt-24">
-          <div className="max-w-3xl">
-            <p className="animate-fade-up text-xs font-semibold uppercase tracking-[0.22em] text-teal-200">
-              LinkedIn Auto
-            </p>
-            <h1
-              className="animate-fade-up mt-5 text-5xl font-semibold tracking-tight sm:text-6xl lg:text-7xl"
-              style={{ animationDelay: "0.08s" }}
-            >
-              Safer LinkedIn outreach, beautifully under control.
+        <div className="relative mx-auto grid min-h-[calc(100vh-4rem)] max-w-7xl gap-12 px-4 pb-16 pt-16 sm:px-6 lg:grid-cols-[1fr_1.1fr] lg:items-center lg:gap-16 lg:px-8 lg:pt-24">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold text-teal-300">
+              LinkedIn outreach automation
+            </span>
+            <h1 className="mt-6 text-4xl font-semibold leading-[1.12] tracking-tight sm:text-5xl xl:text-6xl">
+              LinkedIn automation that doesn&apos;t get you banned.
             </h1>
-            <p
-              className="animate-fade-up mt-6 max-w-2xl text-base leading-8 text-slate-200 sm:text-lg"
-              style={{ animationDelay: "0.16s" }}
-            >
-              A sleek command center for account-safe campaigns, lead imports,
-              sequence building, content-signal prospecting, health monitoring,
-              and fast checkpoint response.
+            <p className="mt-6 max-w-xl text-base leading-7 text-slate-300 sm:text-lg sm:leading-8">
+              Vectra is an operations workspace, not a blast tool. Campaigns run through
+              10 safety guards, proxy enforcement, and warm-up phases. Every risk signal is visible
+              to you before it becomes a problem.
             </p>
             <HeroCTA />
-          </div>
 
-          <div className="mt-14 grid gap-4 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-              {stats.map((item, index) => (
-                <div
-                  key={item.label}
-                  className="animate-fade-up rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur"
-                  style={{ animationDelay: `${0.32 + index * 0.08}s` }}
-                >
-                  <p className="text-3xl font-semibold tracking-tight">
-                    {item.value}
-                  </p>
-                  <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-slate-300">
-                    {item.label}
-                  </p>
+            <div className="mt-10 grid grid-cols-3 gap-4 border-t border-white/10 pt-8">
+              {[
+                { value: "10", label: "Safety guards" },
+                { value: "15/day", label: "Connection hard cap" },
+                { value: "4 weeks", label: "Warm-up protocol" },
+              ].map((stat) => (
+                <div key={stat.label}>
+                  <p className="text-2xl font-semibold text-white">{stat.value}</p>
+                  <p className="mt-1 text-xs font-medium text-slate-400">{stat.label}</p>
                 </div>
               ))}
             </div>
+          </div>
 
-            <div
-              className="animate-fade-up animate-float-soft relative overflow-hidden rounded-[1.5rem] border border-white/[0.12] bg-white/10 p-3 shadow-2xl shadow-black/30 backdrop-blur"
-              style={{ animationDelay: "0.42s" }}
-            >
-              <div className="animate-sheen pointer-events-none absolute inset-y-0 left-0 w-20 bg-white/[0.08]" />
-              <div className="rounded-[1.1rem] bg-slate-950/80 p-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-teal-200">
-                      Live cockpit
-                    </p>
-                    <p className="mt-1 text-xl font-semibold">
-                      Today&apos;s operating picture
-                    </p>
-                  </div>
-                  <span className="animate-pulse-soft rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200 ring-1 ring-emerald-300/20">
-                    Systems clear
-                  </span>
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                  {["Connections", "Messages", "Leads", "Replies"].map(
-                    (label, index) => (
-                      <div
-                        key={label}
-                        className="rounded-2xl bg-white/[0.07] p-3"
-                      >
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                          {label}
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold">
-                          {[12, 31, 428, "18%"][index]}
-                        </p>
-                      </div>
-                    )
-                  )}
-                </div>
-
-                <div className="mt-4 space-y-2">
-                  {[
-                    ["Connect", "SaaS founders Q3", "Queued"],
-                    ["Message", "Accepted connections", "Sent"],
-                    ["Signal", "AI automation posts", "Collected"],
-                  ].map(([type, target, status]) => (
-                    <div
-                      key={target}
-                      className="relative grid grid-cols-[7rem_1fr_6rem] items-center gap-3 overflow-hidden rounded-2xl bg-white/[0.06] px-4 py-3 text-sm"
-                    >
-                      <div className="animate-sheen pointer-events-none absolute inset-y-0 left-0 w-12 bg-teal-200/[0.06]" />
-                      <span className="font-semibold text-teal-100">
-                        {type}
-                      </span>
-                      <span className="truncate text-slate-300">{target}</span>
-                      <span className="text-right text-slate-400">
-                        {status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+          <div className="pb-8 lg:pb-0">
+            <DashboardPreview />
           </div>
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-4 px-4 py-16 sm:px-6 lg:grid-cols-3 lg:px-8">
-        {features.map((feature) => (
-          <div key={feature.title} className="app-surface p-6">
-            <div className="mb-5 h-1.5 w-14 rounded-full bg-teal-500" />
-            <h2 className="text-xl font-semibold tracking-tight text-slate-950">
-              {feature.title}
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              {feature.text}
-            </p>
-          </div>
-        ))}
-      </section>
-
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
-          <div>
-            <p className="page-kicker">What it manages</p>
+      {/* ── Problem ────────────────────────────────────────────────────────── */}
+      <section className="bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="max-w-2xl">
+            <p className="page-kicker">The problem</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-              Every outreach path in one intuitive operating system.
+              Why most LinkedIn automation tools fail and take your account with them.
             </h2>
-            <p className="mt-4 text-sm leading-6 text-slate-600">
-              The app is built around the real work of LinkedIn automation:
-              finding the right people, choosing the right action, sending at a
-              careful pace, and staying aware of account risk.
-            </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {campaignModes.map((mode) => (
-              <div key={mode.name} className="app-panel p-5">
-                <span className="inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-teal-700 ring-1 ring-teal-100">
-                  {mode.name}
-                </span>
-                <p className="mt-4 text-sm leading-6 text-slate-600">
-                  {mode.detail}
-                </p>
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            {problems.map((p) => (
+              <div key={p.number} className="relative rounded-xl border border-slate-200 bg-slate-50 p-6">
+                <span className="text-xs font-bold text-slate-300">{p.number}</span>
+                <h3 className="mt-3 text-base font-semibold text-slate-950">{p.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{p.text}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="app-panel overflow-hidden">
-          <div className="grid gap-8 p-6 lg:grid-cols-[0.8fr_1.2fr] lg:p-8">
+      {/* ── Content Signal Targeting ────────────────────────────────────────── */}
+      <section className="bg-slate-950 text-white">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr] lg:items-center">
             <div>
-              <p className="page-kicker">Workflow</p>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-                From first account to running campaign in one focused flow.
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold text-teal-300">
+                Standout feature
+              </span>
+              <h2 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">
+                Reach people based on what they just posted about.
               </h2>
-              <p className="mt-4 text-sm leading-6 text-slate-600">
-                The application is built for repeated operation: load leads,
-                start campaigns, review activity, and resolve health issues
-                without losing context.
+              <p className="mt-5 text-base leading-7 text-slate-300">
+                Content Signal Targeting finds LinkedIn profiles who posted a specific keyword within
+                the last N days, extracts the post excerpt, and generates a connection note that
+                references what they actually wrote.
               </p>
+              <p className="mt-4 text-sm leading-6 text-slate-400">
+                The post is stored against the lead. When a connection is accepted and a
+                follow-up message fires, the conversation context is already there. You always
+                know why you connected. Your message already has something real to say.
+              </p>
+
+              <div className="mt-8 space-y-3">
+                {[
+                  "Keyword search across LinkedIn posts within a date window",
+                  "Author name, title, company, and post excerpt stored per lead",
+                  "Dynamic template fields: {{postTopic}}, {{postExcerpt}}, {{postDate}}",
+                  "Post URL stored as unique key, no duplicate processing",
+                  "Deduplication across campaigns and prior contact history",
+                  "Search throttle, freshness gate, and note uniqueness guards built in",
+                ].map((item) => (
+                  <div key={item} className="flex items-start gap-3">
+                    <span className="mt-0.5 h-5 w-5 flex-shrink-0 text-teal-400">
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                    <span className="text-sm text-slate-300">{item}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {workflow.map((step, index) => (
-                <div
-                  key={step.title}
-                  className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5"
-                >
-                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-950 text-sm font-semibold text-white">
-                    {index + 1}
-                  </span>
-                  <p className="mt-5 font-semibold text-slate-950">
-                    {step.title}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {step.text}
-                  </p>
-                </div>
-              ))}
+
+            <div>
+              <ContentSignalPreview />
             </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 bg-white/70 px-6 py-5 lg:px-8">
-            <p className="text-sm font-medium text-slate-600">
-              Ready to operate the automation cockpit?
-            </p>
-            <Link href="/dashboard" className="btn-primary">
-              Open Dashboard
-            </Link>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="app-panel p-6 lg:p-8">
-            <p className="page-kicker">Safety layer</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-              Built to slow down when LinkedIn starts asking questions.
+      {/* ── Safety Guards ───────────────────────────────────────────────────── */}
+      <section className="bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="max-w-2xl">
+            <p className="page-kicker">Safety architecture</p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+              10 guards between your campaign and a banned account.
             </h2>
             <p className="mt-4 text-sm leading-6 text-slate-600">
-              Automation is only useful when the accounts stay healthy. The app
-              keeps risk visible with checkpoints, caps, proxies, warm-up
-              phases, and clear pause or resume controls.
+              Each guard is enforced at the queue or worker level, not just recommended. They are
+              inspectable, not hidden. The system cannot remove platform risk. What it can do is make
+              every risky condition visible and pause before LinkedIn forces it to.
             </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {safetyControls.map((control) => (
-                <div
-                  key={control}
-                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3"
-                >
-                  <span className="h-2.5 w-2.5 rounded-full bg-teal-500" />
-                  <span className="text-sm font-semibold text-slate-700">
-                    {control}
+          </div>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {safetyGuards.map((guard) => (
+              <div key={guard.number} className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-slate-950 text-xs font-bold text-white">
+                    {guard.number}
                   </span>
+                  <h3 className="text-sm font-semibold text-slate-950">{guard.title}</h3>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-3xl bg-slate-950 p-6 text-white shadow-2xl shadow-slate-900/15">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-200">
-              Health snapshot
-            </p>
-            <div className="mt-6 space-y-4">
-              {[
-                ["founder@company.com", "Healthy", "92"],
-                ["sales@company.com", "Warning", "68"],
-                ["growth@company.com", "Paused", "41"],
-              ].map(([email, label, score]) => (
-                <div
-                  key={email}
-                  className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{email}</p>
-                      <p className="mt-1 text-xs text-slate-400">{label}</p>
-                    </div>
-                    <span className="rounded-xl bg-white/10 px-3 py-1 text-lg font-semibold">
-                      {score}
-                    </span>
-                  </div>
-                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-teal-400"
-                      style={{ width: `${score}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                <p className="mt-3 text-xs leading-5 text-slate-600">{guard.text}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="page-kicker">Inside the app</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-              Clear pages for every job.
+      {/* ── How it works ────────────────────────────────────────────────────── */}
+      <section className="border-y border-slate-200 bg-slate-50">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="max-w-2xl">
+            <p className="page-kicker">How it works</p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+              From account setup to monitored campaign in four steps.
             </h2>
+            <p className="mt-4 text-sm leading-6 text-slate-600">
+              The system is strongest when you treat it as an operations platform, not a one-click
+              sender. Each step adds context that makes the next action safer to take.
+            </p>
           </div>
-          <Link href="/dashboard" className="btn-secondary">
-            Explore dashboard
-          </Link>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {productAreas.map((area) => (
-            <Link
-              key={area.title}
-              href={area.href}
-              className="group app-surface flex min-h-56 flex-col justify-between p-5 transition hover:-translate-y-1 hover:border-teal-200"
-            >
-              <div>
-                <h3 className="text-lg font-semibold text-slate-950">
-                  {area.title}
-                </h3>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  {area.text}
-                </p>
-              </div>
-              <span className="mt-6 text-sm font-semibold text-teal-700 group-hover:text-teal-800">
-                Open
-              </span>
-            </Link>
-          ))}
-        </div>
-      </section>
 
-      {/* Pricing */}
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="text-center mb-10">
-          <p className="page-kicker">Pricing</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            One plan. Everything included.
-          </h2>
-          <p className="mt-4 text-sm leading-6 text-slate-600 max-w-xl mx-auto">
-            No tiers, no feature gates, no credit card required. Every account gets the full platform — campaigns, automation, safety guards, and all.
-          </p>
-        </div>
-        <div className="mx-auto max-w-lg">
-          <div className="relative overflow-hidden rounded-3xl bg-slate-950 px-8 py-10 text-white shadow-2xl shadow-slate-900/20">
-            <div className="absolute -right-10 -top-10 h-56 w-56 rounded-full bg-teal-400/20 blur-3xl" />
-            <div className="relative">
-              <div className="flex items-center justify-between">
-                <span className="inline-flex rounded-full bg-teal-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-teal-300 ring-1 ring-teal-300/20">
-                  Free Forever
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {workflow.map((step) => (
+              <div key={step.step} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600 text-sm font-bold text-white">
+                  {step.step}
                 </span>
-                <span className="text-4xl font-bold">$0</span>
+                <h3 className="mt-5 text-sm font-semibold text-slate-950">{step.title}</h3>
+                <p className="mt-2 text-xs leading-5 text-slate-600">{step.text}</p>
               </div>
-              <p className="mt-4 text-sm leading-6 text-slate-300">
-                Full access. No expiry. No hidden upgrade prompt. If pricing ever changes, existing accounts are grandfathered.
-              </p>
-              <ul className="mt-6 space-y-3">
-                {[
-                  "Unlimited campaigns (Connect, Message, Scrape, Content Signal)",
-                  "Unlimited lead imports and CSV exports",
-                  "Multi-account management with proxy support",
-                  "Warm-up phase enforcement and daily cap controls",
-                  "Anomaly detection and checkpoint alerts",
-                  "Activity log, reply tracking, and health monitoring",
-                  "Job queue visibility with per-lead failure diagnostics",
-                  "Webhook and email alert delivery (Slack, Discord, Resend)",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-3 text-sm text-slate-200">
-                    <span className="mt-1 h-4 w-4 shrink-0 rounded-full bg-teal-400/20 text-center text-[10px] font-bold text-teal-300">✓</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-8">
-                <Link href="/signup" className="btn-accent w-full text-center block">
-                  Get started free
-                </Link>
-                <p className="mt-3 text-center text-xs text-slate-400">
-                  Already have an account?{" "}
-                  <Link href="/login" className="text-teal-300 hover:text-teal-200 font-medium">
-                    Sign in
-                  </Link>
-                </p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-10 text-white shadow-2xl shadow-slate-900/15 lg:px-10">
-          <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-teal-400/20 blur-3xl" />
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      {/* ── Product Surface ─────────────────────────────────────────────────── */}
+      <section className="bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-200">
-                Ready when you are
-              </p>
-              <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight">
-                Start with a campaign, then let the dashboard keep the whole
-                operation honest.
+              <p className="page-kicker">What you get</p>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+                Every page an operator actually needs.
               </h2>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
+                No bloat. Six purpose-built views that cover the complete outreach lifecycle, from
+                account onboarding to post-campaign audit.
+              </p>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <Link href="/dashboard" className="btn-secondary shrink-0">
+              Open dashboard
+            </Link>
+          </div>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {productAreas.map((area) => (
+              <Link
+                key={area.title}
+                href={area.href}
+                className="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"
+              >
+                <h3 className="text-base font-semibold text-slate-950">{area.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{area.text}</p>
+                <span className="mt-5 inline-flex text-xs font-semibold text-teal-700 group-hover:text-teal-800">
+                  View page →
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA ─────────────────────────────────────────────────────────────── */}
+      <section className="bg-slate-950">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-300">
+                Get started
+              </p>
+              <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                One account. One proxy. One low-volume campaign.
+              </h2>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400">
+                The right first run isn&apos;t a blast. It&apos;s a controlled validation loop.
+                Confirm cookies, verify proxy health, run a small audience, inspect the activity
+                log, and then decide whether to scale. The system gives you everything you need
+                to make that call.
+              </p>
+              <p className="mt-4 text-xs text-slate-500">
+                LinkedIn automation carries platform-policy and account risk. Vectra makes
+                limits, pauses, and review points visible. It does not eliminate the risk.
+                Do not run it on accounts you cannot afford to lose.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 lg:flex-col">
               <Link href="/signup" className="btn-accent">
-                Get started free
+                Create account
               </Link>
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/[0.15]"
+                className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/[0.15]"
               >
                 Sign in
               </Link>
@@ -493,67 +531,33 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="border-t border-slate-200 bg-white/70">
-        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1.2fr_0.8fr_0.8fr] lg:px-8">
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <footer className="border-t border-slate-800 bg-slate-950">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
             <Link href="/" className="inline-flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-950 text-sm font-black text-white">
-                LA
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-teal-400 to-blue-600 text-sm font-black text-white">
+                V
               </span>
               <span>
-                <span className="block text-sm font-semibold text-slate-950">
-                  LinkedIn Auto
-                </span>
-                <span className="block text-xs font-medium uppercase tracking-[0.14em] text-teal-700">
-                  Outreach control
+                <span className="block text-sm font-semibold text-white">Vectra</span>
+                <span className="block text-xs font-medium uppercase tracking-[0.14em] text-teal-400">
+                  Outreach automation
                 </span>
               </span>
             </Link>
-            <p className="mt-4 max-w-md text-sm leading-6 text-slate-600">
-              A focused admin experience for safer LinkedIn automation,
-              campaign orchestration, lead management, and account health.
+            <p className="mt-3 max-w-sm text-xs leading-5 text-slate-500">
+              An operations workspace for LinkedIn outreach campaigns. Account health, proxy
+              discipline, safety controls, and full audit visibility in one place.
             </p>
           </div>
-
-          <div>
-            <p className="text-sm font-semibold text-slate-950">Product</p>
-            <div className="mt-4 grid gap-3 text-sm text-slate-600">
-              <Link href="/dashboard" className="hover:text-slate-950">
-                Dashboard
-              </Link>
-              <Link href="/campaigns" className="hover:text-slate-950">
-                Campaigns
-              </Link>
-              <Link href="/leads" className="hover:text-slate-950">
-                Leads
-              </Link>
-            </div>
+          <div className="flex flex-wrap gap-5 text-sm font-medium text-slate-500">
+            <Link href="/campaigns" className="hover:text-white transition-colors">Campaigns</Link>
+            <Link href="/accounts" className="hover:text-white transition-colors">Accounts</Link>
+            <Link href="/proxies" className="hover:text-white transition-colors">Proxies</Link>
+            <Link href="/jobs" className="hover:text-white transition-colors">Jobs</Link>
+            <Link href="/activity" className="hover:text-white transition-colors">Activity</Link>
           </div>
-
-          <div>
-            <p className="text-sm font-semibold text-slate-950">Operations</p>
-            <div className="mt-4 grid gap-3 text-sm text-slate-600">
-              <Link href="/accounts" className="hover:text-slate-950">
-                Accounts
-              </Link>
-              <Link href="/checkpoints" className="hover:text-slate-950">
-                Checkpoints
-              </Link>
-              <Link href="/jobs" className="hover:text-slate-950">
-                Jobs
-              </Link>
-              <Link href="/settings" className="hover:text-slate-950">
-                Settings
-              </Link>
-              <Link href="/campaigns/new" className="hover:text-slate-950">
-                New Campaign
-              </Link>
-            </div>
-          </div>
-        </div>
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-5 text-xs text-slate-500 sm:px-6 lg:px-8">
-          <span>&copy; 2026 LinkedIn Auto. All rights reserved.</span>
-          <span>Built for deliberate, observable outreach.</span>
         </div>
       </footer>
     </div>

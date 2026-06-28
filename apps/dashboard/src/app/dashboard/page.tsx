@@ -37,10 +37,10 @@ export default function DashboardPage() {
   }, []);
 
   if (loading)
-    return <p className="text-sm text-slate-500">Loading dashboard...</p>;
+    return <p className="text-sm text-slate-400">Loading dashboard...</p>;
   if (error)
     return (
-      <p className="text-sm text-red-600">Failed to load dashboard: {error}</p>
+      <p className="text-sm text-red-400">Failed to load dashboard: {error}</p>
     );
 
   const healthy =
@@ -127,20 +127,20 @@ export default function DashboardPage() {
       </section>
 
       {openCheckpoints.length > 0 && (
-        <div className="flex items-start justify-between gap-4 rounded-2xl border border-red-200 bg-red-50/90 p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
           <div>
-            <p className="font-semibold text-red-800">
+            <p className="font-semibold text-red-400">
               {openCheckpoints.length} open checkpoint
-              {openCheckpoints.length > 1 ? "s" : ""} - action required
+              {openCheckpoints.length > 1 ? "s" : ""} — action required
             </p>
-            <p className="mt-0.5 text-sm text-red-600">
+            <p className="mt-0.5 text-sm text-red-400/80">
               LinkedIn flagged one or more accounts. Automation is paused until
               you resolve them manually.
             </p>
           </div>
           <Link
             href="/checkpoints"
-            className="shrink-0 text-sm font-semibold text-red-700 underline underline-offset-4"
+            className="shrink-0 text-sm font-semibold text-red-400 underline underline-offset-4"
           >
             Resolve
           </Link>
@@ -151,11 +151,11 @@ export default function DashboardPage() {
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
             <p className="page-kicker">Live metrics</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-white">
               Today&apos;s operating picture
             </h2>
           </div>
-          <Link href="/accounts" className="hidden text-sm font-semibold text-teal-700 hover:text-teal-800 sm:block">
+          <Link href="/accounts" className="hidden text-sm font-semibold text-teal-400 hover:text-teal-300 sm:block">
             View account health
           </Link>
         </div>
@@ -209,49 +209,43 @@ export default function DashboardPage() {
         <div className="mb-3 flex items-center justify-between gap-4">
           <div>
             <p className="page-kicker">Event stream</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-white">
               Recent activity
             </h2>
           </div>
-          <Link href="/campaigns" className="text-sm font-semibold text-slate-600 hover:text-slate-950">
+          <Link href="/campaigns" className="text-sm font-semibold text-slate-400 hover:text-white">
             Campaigns
           </Link>
         </div>
         <div className="table-shell">
-          <table className="min-w-full divide-y divide-slate-100">
+          <table className="min-w-full divide-y divide-white/[0.06]">
             <thead className="table-head">
               <tr>
                 {["Action", "Target", "Result", "Time"].map((h) => (
-                  <th
-                    key={h}
-                    className="px-6 py-3"
-                  >
+                  <th key={h} className="px-6 py-3">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-white/[0.06]">
               {activity.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={4}
-                    className="px-6 py-10 text-center text-sm text-slate-400"
-                  >
+                  <td colSpan={4} className="px-6 py-10 text-center text-sm text-slate-400">
                     No activity yet. Start a campaign to see logs here.
                   </td>
                 </tr>
               )}
               {activity.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/80">
+                <tr key={log.id} className="transition hover:bg-white/[0.03]">
                   <td className="table-cell">
                     <Badge value={log.actionType} />
                   </td>
-                  <td className="table-cell max-w-xs truncate text-slate-600">
-                    {log.targetUrl ?? "-"}
+                  <td className="table-cell max-w-xs truncate text-slate-400">
+                    {log.targetUrl ?? "—"}
                   </td>
-                  <td className="table-cell text-slate-600">
-                    {log.result ?? "-"}
+                  <td className="table-cell text-slate-400">
+                    {log.result ?? "—"}
                   </td>
                   <td className="table-cell whitespace-nowrap text-slate-400">
                     {new Date(log.createdAt).toLocaleString()}

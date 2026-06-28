@@ -2,8 +2,8 @@
 
 This app should run as separate services in production:
 
-- Dashboard: Next.js web service
-- API: Express service
+- Dashboard: Next.js web service, currently configured for Render
+- API: Express service, currently configured for Railway
 - Worker: BullMQ worker service
 - PostgreSQL: managed database
 - Redis: managed queue backend
@@ -46,6 +46,10 @@ pnpm --filter @linkedin-automation/queue workers
 ```text
 NEXT_PUBLIC_API_URL=https://your-api.example.com
 ```
+
+`NEXT_PUBLIC_API_URL` is compiled into the browser bundle during `next build`.
+If the API URL changes, update the Render environment variable and redeploy the
+dashboard.
 
 ### Alerts
 
@@ -97,6 +101,35 @@ ALERT_EMAIL_FROM=alerts@your-domain.example
 5. Start or roll the worker service.
 6. Check `/health` on the API.
 7. Check the Jobs page for failed/retried jobs.
+
+## Render Dashboard Deployment
+
+The root `render.yaml` deploys only the dashboard as a Render Node web service.
+The API and worker can remain on Railway. It uses Render's free web-service
+plan by default; upgrade the service plan later if cold starts become annoying.
+
+1. Push the repository to GitHub.
+2. In Render, create a new Blueprint from the repository.
+3. Render will read `render.yaml` and create
+   `linkedin-automation-dashboard`.
+4. Set the required environment variable:
+
+   ```text
+   NEXT_PUBLIC_API_URL=https://your-api.up.railway.app
+   ```
+
+5. Deploy the service.
+6. Copy the Render dashboard URL and add it to the Railway API service:
+
+   ```text
+   ALLOWED_ORIGINS=https://your-dashboard.onrender.com
+   ```
+
+7. Redeploy the Railway API after changing `ALLOWED_ORIGINS`.
+8. Open the Render dashboard URL and sign up or log in.
+
+If you use a custom domain on Render, set `ALLOWED_ORIGINS` to that custom
+domain instead of the default `onrender.com` URL.
 
 ## Browser Runtime Notes
 

@@ -101,7 +101,7 @@ export default function ActivityLogPage() {
           <button
             onClick={handleExport}
             disabled={exporting}
-            className="btn-secondary shrink-0 text-teal-700"
+            className="btn-secondary shrink-0 text-teal-400"
           >
             {exporting ? "Exporting…" : "Export CSV"}
           </button>
@@ -111,7 +111,7 @@ export default function ActivityLogPage() {
       {/* Filters */}
       <div className="app-panel flex flex-wrap gap-4 p-4">
         <div className="flex-1 min-w-[180px]">
-          <label className="mb-1 block text-xs font-semibold text-slate-500">
+          <label className="mb-1 block text-xs font-semibold text-slate-400">
             Account
           </label>
           <select
@@ -128,7 +128,7 @@ export default function ActivityLogPage() {
           </select>
         </div>
         <div className="flex-1 min-w-[180px]">
-          <label className="mb-1 block text-xs font-semibold text-slate-500">
+          <label className="mb-1 block text-xs font-semibold text-slate-400">
             Action type
           </label>
           <select
@@ -152,7 +152,7 @@ export default function ActivityLogPage() {
 
       {/* Table */}
       <div className="table-shell">
-        <table className="min-w-full divide-y divide-slate-100">
+        <table className="min-w-full divide-y divide-white/[0.06]">
           <thead className="table-head">
             <tr>
               {["Action", "Target", "Result", "Account", "Time"].map((h) => (
@@ -162,7 +162,7 @@ export default function ActivityLogPage() {
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-white/[0.06]">
             {loading && (
               <tr>
                 <td
@@ -185,17 +185,17 @@ export default function ActivityLogPage() {
             )}
             {!loading &&
               page?.logs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/80">
+                <tr key={log.id} className="hover:bg-white/[0.03]">
                   <td className="table-cell">
                     <Badge value={log.actionType} />
                   </td>
-                  <td className="table-cell max-w-xs truncate font-mono text-xs text-slate-600">
+                  <td className="table-cell max-w-xs truncate font-mono text-xs text-slate-400">
                     {log.targetUrl ?? "—"}
                   </td>
-                  <td className="table-cell text-sm text-slate-600">
+                  <td className="table-cell text-sm text-slate-400">
                     {log.result ?? "—"}
                   </td>
-                  <td className="table-cell text-xs text-slate-500">
+                  <td className="table-cell text-xs text-slate-400">
                     {accountEmail(log.accountId)}
                   </td>
                   <td className="table-cell whitespace-nowrap text-xs text-slate-400">
@@ -210,7 +210,7 @@ export default function ActivityLogPage() {
       {/* Pagination */}
       {page && totalPages > 1 && (
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm text-slate-500">
+          <span className="text-sm text-slate-400">
             Page {currentPage} of {totalPages}
           </span>
           <div className="flex gap-2">

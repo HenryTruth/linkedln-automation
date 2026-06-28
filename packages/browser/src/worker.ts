@@ -3,7 +3,12 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { prisma, AccountStatus, type Proxy } from "@linkedin-automation/db";
-import { detectCheckpoint, sendAlert, IpMismatchError } from "@linkedin-automation/guards";
+import {
+  detectCheckpoint,
+  sendAlert,
+  IpMismatchError,
+  MissingProxyError,
+} from "@linkedin-automation/guards";
 import { saveCookies, loadCookies } from "./session.js";
 import {
   getProxyForAccount,
@@ -23,6 +28,7 @@ function randomSessionMaxMs(): number {
 const IP_CHECK_INTERVAL = 10;
 const ARTIFACT_DIR =
   process.env.BROWSER_ARTIFACT_DIR ?? "/tmp/linkedin-automation-artifacts";
+const REQUIRE_PROXY = process.env.REQUIRE_PROXY !== "false";
 
 function safeName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 120);
@@ -69,6 +75,10 @@ export class BrowserWorker {
     }
 
     const proxy = await getProxyForAccount(this.accountId);
+    if (!proxy && REQUIRE_PROXY) {
+      throw new MissingProxyError(this.accountId);
+    }
+
     if (proxy) {
       const proxySessionId =
         proxy.rotationMode === "STICKY_SESSION" ? createProxySessionId() : null;

@@ -115,10 +115,10 @@ export default function SettingsPage() {
       {/* Alert webhook */}
       <section className="app-panel p-6 space-y-5">
         <div>
-          <h2 className="text-base font-semibold text-slate-950">Alert webhook</h2>
+          <h2 className="text-base font-semibold text-white">Alert webhook</h2>
           <p className="mt-1 text-sm leading-6 text-slate-500">
             A POST request with{" "}
-            <code className="rounded bg-slate-100 px-1 py-0.5 text-xs font-mono">
+            <code className="rounded bg-slate-800 px-1 py-0.5 text-xs font-mono">
               {"{ text: \"...\" }"}
             </code>{" "}
             is sent when a checkpoint is detected, an account is paused for anomalous behaviour, or
@@ -126,15 +126,15 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 text-sm">
-          <p className="font-semibold text-slate-700">Status</p>
+        <div className="rounded-2xl border border-white/[0.06] bg-slate-800/40 p-4 text-sm">
+          <p className="font-semibold text-slate-200">Status</p>
           <div className="mt-2 flex items-center gap-2">
             <span
               className={`inline-block h-2 w-2 rounded-full ${
                 hasWebhook ? "bg-emerald-400" : "bg-slate-300"
               }`}
             />
-            <span className="text-slate-600">
+            <span className="text-slate-300">
               {hasWebhook ? "Webhook configured" : "No webhook set"}
             </span>
           </div>
@@ -147,7 +147,7 @@ export default function SettingsPage() {
 
         <form onSubmit={handleWebhookSave} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">Webhook URL</label>
+            <label className="mb-1 block text-xs font-semibold text-slate-300">Webhook URL</label>
             <input
               type="url"
               value={webhookDraft}
@@ -162,8 +162,8 @@ export default function SettingsPage() {
             <div
               className={`rounded-xl border p-3 text-sm ${
                 webhookMsg.ok
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-red-200 bg-red-50 text-red-700"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                  : "border-red-500/30 bg-red-500/10 text-red-400"
               }`}
             >
               {webhookMsg.text}
@@ -179,14 +179,14 @@ export default function SettingsPage() {
       {/* Email alerts via Resend */}
       <section className="app-panel p-6 space-y-5">
         <div>
-          <h2 className="text-base font-semibold text-slate-950">Email alerts (Resend)</h2>
+          <h2 className="text-base font-semibold text-white">Email alerts (Resend)</h2>
           <p className="mt-1 text-sm leading-6 text-slate-500">
             Fallback alert delivery via email when no webhook is configured. Powered by{" "}
             <a
               href="https://resend.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-teal-700 hover:text-teal-800"
+              className="font-medium text-teal-400 hover:text-teal-300"
             >
               Resend
             </a>{" "}
@@ -194,22 +194,22 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 text-sm">
-          <p className="font-semibold text-slate-700">Status</p>
+        <div className="rounded-2xl border border-white/[0.06] bg-slate-800/40 p-4 text-sm">
+          <p className="font-semibold text-slate-200">Status</p>
           <div className="mt-2 flex items-center gap-2">
             <span
               className={`inline-block h-2 w-2 rounded-full ${
                 hasEmail ? "bg-emerald-400" : "bg-slate-300"
               }`}
             />
-            <span className="text-slate-600">
+            <span className="text-slate-300">
               {hasEmail
                 ? `Email alerts active → ${settings!.alert_email_to}`
                 : "Email alerts not configured"}
             </span>
           </div>
           {hasWebhook && hasEmail && (
-            <p className="mt-2 text-xs text-amber-600">
+            <p className="mt-2 text-xs text-amber-400">
               Webhook takes priority — email is only used when the webhook is removed.
             </p>
           )}
@@ -217,7 +217,7 @@ export default function SettingsPage() {
 
         <form onSubmit={handleEmailSave} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">
+            <label className="mb-1 block text-xs font-semibold text-slate-300">
               Resend API key
             </label>
             <input
@@ -243,7 +243,7 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">
+            <label className="mb-1 block text-xs font-semibold text-slate-300">
               Alert recipient email
             </label>
             <input
@@ -259,8 +259,8 @@ export default function SettingsPage() {
             <div
               className={`rounded-xl border p-3 text-sm ${
                 emailMsg.ok
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-red-200 bg-red-50 text-red-700"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                  : "border-red-500/30 bg-red-500/10 text-red-400"
               }`}
             >
               {emailMsg.text}
@@ -276,7 +276,7 @@ export default function SettingsPage() {
       {/* Test alert */}
       <section className="app-panel p-6 space-y-4">
         <div>
-          <h2 className="text-base font-semibold text-slate-950">Send test alert</h2>
+          <h2 className="text-base font-semibold text-white">Send test alert</h2>
           <p className="mt-1 text-sm leading-6 text-slate-500">
             Fire a test notification to verify your alert delivery. Uses webhook if configured,
             otherwise falls back to email.
@@ -297,8 +297,8 @@ export default function SettingsPage() {
           <div
             className={`rounded-xl border p-3 text-sm ${
               testMsg.ok
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-red-200 bg-red-50 text-red-700"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : "border-red-500/30 bg-red-500/10 text-red-400"
             }`}
           >
             {testMsg.text}
@@ -308,12 +308,12 @@ export default function SettingsPage() {
 
       {/* Anomaly detection info */}
       <section className="app-panel p-6 space-y-3">
-        <h2 className="text-base font-semibold text-slate-950">Anomaly detection</h2>
+        <h2 className="text-base font-semibold text-white">Anomaly detection</h2>
         <p className="text-sm leading-6 text-slate-500">
           A background job runs every hour and scans all active accounts for unusual behaviour. If
           triggered, the account is automatically paused and an alert is sent.
         </p>
-        <ul className="space-y-1.5 text-sm text-slate-600">
+        <ul className="space-y-1.5 text-sm text-slate-300">
           {[
             "More than 5 actions in any 10-minute window",
             "Session error rate above 20% across the last 10 actions",

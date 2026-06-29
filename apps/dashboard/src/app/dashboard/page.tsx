@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, type Stats, type ActivityLog, type Checkpoint } from "@/lib/api";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/Badge";
+import { Skeleton, SkeletonStatCard, SkeletonTableRows } from "@/components/Skeleton";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -37,7 +38,21 @@ export default function DashboardPage() {
   }, []);
 
   if (loading)
-    return <p className="text-sm text-slate-400">Loading dashboard...</p>;
+    return (
+      <div className="space-y-8">
+        <Skeleton className="h-72 w-full rounded-3xl" />
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => <SkeletonStatCard key={i} />)}
+        </div>
+        <div className="table-shell">
+          <table className="min-w-full">
+            <tbody className="divide-y divide-white/[0.06]">
+              <SkeletonTableRows cols={4} rows={6} />
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   if (error)
     return (
       <p className="text-sm text-red-400">Failed to load dashboard: {error}</p>

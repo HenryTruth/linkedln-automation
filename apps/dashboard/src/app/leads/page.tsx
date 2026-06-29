@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { api, type Lead, type Campaign } from "@/lib/api";
 import { Badge } from "@/components/Badge";
+import { SkeletonTableRows } from "@/components/Skeleton";
 
 const STATUS_OPTIONS = ["", "NONE", "PENDING", "CONNECTED", "WITHDRAWN"];
 
@@ -484,16 +485,7 @@ export default function LeadsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.06]">
-            {loading && (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="px-6 py-8 text-center text-sm text-slate-400"
-                >
-                  Loading...
-                </td>
-              </tr>
-            )}
+            {loading && <SkeletonTableRows cols={5} rows={8} />}
             {!loading && leads.length === 0 && (
               <tr>
                 <td

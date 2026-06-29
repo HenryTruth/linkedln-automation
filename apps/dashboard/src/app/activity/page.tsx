@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api, type ActivityPage, type Account } from "@/lib/api";
 import { Badge } from "@/components/Badge";
+import { SkeletonTableRows } from "@/components/Skeleton";
 
 const ACTION_TYPES = [
   "",
@@ -163,16 +164,7 @@ export default function ActivityLogPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.06]">
-            {loading && (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="px-6 py-10 text-center text-sm text-slate-400"
-                >
-                  Loading…
-                </td>
-              </tr>
-            )}
+            {loading && <SkeletonTableRows cols={5} rows={8} />}
             {!loading && page?.logs.length === 0 && (
               <tr>
                 <td

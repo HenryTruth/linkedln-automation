@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, type Checkpoint } from "@/lib/api";
+import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
 
 export default function CheckpointsPage() {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
@@ -47,7 +48,23 @@ export default function CheckpointsPage() {
   const open = checkpoints.filter((cp) => !cp.resolvedAt);
   const resolved = checkpoints.filter((cp) => cp.resolvedAt);
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
+  if (loading)
+    return (
+      <div className="space-y-6">
+        <div className="app-panel p-6 lg:p-8 space-y-3">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-4 w-80 max-w-full" />
+        </div>
+        <div className="table-shell">
+          <table className="min-w-full">
+            <tbody className="divide-y divide-white/[0.06]">
+              <SkeletonTableRows cols={5} rows={4} />
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
 
   return (
     <div className="space-y-8">

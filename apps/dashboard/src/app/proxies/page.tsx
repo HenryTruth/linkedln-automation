@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type Proxy } from "@/lib/api";
 import { Badge } from "@/components/Badge";
+import { Skeleton, SkeletonPageHeader, SkeletonTableRows } from "@/components/Skeleton";
 
 type RotationMode = "STATIC" | "STICKY_SESSION";
 
@@ -125,7 +126,19 @@ export default function ProxiesPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
+  if (loading)
+    return (
+      <div className="space-y-6">
+        <SkeletonPageHeader wide />
+        <div className="table-shell">
+          <table className="min-w-full">
+            <tbody className="divide-y divide-white/[0.06]">
+              <SkeletonTableRows cols={6} rows={3} />
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
 
   return (
     <div className="space-y-6">

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, type Campaign } from "@/lib/api";
 import { Badge } from "@/components/Badge";
+import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -57,7 +58,33 @@ export default function CampaignsPage() {
   const active = campaigns.filter((c) => c.status === "ACTIVE").length;
   const totalLeads = campaigns.reduce((sum, c) => sum + (c._count?.leads ?? 0), 0);
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
+  if (loading)
+    return (
+      <div className="space-y-8">
+        <section className="app-panel overflow-hidden">
+          <div className="p-6 lg:p-8">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="mt-3 h-9 w-44" />
+            <Skeleton className="mt-3 h-4 w-96 max-w-full" />
+          </div>
+          <div className="grid border-t border-white/[0.06] bg-slate-950/40 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="border-white/[0.06] p-5 sm:border-r last:border-r-0">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="mt-3 h-8 w-16" />
+              </div>
+            ))}
+          </div>
+        </section>
+        <div className="table-shell">
+          <table className="min-w-full">
+            <tbody className="divide-y divide-white/[0.06]">
+              <SkeletonTableRows cols={6} rows={4} />
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   if (error) return <p className="text-sm text-red-400">{error}</p>;
 
   return (

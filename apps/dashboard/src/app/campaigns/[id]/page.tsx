@@ -6,6 +6,7 @@ import { api, type CampaignDetail, type CampaignLeadJobStatus, type CampaignStat
 import { Badge } from "@/components/Badge";
 import { SequenceBuilder } from "@/components/SequenceBuilder";
 import { ContentSignalPanel } from "@/components/ContentSignalPanel";
+import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
 
 const JOB_STATUS_STYLES: Record<CampaignLeadJobStatus, string> = {
   IDLE:    "bg-slate-700/50 text-slate-400",
@@ -269,7 +270,30 @@ export default function CampaignDetailPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
+  if (loading)
+    return (
+      <div className="space-y-6">
+        <div className="app-panel p-6 lg:p-8 space-y-4">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-9 w-64" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-white/[0.06] bg-slate-800/50 p-3 space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-6 w-12" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="table-shell">
+          <table className="min-w-full">
+            <tbody className="divide-y divide-white/[0.06]">
+              <SkeletonTableRows cols={5} rows={5} />
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   if (error || !campaign)
     return <p className="text-sm text-red-400">{error ?? "Not found"}</p>;
 

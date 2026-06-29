@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, type Lead, type Campaign, type PostSignal } from "@/lib/api";
 import { Badge } from "@/components/Badge";
+import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
 
 type CampaignMembership = {
   campaign: Campaign;
@@ -96,7 +97,36 @@ export default function LeadDetailPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
+  if (loading)
+    return (
+      <div className="space-y-6">
+        <div className="app-panel p-6 lg:p-8 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-48" />
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-40" />
+            </div>
+            <Skeleton className="h-9 w-24 rounded-xl" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-white/[0.06] bg-slate-800/50 p-3 space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-5 w-28" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="table-shell">
+          <table className="min-w-full">
+            <tbody className="divide-y divide-white/[0.06]">
+              <SkeletonTableRows cols={4} rows={3} />
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   if (error || !lead)
     return <p className="text-sm text-red-400">{error ?? "Lead not found"}</p>;
 

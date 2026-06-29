@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Skeleton, SkeletonPageHeader } from "@/components/Skeleton";
 import {
   api,
   type Account,
@@ -552,7 +553,31 @@ export default function AccountsPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-400">Loading...</p>;
+  if (loading)
+    return (
+      <div className="space-y-6">
+        <SkeletonPageHeader wide />
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="app-panel p-5 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+              <Skeleton className="h-8 w-20 rounded-xl" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, j) => (
+                <div key={j} className="rounded-2xl border border-white/[0.06] bg-slate-800/50 p-3 space-y-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-5 w-24" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
 
   const today = todayKey();
 

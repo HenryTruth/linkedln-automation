@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, type Account } from "@/lib/api";
 import { Badge } from "@/components/Badge";
+import { Skeleton } from "@/components/Skeleton";
 
 const BASE_CAPS: Record<string, number> = {
   connection: 15,
@@ -88,7 +89,40 @@ export default function RateLimitsPage() {
       !accountUtilization(a, today).some((u) => u.pct >= 80)
   ).length;
 
-  if (loading) return <p className="text-sm text-slate-500">Loading…</p>;
+  if (loading)
+    return (
+      <div className="space-y-8">
+        <section className="app-panel p-6 lg:p-8">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="mt-3 h-9 w-56" />
+        </section>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="app-panel p-5 text-center space-y-3">
+              <Skeleton className="mx-auto h-3 w-24" />
+              <Skeleton className="mx-auto h-8 w-12" />
+            </div>
+          ))}
+        </div>
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="app-panel p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, j) => (
+                <div key={j} className="space-y-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-2 w-full rounded-full" />
+                  <Skeleton className="h-3 w-12" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
 
   return (
     <div className="space-y-8">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type JobState, type QueueJob } from "@/lib/api";
+import { SkeletonTableRows } from "@/components/Skeleton";
 
 const states: JobState[] = ["active", "waiting", "delayed", "completed", "failed"];
 const queues = [
@@ -151,7 +152,7 @@ export default function JobsPage() {
           </thead>
           <tbody className="divide-y divide-white/[0.06]">
             {loading ? (
-              <tr><td className="table-cell text-center" colSpan={7}>Loading…</td></tr>
+              <SkeletonTableRows cols={7} rows={5} />
             ) : jobs.length === 0 ? (
               <tr>
                 <td className="px-6 py-10 text-center text-sm text-slate-400" colSpan={7}>

@@ -88,6 +88,13 @@
   .table-cell {
     @apply px-6 py-4 text-sm text-slate-300;
   }
+
+  .skeleton {
+    background: linear-gradient(90deg, #1e293b 25%, #263347 50%, #1e293b 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
+    @apply rounded-lg;
+  }
 }
 
 @keyframes fade-up {
@@ -129,6 +136,15 @@
   50% {
     opacity: 0.95;
     transform: scale(1.08);
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
   }
 }
 

@@ -51,6 +51,29 @@ export interface Proxy {
   lastSessionStartedAt?: string | null;
 }
 
+export interface ProxyCheapRemoteProxy {
+  id: string;
+  status: string;
+  networkType: string | null;
+  countryCode: string | null;
+  host: string;
+  httpPort: number | null;
+  httpsPort: number | null;
+  socks5Port: number | null;
+  proxyType: string | null;
+  username: string | null;
+  publicIp: string | null;
+  expiresAt: string | null;
+  ispName: string | null;
+  importable: boolean;
+  importBlockReason: string | null;
+}
+
+export interface ProxyCheapImportResult {
+  imported: Proxy[];
+  skipped: Array<{ id: string; reason: string }>;
+}
+
 export type CapKey = "connection" | "message" | "profileView" | "searchPage";
 
 export const SYSTEM_CAPS: Record<CapKey, number> = {
@@ -316,6 +339,13 @@ export const api = {
 
   proxies: {
     list: () => apiFetch<Proxy[]>("/proxies"),
+    listProxyCheap: () =>
+      apiFetch<{ proxies: ProxyCheapRemoteProxy[] }>("/proxies/proxy-cheap/remote"),
+    importProxyCheap: (proxyIds?: string[]) =>
+      apiFetch<ProxyCheapImportResult>("/proxies/proxy-cheap/import", {
+        method: "POST",
+        body: JSON.stringify({ proxyIds }),
+      }),
     create: (data: {
       host: string;
       port: number;

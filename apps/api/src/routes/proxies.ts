@@ -7,6 +7,12 @@ import {
   detectProxyIp,
 } from "@linkedin-automation/browser";
 import { encrypt } from "@linkedin-automation/guards";
+import {
+  listProxyCheapProxies,
+  toPublicProxyCheapProxy,
+  getProxyCheapImportBlockReason,
+  toProxyCreateData,
+} from "../lib/proxyCheapClient.js";
 
 export const proxiesRouter: IRouter = Router();
 
@@ -54,6 +60,89 @@ proxiesRouter.post("/", async (req, res, next) => {
       data: { ...data, password: encrypt(data.password), userId: req.user.id },
     });
     res.status(201).json(publicProxy(proxy));
+  } catch (err) {
+    next(err);
+  }
+});
+
+proxiesRouter.get("/proxy-cheap/remote", async (_req, res, next) => {
+  try {
+    const proxies = await listProxyCheapProxies();
+    res.json({
+      proxies: proxies.map(toPublicProxyCheapProxy),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+proxiesRouter.post("/proxy-cheap/import", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      proxyIds: z.array(z.string()).optional(),
+    });
+    const data = schema.parse(req.body);
+    const selectedIds = data.proxyIds ? new Set(data.proxyIds) : null;
+
+    const remoteProxies = await listProxyCheapProxies();
+    const candidates = selectedIds
+      ? remoteProxies.filter((proxy) => selectedIds.has(proxy.id))
+      : remoteProxies;
+
+    const imported = [];
+    const skipped: Array<{ id: string; reason: string }> = [];
+
+    for (const remoteProxy of candidates) {
+      const blockReason = getProxyCheapImportBlockReason(remoteProxy);
+      if (blockReason) {
+        skipped.push({ id: remoteProxy.id, reason: blockReason });
+        continue;
+      }
+
+      const proxyData = toProxyCreateData(remoteProxy);
+      const existing = await prisma.proxy.findFirst({
+        where: {
+          userId: req.user.id,
+          host: proxyData.host,
+          port: proxyData.port,
+          username: proxyData.username,
+        },
+      });
+
+      const stored = existing
+        ? await prisma.proxy.update({
+            where: { id: existing.id },
+            data: {
+              country: proxyData.country,
+              city: proxyData.city,
+              password: encrypt(proxyData.password),
+              rotationMode: ProxyRotationMode.STATIC,
+              usernameTemplate: null,
+              currentExitIp: proxyData.currentExitIp,
+              healthStatus: ProxyHealth.HEALTHY,
+              lastUsed: new Date(),
+            },
+          })
+        : await prisma.proxy.create({
+            data: {
+              ...proxyData,
+              password: encrypt(proxyData.password),
+              userId: req.user.id,
+              healthStatus: ProxyHealth.HEALTHY,
+            },
+          });
+
+      imported.push(publicProxy(stored));
+    }
+
+    if (selectedIds) {
+      const foundIds = new Set(remoteProxies.map((proxy) => proxy.id));
+      for (const id of selectedIds) {
+        if (!foundIds.has(id)) skipped.push({ id, reason: "Proxy not found in Proxy-Cheap account." });
+      }
+    }
+
+    res.status(201).json({ imported, skipped });
   } catch (err) {
     next(err);
   }

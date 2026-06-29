@@ -157,6 +157,12 @@ Use the proxy location the account normally logs in from. The dashboard warns
 when the account timezone and proxy country look mismatched, but the user should
 make the final choice because they know the account's normal login history.
 
+Proxy-Cheap imports are supported for purchased Static Residential (ISP)
+proxies. Set `PROXY_CHEAP_API_KEY` and `PROXY_CHEAP_API_SECRET`, then use the
+Proxies page to load and import active residential IPv4 proxies. The importer
+blocks rotating, datacenter, inactive, and IPv6 entries because they do not meet
+the session-stability policy for LinkedIn accounts.
+
 For a future managed proxy add-on, do not infer location silently. Ask the user
 for the account's normal login country, city or region, and timezone, then
 provision a sticky residential proxy in that geography and keep it bound to the

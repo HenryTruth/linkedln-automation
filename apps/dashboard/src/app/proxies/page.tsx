@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Proxy } from "@/lib/api";
+import { api, type Proxy, type ProxyCheapRemoteProxy } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { Skeleton, SkeletonPageHeader, SkeletonTableRows } from "@/components/Skeleton";
 
@@ -36,6 +36,12 @@ export default function ProxiesPage() {
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [proxyCheapLoading, setProxyCheapLoading] = useState(false);
+  const [proxyCheapImporting, setProxyCheapImporting] = useState(false);
+  const [proxyCheapError, setProxyCheapError] = useState<string | null>(null);
+  const [proxyCheapProxies, setProxyCheapProxies] = useState<ProxyCheapRemoteProxy[]>([]);
+  const [selectedProxyCheapIds, setSelectedProxyCheapIds] = useState<Set<string>>(new Set());
+  const [importSummary, setImportSummary] = useState<string | null>(null);
 
   // Add form
   const [showForm, setShowForm] = useState(false);
@@ -126,6 +132,56 @@ export default function ProxiesPage() {
     }
   }
 
+  async function handleLoadProxyCheap() {
+    setProxyCheapLoading(true);
+    setProxyCheapError(null);
+    setImportSummary(null);
+    try {
+      const result = await api.proxies.listProxyCheap();
+      setProxyCheapProxies(result.proxies);
+      setSelectedProxyCheapIds(
+        new Set(result.proxies.filter((proxy) => proxy.importable).map((proxy) => proxy.id))
+      );
+    } catch (err) {
+      setProxyCheapError((err as Error).message);
+    } finally {
+      setProxyCheapLoading(false);
+    }
+  }
+
+  async function handleImportProxyCheap() {
+    const proxyIds = Array.from(selectedProxyCheapIds);
+    if (proxyIds.length === 0) {
+      setProxyCheapError("Select at least one importable Proxy-Cheap proxy.");
+      return;
+    }
+
+    setProxyCheapImporting(true);
+    setProxyCheapError(null);
+    setImportSummary(null);
+    try {
+      const result = await api.proxies.importProxyCheap(proxyIds);
+      await reload();
+      const skippedText = result.skipped.length
+        ? ` ${result.skipped.length} skipped.`
+        : "";
+      setImportSummary(`Imported ${result.imported.length} proxy profile(s).${skippedText}`);
+    } catch (err) {
+      setProxyCheapError((err as Error).message);
+    } finally {
+      setProxyCheapImporting(false);
+    }
+  }
+
+  function toggleProxyCheapSelection(id: string) {
+    setSelectedProxyCheapIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   if (loading)
     return (
       <div className="space-y-6">
@@ -160,6 +216,110 @@ export default function ProxiesPage() {
             {showForm ? "Cancel" : "Add Proxy"}
           </button>
         </div>
+      </section>
+
+      <section className="app-panel p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-100">
+              Import from Proxy-Cheap
+            </h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
+              Pull active Static Residential ISP proxies from your Proxy-Cheap
+              account. Rotating, datacenter, inactive, and IPv6 entries are
+              blocked from import.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleLoadProxyCheap}
+              disabled={proxyCheapLoading || proxyCheapImporting}
+              className="btn-secondary"
+            >
+              {proxyCheapLoading ? "Loading..." : "Load Proxy-Cheap"}
+            </button>
+            {proxyCheapProxies.length > 0 && (
+              <button
+                type="button"
+                onClick={handleImportProxyCheap}
+                disabled={proxyCheapImporting || selectedProxyCheapIds.size === 0}
+                className="btn-primary"
+              >
+                {proxyCheapImporting
+                  ? "Importing..."
+                  : `Import Selected (${selectedProxyCheapIds.size})`}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {proxyCheapError && (
+          <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+            {proxyCheapError}
+          </div>
+        )}
+        {importSummary && (
+          <div className="mt-4 rounded-xl border border-teal-500/30 bg-teal-500/10 p-3 text-sm text-teal-300">
+            {importSummary}
+          </div>
+        )}
+
+        {proxyCheapProxies.length > 0 && (
+          <div className="mt-5 overflow-x-auto">
+            <table className="min-w-full divide-y divide-white/[0.06]">
+              <thead className="table-head">
+                <tr>
+                  {["", "Proxy", "Network", "Country", "Exit IP", "Status"].map((h) => (
+                    <th key={h} className="px-4 py-3">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.06]">
+                {proxyCheapProxies.map((proxy) => (
+                  <tr key={proxy.id} className="hover:bg-white/[0.03]">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        disabled={!proxy.importable}
+                        checked={selectedProxyCheapIds.has(proxy.id)}
+                        onChange={() => toggleProxyCheapSelection(proxy.id)}
+                        className="h-4 w-4 rounded border-slate-600 bg-slate-900"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-mono text-xs font-semibold text-slate-100">
+                        {proxy.host}:{proxy.httpPort ?? proxy.httpsPort ?? "-"}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {proxy.ispName ?? "ISP unknown"} · {proxy.proxyType ?? "HTTP"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-400">
+                      {proxy.networkType ?? "-"}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-400">
+                      {proxy.countryCode ?? "-"}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                      {proxy.publicIp ?? "-"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge value={proxy.status} />
+                      {!proxy.importable && (
+                        <p className="mt-1 max-w-xs text-xs text-amber-400">
+                          {proxy.importBlockReason}
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {/* Add proxy form */}

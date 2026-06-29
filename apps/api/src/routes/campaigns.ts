@@ -14,6 +14,26 @@ export const campaignsRouter: IRouter = Router();
 
 const NOTE_MAX = 300;
 
+type CampaignReadyAccount = {
+  id: string;
+  status: string;
+  cookiesEncrypted: string | null;
+  proxyId: string | null;
+};
+
+function assertCampaignAccountReady(account: CampaignReadyAccount): string | null {
+  if (account.status !== "ACTIVE") {
+    return "Account is paused or restricted. Resume the account before starting a campaign.";
+  }
+  if (!account.proxyId) {
+    return "Proxy required. Assign a matching residential proxy to this account before starting a campaign.";
+  }
+  if (!account.cookiesEncrypted) {
+    return "LinkedIn session required. Connect or refresh this account's LinkedIn session before starting a campaign.";
+  }
+  return null;
+}
+
 const CreateCampaignSchema = z.object({
   name: z.string().min(1),
   accountId: z.string(),
@@ -318,7 +338,23 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
 
     const campaign = await prisma.campaign.findFirstOrThrow({
       where: { id: req.params.id, account: { userId: req.user.id } },
+      include: {
+        account: {
+          select: {
+            id: true,
+            status: true,
+            cookiesEncrypted: true,
+            proxyId: true,
+          },
+        },
+      },
     });
+
+    const readinessError = assertCampaignAccountReady(campaign.account);
+    if (readinessError) {
+      res.status(422).json({ error: readinessError });
+      return;
+    }
 
     // Queue a search-scrape job to crawl results pages and discover profiles
     await searchScrapeQueue.add("scrape-search", {
@@ -340,6 +376,14 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
     const fullCampaign = await prisma.campaign.findFirstOrThrow({
       where: { id: req.params.id, account: { userId: req.user.id } },
       include: {
+        account: {
+          select: {
+            id: true,
+            status: true,
+            cookiesEncrypted: true,
+            proxyId: true,
+          },
+        },
         messages: { orderBy: { sequenceOrder: "asc" } },
         leads: {
           where: {
@@ -350,6 +394,12 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
         },
       },
     });
+
+    const readinessError = assertCampaignAccountReady(fullCampaign.account);
+    if (readinessError) {
+      res.status(422).json({ error: readinessError });
+      return;
+    }
 
     const batch = fullCampaign.leads.slice(0, fullCampaign.dailyLimit);
     const dispatched: string[] = [];

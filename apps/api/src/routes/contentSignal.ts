@@ -10,6 +10,25 @@ import {
 
 export const contentSignalRouter: IRouter = Router();
 
+type CampaignReadyAccount = {
+  status: string;
+  cookiesEncrypted: string | null;
+  proxyId: string | null;
+};
+
+function campaignAccountReadinessError(account: CampaignReadyAccount): string | null {
+  if (account.status !== "ACTIVE") {
+    return "Account is paused or restricted. Resume the account before starting a campaign.";
+  }
+  if (!account.proxyId) {
+    return "Proxy required. Assign a matching residential proxy to this account before starting a campaign.";
+  }
+  if (!account.cookiesEncrypted) {
+    return "LinkedIn session required. Connect or refresh this account's LinkedIn session before starting a campaign.";
+  }
+  return null;
+}
+
 const ConfigSchema = z.object({
   keyword: z.string().min(1).max(200),
   dateRangeDays: z.number().int().min(1).max(30).default(7),
@@ -121,7 +140,16 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
   try {
     const campaign = await prisma.campaign.findFirstOrThrow({
       where: { id: req.params.campaignId, account: { userId: req.user.id } },
-      include: { contentSignalConfig: true },
+      include: {
+        contentSignalConfig: true,
+        account: {
+          select: {
+            status: true,
+            cookiesEncrypted: true,
+            proxyId: true,
+          },
+        },
+      },
     });
 
     if (campaign.type !== "CONTENT_SIGNAL") {
@@ -132,6 +160,12 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
     const config = campaign.contentSignalConfig;
     if (!config) {
       res.status(422).json({ error: "No keyword config set — save a config first" });
+      return;
+    }
+
+    const readinessError = campaignAccountReadinessError(campaign.account);
+    if (readinessError) {
+      res.status(422).json({ error: readinessError });
       return;
     }
 

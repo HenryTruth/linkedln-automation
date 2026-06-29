@@ -204,6 +204,37 @@ function CapBar({ label, used, cap }: { label: string; used: number; cap: number
 
 type AccountNoticeType = "success" | "error" | "info";
 
+function sessionBadge(account: Account, openCheckpoints: number) {
+  if (openCheckpoints > 0 || account.status === "RESTRICTED") {
+    return {
+      label: "Verification required",
+      detail: "Resolve the LinkedIn security prompt before this account can run.",
+      className: "border-red-500/30 bg-red-500/10 text-red-300",
+    };
+  }
+  if (!account.proxy) {
+    return {
+      label: "Proxy required",
+      detail: "Assign a matching residential proxy before connecting LinkedIn.",
+      className: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+    };
+  }
+  if (!account.hasSession) {
+    return {
+      label: "Session required",
+      detail: "Connect LinkedIn once so campaigns can reuse a saved login session.",
+      className: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+    };
+  }
+  return {
+    label: "Session active",
+    detail: account.cookiesConsentAt
+      ? `Saved ${new Date(account.cookiesConsentAt).toLocaleString()}`
+      : "Saved login session is available for browser jobs.",
+    className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  };
+}
+
 function AccountActionButton({
   title,
   description,
@@ -277,7 +308,7 @@ export default function AccountsPage() {
     action: "pause" | "warmup";
   } | null>(null);
 
-  // cookie upload state
+  // LinkedIn session import state
   const [cookieInputs, setCookieInputs] = useState<Record<string, string>>({});
   const [cookieConsent, setCookieConsent] = useState<Record<string, boolean>>({});
   const [showCookieFor, setShowCookieFor] = useState<string | null>(null);
@@ -512,7 +543,7 @@ export default function AccountsPage() {
       setAccountNotice(
         id,
         "success",
-        "Cookies saved with consent. The next browser session will use them."
+        "LinkedIn session saved. The next campaign browser will use it."
       );
     } catch (e) {
       setAccountNotice(id, "error", (e as Error).message);
@@ -556,8 +587,8 @@ export default function AccountsPage() {
             Add LinkedIn Account
           </h2>
           <p className="text-xs leading-5 text-teal-400">
-            After adding, log in manually on LinkedIn once to generate cookies.
-            The account will auto-resume from saved cookies on subsequent runs.
+            After adding the account, connect LinkedIn once. Vectra will reuse
+            the saved session for campaign runs until LinkedIn asks you to refresh it.
           </p>
 
           {addError && (
@@ -687,6 +718,7 @@ export default function AccountsPage() {
           const accountProxyWarning = account.proxy
             ? locationMismatchMessage(account.proxy, account.timezone)
             : null;
+          const session = sessionBadge(account, openCount);
 
           return (
             <div
@@ -758,7 +790,7 @@ export default function AccountsPage() {
                       Account actions
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      Control automation, warm-up, limits, and session cookies.
+                      Control automation, warm-up, limits, and LinkedIn session access.
                     </p>
                   </div>
                   {accountBusy && (
@@ -830,9 +862,19 @@ export default function AccountsPage() {
                   />
 
                   <AccountActionButton
-                    title={showCookieFor === account.id ? "Close cookies" : "Session cookies"}
-                    description="Paste browser cookies so the worker can keep a trusted session."
-                    detail="Login session"
+                    title={
+                      showCookieFor === account.id
+                        ? "Close session"
+                        : account.hasSession
+                        ? "Refresh LinkedIn"
+                        : "Connect LinkedIn"
+                    }
+                    description={
+                      account.hasSession
+                        ? "Update the saved login if LinkedIn expires or challenges it."
+                        : "Save a LinkedIn login session before campaigns run."
+                    }
+                    detail={account.hasSession ? "Session saved" : "Required"}
                     tone="teal"
                     active={showCookieFor === account.id}
                     onClick={() => toggleCookiePanel(account.id)}
@@ -998,21 +1040,49 @@ export default function AccountsPage() {
                   </div>
                 )}
 
-                {/* Cookie upload panel */}
+                {/* LinkedIn session panel */}
                 {showCookieFor === account.id && (
                   <div className="mt-3 space-y-3 rounded-2xl border border-teal-500/30 bg-teal-500/5 p-4">
-                    <p className="text-xs font-semibold text-teal-300">
-                      Paste session cookies (JSON array from browser devtools)
-                    </p>
-                    <p className="text-xs leading-5 text-teal-400">
-                      Open LinkedIn in your browser, open DevTools, then Application,
-                      Cookies, copy all cookies as JSON, then paste below.
-                    </p>
-                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-300">
-                      Session cookies grant access to this LinkedIn session. They are
-                      encrypted at rest and used only to run browser automation for
-                      this account. Do not paste cookies unless you authorize that use.
+                    <div>
+                      <p className="text-xs font-semibold text-teal-300">
+                        {account.hasSession ? "Refresh LinkedIn session" : "Connect LinkedIn session"}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-teal-400">
+                        Vectra needs one saved LinkedIn login for this account. Your PC does not
+                        need to stay on after the session is saved; campaign browsers run on the server.
+                      </p>
                     </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {[
+                        "Use the same proxy location assigned to this account.",
+                        "Log in to LinkedIn and complete any 2FA or security prompt.",
+                        "Save the session here so campaigns can run later.",
+                      ].map((step, index) => (
+                        <div
+                          key={step}
+                          className="rounded-xl border border-white/[0.06] bg-slate-800/60 p-3 text-xs leading-5 text-slate-300"
+                        >
+                          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-teal-300">
+                            Step {index + 1}
+                          </span>
+                          {step}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-300">
+                      Guided browser login is the preferred user experience. Until that
+                      browser handoff is enabled, this advanced importer saves the same
+                      session data after the user has logged in manually.
+                    </div>
+                    <details className="rounded-xl border border-white/[0.06] bg-slate-950/40 p-3">
+                      <summary className="cursor-pointer text-xs font-semibold text-teal-200">
+                        Advanced session import
+                      </summary>
+                      <p className="mt-3 text-xs leading-5 text-slate-400">
+                        Import a JSON array of LinkedIn cookies from the browser where
+                        the account is already logged in. This is intended as a fallback
+                        for operators, not the normal customer flow.
+                      </p>
                     <textarea
                       rows={5}
                       value={cookieInputs[account.id] ?? ""}
@@ -1023,8 +1093,9 @@ export default function AccountsPage() {
                         }))
                       }
                       placeholder='[{"name":"li_at","value":"...","domain":".linkedin.com",...}]'
-                      className="field w-full font-mono text-xs"
+                      className="field mt-3 w-full font-mono text-xs"
                     />
+                    </details>
                     <label className="flex items-start gap-2 rounded-xl border border-white/[0.06] bg-slate-800/60 p-3 text-xs leading-5 text-teal-200">
                       <input
                         type="checkbox"
@@ -1038,14 +1109,13 @@ export default function AccountsPage() {
                         className="mt-1 h-4 w-4 rounded border-teal-300 text-teal-600"
                       />
                       <span>
-                        I understand these cookies grant session access to my
-                        LinkedIn account and authorize this app to store and use
-                        them for automation on this account.
+                        I authorize Vectra to store this encrypted LinkedIn session
+                        and use it only for automation on this account.
                       </span>
                     </label>
                     {account.cookiesConsentAt && (
                       <p className="text-[11px] text-teal-400">
-                        Last cookie consent recorded{" "}
+                        Last session consent recorded{" "}
                         {new Date(account.cookiesConsentAt).toLocaleString()}.
                       </p>
                     )}
@@ -1058,10 +1128,18 @@ export default function AccountsPage() {
                       }
                       className="btn-primary px-4 py-1.5"
                     >
-                      {uploadingCookies ? "Saving..." : "Save cookies"}
+                      {uploadingCookies ? "Saving..." : "Save session"}
                     </button>
                   </div>
                 )}
+              </div>
+
+              {/* Session row */}
+              <div className={`rounded-2xl border px-4 py-3 text-sm ${session.className}`}>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-semibold">{session.label}</span>
+                  <span className="text-xs opacity-90">{session.detail}</span>
+                </div>
               </div>
 
               {/* Proxy row */}

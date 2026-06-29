@@ -81,6 +81,8 @@ export interface Account {
   warmUpPhase: "MANUAL" | "WEEK2" | "WEEK3" | "WEEK4" | "FULL";
   dailyCaps: Record<string, Record<string, number>>;
   maxDailyCaps: Record<CapKey, number>;
+  hasSession: boolean;
+  sessionStatus: "ACTIVE" | "MISSING";
   cookiesConsentAt?: string | null;
   timezone: string;
   proxy?: Proxy | null;

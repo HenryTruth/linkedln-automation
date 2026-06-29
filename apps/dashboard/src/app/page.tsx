@@ -76,7 +76,7 @@ const workflow = [
   {
     step: "01",
     title: "Add an account and a matching proxy",
-    text: "Upload LinkedIn cookies, assign a residential proxy in the same location as the account's normal usage, and confirm the timezone. The system validates the proxy before anything runs.",
+    text: "Connect LinkedIn once, assign a residential proxy in the same location as the account's normal usage, and confirm the timezone. The system validates the proxy before anything runs.",
   },
   {
     step: "02",
@@ -98,7 +98,7 @@ const workflow = [
 const productAreas = [
   {
     title: "Accounts",
-    text: "Health score, warm-up phase, proxy assignment, cookie status, daily cap usage, and pause/resume per LinkedIn account.",
+    text: "Health score, warm-up phase, proxy assignment, session status, daily cap usage, and pause/resume per LinkedIn account.",
     href: "/accounts",
   },
   {
@@ -506,7 +506,7 @@ export default function LandingPage() {
               </h2>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400">
                 The right first run isn&apos;t a blast. It&apos;s a controlled validation loop.
-                Confirm cookies, verify proxy health, run a small audience, inspect the activity
+                Confirm the LinkedIn session, verify proxy health, run a small audience, inspect the activity
                 log, and then decide whether to scale. The system gives you everything you need
                 to make that call.
               </p>

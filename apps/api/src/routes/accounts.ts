@@ -14,6 +14,24 @@ const WARMUP_ORDER: WarmUpPhase[] = [
 
 export const accountsRouter: IRouter = Router();
 
+type AccountPayload = Awaited<ReturnType<typeof prisma.account.findFirstOrThrow>>;
+
+function publicProxy<T extends { password?: string } | null | undefined>(proxy: T) {
+  if (!proxy) return proxy;
+  const { password: _password, ...safeProxy } = proxy;
+  return safeProxy;
+}
+
+function publicAccount<T extends AccountPayload & { proxy?: unknown }>(account: T) {
+  const { cookiesEncrypted: _cookiesEncrypted, proxy, ...safeAccount } = account;
+  return {
+    ...safeAccount,
+    hasSession: Boolean(_cookiesEncrypted),
+    sessionStatus: _cookiesEncrypted ? "ACTIVE" : "MISSING",
+    proxy: publicProxy(proxy as ({ password?: string } & Record<string, unknown>) | null | undefined),
+  };
+}
+
 const CreateAccountSchema = z.object({
   email: z.string().email(),
   proxyId: z.string().optional(),
@@ -39,7 +57,7 @@ accountsRouter.get("/", async (req, res, next) => {
       include: { proxy: true },
       orderBy: { createdAt: "desc" },
     });
-    res.json(accounts);
+    res.json(accounts.map(publicAccount));
   } catch (err) {
     next(err);
   }
@@ -58,7 +76,7 @@ accountsRouter.post("/", async (req, res, next) => {
       data: { ...data, userId: req.user.id },
     });
     await scheduleWithdrawalForAccount(account.id);
-    res.status(201).json(account);
+    res.status(201).json(publicAccount(account));
   } catch (err) {
     next(err);
   }
@@ -70,7 +88,7 @@ accountsRouter.get("/:id", async (req, res, next) => {
       where: { id: req.params.id, userId: req.user.id },
       include: { proxy: true },
     });
-    res.json(account);
+    res.json(publicAccount(account));
   } catch (err) {
     next(err);
   }
@@ -97,7 +115,7 @@ accountsRouter.put("/:id", async (req, res, next) => {
       where: { id: req.params.id, userId: req.user.id },
       include: { proxy: true },
     });
-    res.json(account);
+    res.json(publicAccount(account));
   } catch (err) {
     next(err);
   }
@@ -127,7 +145,7 @@ accountsRouter.post("/:id/pause", async (req, res, next) => {
     const account = await prisma.account.findFirstOrThrow({
       where: { id: req.params.id, userId: req.user.id },
     });
-    res.json(account);
+    res.json(publicAccount(account));
   } catch (err) {
     next(err);
   }
@@ -180,7 +198,7 @@ accountsRouter.post("/:id/advance-warmup", async (req, res, next) => {
       where: { id: req.params.id, userId: req.user.id },
       include: { proxy: true },
     });
-    res.json(updated);
+    res.json(publicAccount(updated));
   } catch (err) {
     next(err);
   }
@@ -208,7 +226,7 @@ accountsRouter.put("/:id/caps", async (req, res, next) => {
       where: { id: req.params.id, userId: req.user.id },
       include: { proxy: true },
     });
-    res.json(account);
+    res.json(publicAccount(account));
   } catch (err) {
     next(err);
   }
@@ -257,8 +275,9 @@ accountsRouter.post("/:id/resume", async (req, res, next) => {
     }
     const account = await prisma.account.findFirstOrThrow({
       where: { id: req.params.id, userId: req.user.id },
+      include: { proxy: true },
     });
-    res.json(account);
+    res.json(publicAccount(account));
   } catch (err) {
     next(err);
   }

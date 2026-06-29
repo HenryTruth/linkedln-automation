@@ -547,11 +547,6 @@ export default function ProxiesPage() {
                   </td>
                   <td className="table-cell">
                     <Badge value={proxy.rotationMode} />
-                    {proxy.rotationMode === "STATIC" && (
-                      <p className="mt-1 text-xs text-amber-400">
-                        Use only if residential/ISP
-                      </p>
-                    )}
                     {proxy.currentSessionId && (
                       <p className="mt-1 font-mono text-xs text-slate-400">
                         {proxy.currentSessionId}

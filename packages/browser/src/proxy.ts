@@ -1,6 +1,7 @@
 import { prisma, type Proxy } from "@linkedin-automation/db";
 import { decrypt } from "@linkedin-automation/guards";
 import { randomBytes } from "crypto";
+import https from "node:https";
 
 function proxyPassword(proxy: Proxy): string {
   try {
@@ -59,24 +60,61 @@ function buildProxyUrl(proxy: Proxy, sessionId?: string): string {
   return `http://${username}:${password}@${proxy.host}:${proxy.port}`;
 }
 
+async function fetchIpInfoThroughProxy(
+  proxyUrl: string
+): Promise<{ ok: boolean; ip: string | null }> {
+  const { HttpsProxyAgent } = await import("https-proxy-agent");
+  const agent = new HttpsProxyAgent(proxyUrl);
+
+  return await new Promise((resolve, reject) => {
+    const request = https.get(
+      "https://ipinfo.io/json",
+      {
+        agent,
+        timeout: 8_000,
+        headers: { Accept: "application/json" },
+      },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
+            resolve({ ok: false, ip: null });
+            return;
+          }
+          try {
+            const data = JSON.parse(body) as { ip?: string };
+            resolve({ ok: true, ip: data.ip ?? null });
+          } catch {
+            resolve({ ok: false, ip: null });
+          }
+        });
+      }
+    );
+
+    request.on("timeout", () => {
+      request.destroy(new Error("Proxy IP check timed out"));
+    });
+    request.on("error", reject);
+  });
+}
+
 export async function checkProxyHealth(
   proxy: Proxy,
   sessionId?: string
 ): Promise<boolean> {
   const proxyUrl = buildProxyUrl(proxy, sessionId);
   try {
-    const { HttpsProxyAgent } = await import("https-proxy-agent");
-    const agent = new HttpsProxyAgent(proxyUrl);
-    const response = await fetch("https://ipinfo.io/json", {
-      signal: AbortSignal.timeout(8_000),
-      // @ts-expect-error node-fetch agent typing
-      agent,
-    });
-    const healthy = response.ok;
+    const result = await fetchIpInfoThroughProxy(proxyUrl);
+    const healthy = result.ok;
     await prisma.proxy.update({
       where: { id: proxy.id },
       data: {
         healthStatus: healthy ? "HEALTHY" : "DEGRADED",
+        currentExitIp: result.ip,
         lastUsed: new Date(),
       },
     });
@@ -100,16 +138,8 @@ export async function detectProxyIp(
 ): Promise<string | null> {
   const proxyUrl = buildProxyUrl(proxy, sessionId);
   try {
-    const { HttpsProxyAgent } = await import("https-proxy-agent");
-    const agent = new HttpsProxyAgent(proxyUrl);
-    const response = await fetch("https://ipinfo.io/json", {
-      signal: AbortSignal.timeout(8_000),
-      // @ts-expect-error node-fetch agent typing
-      agent,
-    });
-    if (!response.ok) return null;
-    const data = (await response.json()) as { ip?: string };
-    return data.ip ?? null;
+    const result = await fetchIpInfoThroughProxy(proxyUrl);
+    return result.ip;
   } catch {
     return null;
   }

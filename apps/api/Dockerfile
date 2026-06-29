@@ -88,4 +88,4 @@ EXPOSE 3001
 # xvfb-run starts a virtual X11 display so Chromium can run non-headless.
 # The display is only used when HEADLESS=false (which is required in production
 # to avoid LinkedIn's bot detection).
-CMD ["sh", "-c", "cd packages/db && pnpm exec prisma migrate deploy && cd /app && xvfb-run --server-args='-screen 0 1280x800x24' node apps/api/dist/index.js"]
+CMD ["sh", "-c", "cd packages/db && pnpm exec prisma migrate deploy && cd /app && xvfb-run --auto-servernum --server-args='-screen 0 1280x800x24' node apps/api/dist/index.js"]

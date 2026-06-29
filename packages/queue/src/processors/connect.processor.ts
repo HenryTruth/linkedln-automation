@@ -18,7 +18,7 @@ export async function connectProcessor(
 ): Promise<void> {
   const { accountId, linkedinUrl, note, campaignLeadId } = job.data;
 
-  const [account, lead] = await Promise.all([
+  const [account, lead, campaignData] = await Promise.all([
     prisma.account.findUniqueOrThrow({
       where: { id: accountId },
       select: { status: true, warmUpPhase: true },
@@ -27,7 +27,14 @@ export async function connectProcessor(
       where: { id: job.data.leadId },
       select: { blacklisted: true },
     }),
+    campaignLeadId
+      ? prisma.campaignLead.findUnique({
+          where: { id: campaignLeadId },
+          select: { campaign: { select: { targetTimezone: true } } },
+        })
+      : Promise.resolve(null),
   ]);
+  const campaignTimezone = campaignData?.campaign?.targetTimezone ?? undefined;
 
   if (account.status === AccountStatus.PAUSED) {
     throw new AccountPausedError(accountId);
@@ -45,7 +52,7 @@ export async function connectProcessor(
 
   try {
     assertWarmUpAllowed(accountId, account.warmUpPhase, "connection");
-    await claimDailyCap(accountId, "connection");
+    await claimDailyCap(accountId, "connection", campaignTimezone);
     await checkActionWindow(accountId);
     await checkSessionErrorRate(accountId);
     await checkDuplicate(accountId, linkedinUrl, "connect");

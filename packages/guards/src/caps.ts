@@ -127,14 +127,15 @@ export async function remainingDailyCap(
 
 export async function checkDailyCap(
   accountId: string,
-  action: ActionType
+  action: ActionType,
+  timezoneOverride?: string
 ): Promise<void> {
   const account = await prisma.account.findUniqueOrThrow({
     where: { id: accountId },
     select: { dailyCaps: true, timezone: true, maxDailyCaps: true },
   });
 
-  if (!isActiveHour(account.timezone)) {
+  if (!isActiveHour(timezoneOverride ?? account.timezone)) {
     throw new DailyCapExceededError(
       accountId,
       `${action} (outside active hours)`
@@ -179,7 +180,8 @@ export async function incrementDailyCap(
 
 export async function claimDailyCap(
   accountId: string,
-  action: ActionType
+  action: ActionType,
+  timezoneOverride?: string
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<CapAccount[]>`
@@ -193,7 +195,7 @@ export async function claimDailyCap(
       throw new Error(`Account not found: ${accountId}`);
     }
 
-    if (!isActiveHour(account.timezone)) {
+    if (!isActiveHour(timezoneOverride ?? account.timezone)) {
       throw new DailyCapExceededError(
         accountId,
         `${action} (outside active hours)`

@@ -29,10 +29,17 @@ export async function contentSignalProcessor(
     connectionNoteTemplate,
   } = job.data;
 
-  const account = await prisma.account.findUniqueOrThrow({
-    where: { id: accountId },
-    select: { status: true, warmUpPhase: true },
-  });
+  const [account, campaign] = await Promise.all([
+    prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      select: { status: true, warmUpPhase: true },
+    }),
+    prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { targetTimezone: true },
+    }),
+  ]);
+  const campaignTimezone = campaign?.targetTimezone ?? undefined;
 
   if (account.status === AccountStatus.PAUSED) {
     throw new AccountPausedError(accountId);
@@ -41,7 +48,7 @@ export async function contentSignalProcessor(
   try {
     // Guard A: search counts as searchPage cap usage
     assertWarmUpAllowed(accountId, account.warmUpPhase, "searchPage");
-    await claimDailyCap(accountId, "searchPage");
+    await claimDailyCap(accountId, "searchPage", campaignTimezone);
     await checkActionWindow(accountId);
     await checkSessionErrorRate(accountId);
     // Guard E: keyword uniqueness across active campaigns

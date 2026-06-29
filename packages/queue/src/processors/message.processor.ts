@@ -28,7 +28,7 @@ export async function messageProcessor(
     company,
   } = job.data;
 
-  const [account, lead] = await Promise.all([
+  const [account, lead, campaignData] = await Promise.all([
     prisma.account.findUniqueOrThrow({
       where: { id: accountId },
       select: { status: true, warmUpPhase: true },
@@ -37,7 +37,12 @@ export async function messageProcessor(
       where: { id: job.data.leadId },
       select: { blacklisted: true },
     }),
+    prisma.campaignLead.findUnique({
+      where: { id: campaignLeadId },
+      select: { campaign: { select: { targetTimezone: true } } },
+    }),
   ]);
+  const campaignTimezone = campaignData?.campaign?.targetTimezone ?? undefined;
 
   if (account.status === AccountStatus.PAUSED) {
     throw new AccountPausedError(accountId);
@@ -55,7 +60,7 @@ export async function messageProcessor(
 
   try {
     assertWarmUpAllowed(accountId, account.warmUpPhase, "message");
-    await claimDailyCap(accountId, "message");
+    await claimDailyCap(accountId, "message", campaignTimezone);
     await checkActionWindow(accountId);
     await checkSessionErrorRate(accountId);
 

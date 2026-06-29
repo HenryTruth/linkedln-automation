@@ -14,10 +14,19 @@ import type { ScrapeJobData } from "../queues.js";
 export async function scrapeProcessor(job: Job<ScrapeJobData>): Promise<void> {
   const { accountId, linkedinUrl, campaignLeadId } = job.data;
 
-  const account = await prisma.account.findUniqueOrThrow({
-    where: { id: accountId },
-    select: { status: true, warmUpPhase: true, userId: true },
-  });
+  const [account, campaignData] = await Promise.all([
+    prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      select: { status: true, warmUpPhase: true, userId: true },
+    }),
+    campaignLeadId
+      ? prisma.campaignLead.findUnique({
+          where: { id: campaignLeadId },
+          select: { campaign: { select: { targetTimezone: true } } },
+        })
+      : Promise.resolve(null),
+  ]);
+  const campaignTimezone = campaignData?.campaign?.targetTimezone ?? undefined;
 
   if (account.status === AccountStatus.PAUSED) {
     throw new AccountPausedError(accountId);
@@ -45,7 +54,7 @@ export async function scrapeProcessor(job: Job<ScrapeJobData>): Promise<void> {
 
   try {
     assertWarmUpAllowed(accountId, account.warmUpPhase, "profileView");
-    await claimDailyCap(accountId, "profileView");
+    await claimDailyCap(accountId, "profileView", campaignTimezone);
     await checkActionWindow(accountId);
   } catch (err) {
     if (err instanceof AnomalyError) {

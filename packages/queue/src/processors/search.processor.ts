@@ -17,10 +17,19 @@ export async function searchScrapeProcessor(
 ): Promise<void> {
   const { accountId, searchUrl, campaignId, maxPages = 5 } = job.data;
 
-  const account = await prisma.account.findUniqueOrThrow({
-    where: { id: accountId },
-    select: { status: true, warmUpPhase: true, userId: true },
-  });
+  const [account, campaign] = await Promise.all([
+    prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      select: { status: true, warmUpPhase: true, userId: true },
+    }),
+    campaignId
+      ? prisma.campaign.findUnique({
+          where: { id: campaignId },
+          select: { targetTimezone: true },
+        })
+      : Promise.resolve(null),
+  ]);
+  const campaignTimezone = campaign?.targetTimezone ?? undefined;
 
   if (account.status === AccountStatus.PAUSED) {
     throw new AccountPausedError(accountId);
@@ -39,7 +48,7 @@ export async function searchScrapeProcessor(
   let pagesToScrape = 0;
   for (let i = 0; i < maxPages; i++) {
     try {
-      await claimDailyCap(accountId, "searchPage");
+      await claimDailyCap(accountId, "searchPage", campaignTimezone);
       pagesToScrape++;
     } catch (err) {
       if (i === 0) throw err;

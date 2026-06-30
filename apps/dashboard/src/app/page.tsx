@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { HeroCTA } from "@/components/HeroCTA";
 import { AnimateIn } from "@/components/AnimateIn";
+import { FAQ } from "@/components/FAQ";
 
 const problems = [
   {
@@ -651,6 +652,22 @@ export default function LandingPage() {
               </AnimateIn>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ───────────────────────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden bg-slate-950">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_80%_50%,rgba(20,184,166,0.08),transparent)]" aria-hidden />
+        <div className="relative mx-auto max-w-3xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
+          <AnimateIn>
+            <p className="page-kicker">FAQ</p>
+            <h2 className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">
+              Common questions.
+            </h2>
+          </AnimateIn>
+          <AnimateIn delay={80}>
+            <FAQ />
+          </AnimateIn>
         </div>
       </section>
 

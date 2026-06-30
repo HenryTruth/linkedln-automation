@@ -13,8 +13,7 @@ export default function SettingsPage() {
   const [webhookSaving, setWebhookSaving] = useState(false);
   const [webhookMsg, setWebhookMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // Email (Resend)
-  const [resendKeyDraft, setResendKeyDraft] = useState("");
+  // Email
   const [emailToDraft, setEmailToDraft] = useState("");
   const [emailSaving, setEmailSaving] = useState(false);
   const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -29,7 +28,6 @@ export default function SettingsPage() {
       .then((s) => {
         setSettings(s);
         setWebhookDraft(s.alert_webhook_url ?? "");
-        setResendKeyDraft(s.resend_api_key ?? "");
         setEmailToDraft(s.alert_email_to ?? "");
       })
       .finally(() => setLoading(false));
@@ -58,7 +56,6 @@ export default function SettingsPage() {
     setEmailMsg(null);
     try {
       await api.settings.update({
-        resend_api_key: resendKeyDraft.trim() || null,
         alert_email_to: emailToDraft.trim() || null,
       });
       setEmailMsg({ ok: true, text: "Saved." });
@@ -66,7 +63,6 @@ export default function SettingsPage() {
         prev
           ? {
               ...prev,
-              resend_api_key: resendKeyDraft.trim() || null,
               alert_email_to: emailToDraft.trim() || null,
             }
           : prev
@@ -115,7 +111,7 @@ export default function SettingsPage() {
     );
 
   const hasWebhook = !!(settings?.alert_webhook_url);
-  const hasEmail = !!(settings?.resend_api_key && settings?.alert_email_to);
+  const hasEmail = !!(settings?.alert_email_to);
   const hasAnyAlert = hasWebhook || hasEmail;
 
   return (
@@ -193,21 +189,12 @@ export default function SettingsPage() {
         </form>
       </section>
 
-      {/* Email alerts via Resend */}
+      {/* Email alerts */}
       <section className="app-panel p-6 space-y-5">
         <div>
-          <h2 className="text-base font-semibold text-white">Email alerts (Resend)</h2>
+          <h2 className="text-base font-semibold text-white">Email alerts</h2>
           <p className="mt-1 text-sm leading-6 text-slate-500">
-            Fallback alert delivery via email when no webhook is configured. Powered by{" "}
-            <a
-              href="https://resend.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-teal-400 hover:text-teal-300"
-            >
-              Resend
-            </a>{" "}
-            — free tier supports 3,000 emails/month.
+            Fallback alert delivery via email when no webhook is configured.
           </p>
         </div>
 
@@ -233,32 +220,6 @@ export default function SettingsPage() {
         </div>
 
         <form onSubmit={handleEmailSave} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-300">
-              Resend API key
-            </label>
-            <input
-              type="password"
-              value={resendKeyDraft}
-              onChange={(e) => setResendKeyDraft(e.target.value)}
-              placeholder="re_..."
-              className="field w-full"
-              autoComplete="new-password"
-            />
-            <p className="mt-1 text-xs text-slate-400">
-              Get your API key from{" "}
-              <a
-                href="https://resend.com/api-keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                resend.com/api-keys
-              </a>
-              .
-            </p>
-          </div>
-
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-300">
               Alert recipient email

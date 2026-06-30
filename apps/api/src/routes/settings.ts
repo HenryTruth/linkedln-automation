@@ -5,7 +5,7 @@ import { sendAlert } from "@linkedin-automation/guards";
 
 export const settingsRouter: IRouter = Router();
 
-const SETTING_KEYS = ["alert_webhook_url", "resend_api_key", "alert_email_to"] as const;
+const SETTING_KEYS = ["alert_webhook_url", "alert_email_to"] as const;
 
 // GET /settings — return all configurable settings
 settingsRouter.get("/", async (_req, res, next) => {
@@ -13,7 +13,6 @@ settingsRouter.get("/", async (_req, res, next) => {
     const rows = await prisma.systemSetting.findMany();
     const map: Record<string, string | null> = {
       alert_webhook_url: null,
-      resend_api_key: null,
       alert_email_to: null,
     };
     for (const row of rows) {
@@ -32,7 +31,6 @@ settingsRouter.put("/", async (req, res, next) => {
   try {
     const schema = z.object({
       alert_webhook_url: z.string().url().nullable().optional(),
-      resend_api_key: z.string().min(1).nullable().optional(),
       alert_email_to: z.string().email().nullable().optional(),
     });
     const data = schema.parse(req.body);

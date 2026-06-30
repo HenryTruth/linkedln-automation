@@ -259,7 +259,6 @@ export interface CampaignStats {
 
 export interface AppSettings {
   alert_webhook_url: string | null;
-  resend_api_key: string | null;
   alert_email_to: string | null;
 }
 

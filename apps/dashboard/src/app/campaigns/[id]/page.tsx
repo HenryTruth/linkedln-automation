@@ -9,6 +9,66 @@ import { ContentSignalPanel } from "@/components/ContentSignalPanel";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
 import { toast } from "sonner";
 
+const SEARCH_LOCATIONS: { label: string; geoUrn: string }[] = [
+  // Americas
+  { label: "United States",        geoUrn: "103644278" },
+  { label: "Canada",               geoUrn: "101174742" },
+  { label: "Brazil",               geoUrn: "106057199" },
+  { label: "Mexico",               geoUrn: "103323778" },
+  { label: "Colombia",             geoUrn: "100877388" },
+  { label: "Argentina",            geoUrn: "100446943" },
+  { label: "Chile",                geoUrn: "104621616" },
+  // Europe
+  { label: "United Kingdom",       geoUrn: "101165590" },
+  { label: "Ireland",              geoUrn: "104738515" },
+  { label: "Germany",              geoUrn: "101282230" },
+  { label: "France",               geoUrn: "105015875" },
+  { label: "Netherlands",          geoUrn: "102890719" },
+  { label: "Sweden",               geoUrn: "105117694" },
+  { label: "Switzerland",          geoUrn: "106693272" },
+  { label: "Belgium",              geoUrn: "100565514" },
+  { label: "Spain",                geoUrn: "105646813" },
+  { label: "Italy",                geoUrn: "103350119" },
+  { label: "Denmark",              geoUrn: "104514075" },
+  { label: "Norway",               geoUrn: "103819153" },
+  { label: "Finland",              geoUrn: "100456013" },
+  { label: "Poland",               geoUrn: "105072130" },
+  { label: "Portugal",             geoUrn: "100364837" },
+  { label: "Austria",              geoUrn: "103883259" },
+  { label: "Turkey",               geoUrn: "102105699" },
+  // Africa
+  { label: "Nigeria",              geoUrn: "101356196" },
+  { label: "South Africa",         geoUrn: "104035573" },
+  { label: "Kenya",                geoUrn: "101686952" },
+  { label: "Ghana",                geoUrn: "105769760" },
+  { label: "Egypt",                geoUrn: "106556538" },
+  { label: "Ethiopia",             geoUrn: "107357706" },
+  { label: "Tanzania",             geoUrn: "101525285" },
+  { label: "Uganda",               geoUrn: "102572633" },
+  { label: "Morocco",              geoUrn: "102262120" },
+  { label: "Rwanda",               geoUrn: "105115402" },
+  // Middle East
+  { label: "United Arab Emirates", geoUrn: "104305776" },
+  { label: "Saudi Arabia",         geoUrn: "103424752" },
+  { label: "Israel",               geoUrn: "101620260" },
+  { label: "Qatar",                geoUrn: "104338233" },
+  { label: "Kuwait",               geoUrn: "104098652" },
+  // Asia-Pacific
+  { label: "India",                geoUrn: "102713980" },
+  { label: "Singapore",            geoUrn: "102454443" },
+  { label: "Australia",            geoUrn: "101452733" },
+  { label: "New Zealand",          geoUrn: "105490917" },
+  { label: "Japan",                geoUrn: "101355337" },
+  { label: "South Korea",          geoUrn: "105149562" },
+  { label: "Pakistan",             geoUrn: "105214831" },
+  { label: "Bangladesh",           geoUrn: "105563663" },
+  { label: "Philippines",          geoUrn: "103121230" },
+  { label: "Indonesia",            geoUrn: "102478259" },
+  { label: "Malaysia",             geoUrn: "103032786" },
+  { label: "Thailand",             geoUrn: "105084113" },
+  { label: "Vietnam",              geoUrn: "104195383" },
+];
+
 const JOB_STATUS_STYLES: Record<CampaignLeadJobStatus, string> = {
   IDLE:    "bg-slate-700/50 text-slate-400",
   QUEUED:  "bg-amber-500/15 text-amber-400",
@@ -100,6 +160,27 @@ export default function CampaignDetailPage() {
   const [addingSearch, setAddingSearch] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showSearchForm, setShowSearchForm] = useState(false);
+
+  // LinkedIn search URL builder
+  const [showUrlBuilder, setShowUrlBuilder] = useState(false);
+  const [builderKeywords, setBuilderKeywords] = useState("");
+  const [builderTitle, setBuilderTitle] = useState("");
+  const [builderLocation, setBuilderLocation] = useState("");
+  const [builderNetwork, setBuilderNetwork] = useState("SO");
+
+  function applyBuilder() {
+    const params = new URLSearchParams({ origin: "FACETED_SEARCH" });
+    if (builderKeywords.trim()) params.set("keywords", builderKeywords.trim());
+    if (builderLocation) params.set("geoUrn", JSON.stringify([builderLocation]));
+    if (builderTitle.trim()) params.set("titleFreeText", builderTitle.trim());
+    const networkMap: Record<string, string[]> = {
+      F: ["F"], S: ["S"], O: ["O"], SO: ["S", "O"],
+    };
+    const net = networkMap[builderNetwork];
+    if (net) params.set("network", JSON.stringify(net));
+    setSearchUrl(`https://www.linkedin.com/search/results/people/?${params}`);
+    setShowUrlBuilder(false);
+  }
 
   // Bulk CSV import
   const [showCsvImport, setShowCsvImport] = useState(false);
@@ -743,40 +824,103 @@ export default function CampaignDetailPage() {
 
         {/* Add search URL form (SCRAPE only) */}
         {showSearchForm && (
-          <form
-            onSubmit={handleAddSearchUrl}
-            className="mb-4 space-y-3 rounded-2xl border border-violet-500/30 bg-violet-500/5 p-4"
-          >
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-300">
-                LinkedIn search URL
-              </label>
-              <p className="mb-2 text-xs leading-5 text-slate-400">
-                Go to LinkedIn to search for people to copy the URL from the
-                address bar. The scraper will crawl through the results pages
-                and save every profile it finds.
+          <div className="mb-4 space-y-3 rounded-2xl border border-violet-500/30 bg-violet-500/5 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-slate-300">LinkedIn search URL</p>
+              <button
+                type="button"
+                onClick={() => setShowUrlBuilder((v) => !v)}
+                className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-xs font-semibold text-violet-300 hover:bg-violet-500/20"
+              >
+                {showUrlBuilder ? "Enter URL manually" : "Build URL"}
+              </button>
+            </div>
+
+            {showUrlBuilder ? (
+              <div className="space-y-3 rounded-xl border border-violet-500/20 bg-slate-900/60 p-4">
+                <p className="text-xs text-slate-400">
+                  Fill in the fields and click Apply — the search URL will be generated for you.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-300">Keywords</label>
+                    <input
+                      value={builderKeywords}
+                      onChange={(e) => setBuilderKeywords(e.target.value)}
+                      placeholder="e.g. doctor, software engineer"
+                      className="field w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-300">Job title (optional)</label>
+                    <input
+                      value={builderTitle}
+                      onChange={(e) => setBuilderTitle(e.target.value)}
+                      placeholder="e.g. Medical Doctor, Cardiologist"
+                      className="field w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-300">Location (optional)</label>
+                    <select
+                      value={builderLocation}
+                      onChange={(e) => setBuilderLocation(e.target.value)}
+                      className="field w-full"
+                    >
+                      <option value="">Any location</option>
+                      {SEARCH_LOCATIONS.map((loc) => (
+                        <option key={loc.geoUrn} value={loc.geoUrn}>{loc.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-300">Connection degree</label>
+                    <select
+                      value={builderNetwork}
+                      onChange={(e) => setBuilderNetwork(e.target.value)}
+                      className="field w-full"
+                    >
+                      <option value="SO">2nd &amp; 3rd+ degree (recommended)</option>
+                      <option value="S">2nd degree only</option>
+                      <option value="O">3rd+ degree only</option>
+                      <option value="F">1st degree only</option>
+                      <option value="">Any connection</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={applyBuilder}
+                  disabled={!builderKeywords.trim() && !builderTitle.trim()}
+                  className="btn-primary"
+                >
+                  Apply — Generate URL
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs leading-5 text-slate-400">
+                Paste a URL from LinkedIn, or use the <strong className="text-slate-300">Build URL</strong> button above to generate one without leaving this page.
               </p>
+            )}
+
+            <form onSubmit={handleAddSearchUrl} className="space-y-3">
               <input
                 required
                 value={searchUrl}
                 onChange={(e) => setSearchUrl(e.target.value)}
-                placeholder="https://www.linkedin.com/search/results/people/?keywords=CEO+SaaS+London"
-                className="field w-full font-mono"
+                placeholder="https://www.linkedin.com/search/results/people/?keywords=doctor&geoUrn=..."
+                className="field w-full font-mono text-xs"
               />
-            </div>
-            {searchError && (
-              <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-                {searchError}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={addingSearch}
-              className="btn-primary"
-            >
-              {addingSearch ? "Adding..." : "Add Search URL"}
-            </button>
-          </form>
+              {searchError && (
+                <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+                  {searchError}
+                </p>
+              )}
+              <button type="submit" disabled={addingSearch} className="btn-primary">
+                {addingSearch ? "Adding..." : "Add Search URL"}
+              </button>
+            </form>
+          </div>
         )}
 
         {/* Add profile / lead form */}

@@ -81,7 +81,7 @@ export default function SettingsPage() {
       await api.settings.testAlert();
       const via = settings?.alert_webhook_url
         ? "webhook"
-        : settings?.resend_api_key && settings?.alert_email_to
+        : settings?.alert_email_to
         ? `email (${settings.alert_email_to})`
         : "console only";
       setTestMsg({ ok: true, text: `Test alert sent via ${via}.` });

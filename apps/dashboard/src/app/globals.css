@@ -46,7 +46,7 @@
   }
 
   .page-kicker {
-    @apply text-xs font-semibold uppercase tracking-[0.16em] text-teal-400;
+    @apply text-sm font-semibold uppercase tracking-[0.16em] text-teal-400;
   }
 
   .page-title {
@@ -95,6 +95,22 @@
     animation: skeleton-shimmer 1.6s ease-in-out infinite;
     @apply rounded-lg;
   }
+
+  /* Scroll-reveal */
+  .anim {
+    opacity: 0;
+    will-change: opacity, transform;
+    transition: opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1), transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .anim--up    { transform: translateY(22px); }
+  .anim--left  { transform: translateX(-22px); }
+  .anim--right { transform: translateX(22px); }
+  .anim--none  { transform: none; }
+  .anim.in     { opacity: 1; transform: none; }
+
+  .animate-card-glow {
+    animation: card-glow 6s ease-in-out infinite;
+  }
 }
 
 @keyframes fade-up {
@@ -139,6 +155,11 @@
   }
 }
 
+@keyframes card-glow {
+  0%, 100% { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+  50%       { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 60px rgba(20, 184, 166, 0.1); }
+}
+
 @keyframes skeleton-shimmer {
   0% {
     background-position: -200% 0;
@@ -152,7 +173,9 @@
   .animate-fade-up,
   .animate-float-soft,
   .animate-sheen,
-  .animate-pulse-soft {
+  .animate-pulse-soft,
+  .animate-card-glow {
     animation: none;
   }
+  .anim { opacity: 1; transform: none; transition: none; }
 }

@@ -322,6 +322,13 @@ export default function AccountsPage() {
   const [savingCaps, setSavingCaps] = useState(false);
   const [capError, setCapError] = useState<string | null>(null);
 
+  // Edit account state
+  const [showEditFor, setShowEditFor] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editTimezone, setEditTimezone] = useState("America/New_York");
+  const [editProxyId, setEditProxyId] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
   // Add account form
   const [showForm, setShowForm] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -484,6 +491,32 @@ export default function AccountsPage() {
       setAccountNotice(account.id, "error", (e as Error).message);
     } finally {
       setBusy(null);
+    }
+  }
+
+  function openEditFor(account: Account) {
+    setEditEmail(account.email);
+    setEditTimezone(account.timezone);
+    setEditProxyId(account.proxy?.id ?? "");
+    setShowEditFor(account.id);
+  }
+
+  async function handleEditAccount(account: Account) {
+    setSavingEdit(true);
+    clearAccountNotice(account.id);
+    try {
+      await api.accounts.update(account.id, {
+        email: editEmail,
+        timezone: editTimezone,
+        proxyId: editProxyId || null,
+      });
+      setShowEditFor(null);
+      await reload();
+      setAccountNotice(account.id, "success", "Account updated.");
+    } catch (e) {
+      setAccountNotice(account.id, "error", (e as Error).message);
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -761,9 +794,22 @@ export default function AccountsPage() {
                 <HealthScore account={account} checkpoints={checkpoints} />
 
                 <div className="flex-1 min-w-0">
-                  <p className="truncate text-sm font-semibold text-white">
-                    {account.email}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {account.email}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        showEditFor === account.id
+                          ? setShowEditFor(null)
+                          : openEditFor(account)
+                      }
+                      className="shrink-0 text-[11px] text-slate-400 underline underline-offset-2 hover:text-slate-200"
+                    >
+                      {showEditFor === account.id ? "Cancel" : "Edit"}
+                    </button>
+                  </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <Badge value={account.status} />
                     <Badge value={account.warmUpPhase} />
@@ -805,6 +851,73 @@ export default function AccountsPage() {
                       </button>
                     )}
                   </div>
+                </div>
+              )}
+
+              {showEditFor === account.id && (
+                <div className="space-y-3 rounded-2xl border border-slate-500/30 bg-slate-500/5 p-4">
+                  <p className="text-xs font-semibold text-slate-300">Edit account</p>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-400">
+                      LinkedIn email
+                    </label>
+                    <input
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      className="field w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-400">
+                      Timezone (active hours 8am–7pm)
+                    </label>
+                    <select
+                      value={editTimezone}
+                      onChange={(e) => setEditTimezone(e.target.value)}
+                      className="field w-full"
+                    >
+                      {TIMEZONES.map((tz) => (
+                        <option key={tz} value={tz}>{tz}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-400">
+                      Proxy
+                    </label>
+                    <select
+                      value={editProxyId}
+                      onChange={(e) => setEditProxyId(e.target.value)}
+                      className="field w-full"
+                    >
+                      <option value="">No proxy</option>
+                      {proxies.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.country}{p.city ? ` - ${p.city}` : ""} — {p.host}:{p.port} [{p.healthStatus}]
+                        </option>
+                      ))}
+                    </select>
+                    {editProxyId && (() => {
+                      const warn = locationMismatchMessage(
+                        proxies.find((p) => p.id === editProxyId) ?? null,
+                        editTimezone
+                      );
+                      return warn ? (
+                        <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                          {warn}
+                        </p>
+                      ) : null;
+                    })()}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleEditAccount(account)}
+                    disabled={savingEdit}
+                    className="btn-primary px-4 py-1.5"
+                  >
+                    {savingEdit ? "Saving..." : "Save changes"}
+                  </button>
                 </div>
               )}
 

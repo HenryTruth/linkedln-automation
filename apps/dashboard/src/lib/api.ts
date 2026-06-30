@@ -335,6 +335,11 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(caps),
       }),
+    update: (id: string, data: { email?: string; timezone?: string; proxyId?: string | null }) =>
+      apiFetch<Account>(`/accounts/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
   },
 
   proxies: {

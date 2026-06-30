@@ -273,7 +273,7 @@ function AccountActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-[6.75rem] rounded-2xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`min-h-[6.75rem] cursor-pointer rounded-2xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
         toneClasses[tone]
       } ${active ? "ring-2 ring-white/20" : ""}`}
     >
@@ -805,7 +805,7 @@ export default function AccountsPage() {
                           ? setShowEditFor(null)
                           : openEditFor(account)
                       }
-                      className="shrink-0 text-[11px] text-slate-400 underline underline-offset-2 hover:text-slate-200"
+                      className="shrink-0 rounded-full border border-slate-600 px-2.5 py-0.5 text-[11px] font-medium text-slate-300 transition hover:border-slate-400 hover:text-white"
                     >
                       {showEditFor === account.id ? "Cancel" : "Edit"}
                     </button>

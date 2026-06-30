@@ -198,6 +198,7 @@ export interface ContentSignalConfig {
   maxLeads: number;
   titleFilter?: string | null;
   companyFilter?: string | null;
+  locationFilter?: string | null;
   connectionNoteTemplate?: string | null;
   lastScrapedAt?: string | null;
 }

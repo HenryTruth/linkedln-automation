@@ -26,6 +26,7 @@ export async function contentSignalProcessor(
     maxLeads,
     titleFilter,
     companyFilter,
+    locationFilter,
     connectionNoteTemplate,
   } = job.data;
 
@@ -73,7 +74,8 @@ export async function contentSignalProcessor(
       dateRangeDays,
       maxLeads,
       titleFilter,
-      companyFilter
+      companyFilter,
+      locationFilter
     );
 
     await Promise.all([

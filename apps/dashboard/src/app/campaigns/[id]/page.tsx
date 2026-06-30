@@ -344,19 +344,21 @@ export default function CampaignDetailPage() {
                     className="field w-20"
                   />
                 </div>
-                <div className="flex items-center gap-1">
-                  <label className="text-xs font-semibold text-slate-400">Timezone</label>
-                  <select
-                    value={editTimezone ?? ""}
-                    onChange={(e) => setEditTimezone(e.target.value || null)}
-                    className="field"
-                  >
-                    <option value="">Account default</option>
-                    {TIMEZONES.map((tz) => (
-                      <option key={tz} value={tz}>{tz}</option>
-                    ))}
-                  </select>
-                </div>
+                {!isContentSignal && (
+                  <div className="flex items-center gap-1">
+                    <label className="text-xs font-semibold text-slate-400">Timezone</label>
+                    <select
+                      value={editTimezone ?? ""}
+                      onChange={(e) => setEditTimezone(e.target.value || null)}
+                      className="field"
+                    >
+                      <option value="">Account default</option>
+                      {TIMEZONES.map((tz) => (
+                        <option key={tz} value={tz}>{tz}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <button
                   type="submit"
                   disabled={saving}
@@ -391,7 +393,7 @@ export default function CampaignDetailPage() {
                     {campaign.leads.length !== 1 ? "s" : ""} -{" "}
                     {campaign.dailyLimit}/day limit
                   </span>
-                  {campaign.targetTimezone && (
+                  {!isContentSignal && campaign.targetTimezone && (
                     <span className="text-sm font-medium text-slate-500">
                       · {campaign.targetTimezone}
                     </span>

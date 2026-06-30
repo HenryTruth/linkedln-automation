@@ -116,11 +116,12 @@ async function extractPostCards(page: Page, keyword: string): Promise<PostCard[]
   return results;
 }
 
-function buildContentSearchUrl(keyword: string, page = 1): string {
+function buildContentSearchUrl(keyword: string, page = 1, geoUrn?: string | null): string {
   const base = "https://www.linkedin.com/search/results/content/";
   const params = new URLSearchParams({
     keywords: keyword,
     datePosted: "past-week",
+    ...(geoUrn ? { geoUrn: JSON.stringify([geoUrn]) } : {}),
     ...(page > 1 ? { page: String(page) } : {}),
   });
   return `${base}?${params}`;
@@ -146,7 +147,8 @@ export async function scrapeContentSearch(
   dateRangeDays: number,
   maxLeads: number,
   titleFilter?: string | null,
-  companyFilter?: string | null
+  companyFilter?: string | null,
+  locationFilter?: string | null
 ): Promise<{ collected: number; skipped: number; newLeads: CollectedLead[] }> {
   let collected = 0;
   let skipped = 0;
@@ -161,7 +163,7 @@ export async function scrapeContentSearch(
   const pagesToScrape = Math.min(MAX_PAGES_PER_SESSION, Math.ceil(maxLeads / 10));
 
   for (let pageNum = 1; pageNum <= pagesToScrape && collected < maxLeads; pageNum++) {
-    const url = buildContentSearchUrl(keyword, pageNum);
+    const url = buildContentSearchUrl(keyword, pageNum, locationFilter);
     await navigateTo(page, url);
     await humanDelay(4_000, 8_000);
 

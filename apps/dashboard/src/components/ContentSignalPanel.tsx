@@ -3,6 +3,32 @@
 import { useEffect, useState } from "react";
 import { api, type ContentSignalConfig, type PostSignal } from "@/lib/api";
 
+const LOCATIONS: { label: string; geoUrn: string }[] = [
+  { label: "United States",        geoUrn: "103644278" },
+  { label: "United Kingdom",       geoUrn: "101165590" },
+  { label: "Canada",               geoUrn: "101174742" },
+  { label: "Australia",            geoUrn: "101452733" },
+  { label: "Ireland",              geoUrn: "104738515" },
+  { label: "New Zealand",          geoUrn: "105490917" },
+  { label: "India",                geoUrn: "102713980" },
+  { label: "Singapore",            geoUrn: "102454443" },
+  { label: "United Arab Emirates", geoUrn: "104305776" },
+  { label: "South Africa",         geoUrn: "104035573" },
+  { label: "Germany",              geoUrn: "101282230" },
+  { label: "France",               geoUrn: "105015875" },
+  { label: "Netherlands",          geoUrn: "102890719" },
+  { label: "Sweden",               geoUrn: "105117694" },
+  { label: "Switzerland",          geoUrn: "106693272" },
+  { label: "Belgium",              geoUrn: "100565514" },
+  { label: "Spain",                geoUrn: "105646813" },
+  { label: "Italy",                geoUrn: "103350119" },
+  { label: "Brazil",               geoUrn: "106057199" },
+  { label: "Mexico",               geoUrn: "103323778" },
+  { label: "Israel",               geoUrn: "101620260" },
+  { label: "Japan",                geoUrn: "101355337" },
+  { label: "South Korea",          geoUrn: "105149562" },
+];
+
 function relativeDate(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const d = Math.floor(diff / 86_400_000);
@@ -33,9 +59,8 @@ export function ContentSignalPanel({
   const [dateRange, setDateRange] = useState(initialConfig?.dateRangeDays ?? 7);
   const [maxLeads, setMaxLeads] = useState(initialConfig?.maxLeads ?? 50);
   const [titleFilter, setTitleFilter] = useState(initialConfig?.titleFilter ?? "");
-  const [companyFilter, setCompanyFilter] = useState(
-    initialConfig?.companyFilter ?? ""
-  );
+  const [companyFilter, setCompanyFilter] = useState(initialConfig?.companyFilter ?? "");
+  const [locationFilter, setLocationFilter] = useState(initialConfig?.locationFilter ?? "");
   const [connectionNote, setConnectionNote] = useState(
     initialConfig?.connectionNoteTemplate ??
       "Hi {{firstName}}, I came across your post on {{postTopic}} from {{postDate}} — great perspective. Would love to connect and follow your content."
@@ -69,6 +94,7 @@ export function ContentSignalPanel({
         maxLeads,
         titleFilter: titleFilter || null,
         companyFilter: companyFilter || null,
+        locationFilter: locationFilter || null,
         connectionNoteTemplate: connectionNote.trim() || null,
       });
       setConfig(updated);
@@ -196,6 +222,27 @@ export function ContentSignalPanel({
                 className="field w-full"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-900">
+              Location (optional)
+            </label>
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="field w-full"
+            >
+              <option value="">All locations</option>
+              {LOCATIONS.map((loc) => (
+                <option key={loc.geoUrn} value={loc.geoUrn}>
+                  {loc.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-700">
+              Filters LinkedIn search results to post authors in this country.
+            </p>
           </div>
 
           <div>

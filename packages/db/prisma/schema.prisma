@@ -259,6 +259,7 @@ model ContentSignalConfig {
   maxLeads               Int       @default(50)
   titleFilter            String?
   companyFilter          String?
+  locationFilter         String?
   connectionNoteTemplate String?   @db.Text
   lastScrapedAt          DateTime?
   createdAt              DateTime  @default(now())

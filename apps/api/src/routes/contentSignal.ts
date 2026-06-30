@@ -35,6 +35,7 @@ const ConfigSchema = z.object({
   maxLeads: z.number().int().min(1).max(200).default(50),
   titleFilter: z.string().optional().nullable(),
   companyFilter: z.string().optional().nullable(),
+  locationFilter: z.string().optional().nullable(),
   connectionNoteTemplate: z.string().max(300).optional().nullable(),
 });
 
@@ -179,6 +180,7 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
         maxLeads: config.maxLeads,
         titleFilter: config.titleFilter,
         companyFilter: config.companyFilter,
+        locationFilter: config.locationFilter,
         connectionNoteTemplate: config.connectionNoteTemplate,
       },
       { jobId: `campaign-${campaign.id}-content-signal` }

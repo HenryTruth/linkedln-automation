@@ -59,6 +59,7 @@ export interface ContentSignalJobData {
   maxLeads: number;
   titleFilter?: string | null;
   companyFilter?: string | null;
+  locationFilter?: string | null;
   /** Guard D: connection note template — must include {{postTopic}}, {{postExcerpt}}, or {{postDate}} */
   connectionNoteTemplate?: string | null;
 }

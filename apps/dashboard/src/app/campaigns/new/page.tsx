@@ -165,27 +165,29 @@ export default function NewCampaignPage() {
             </p>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-slate-300">
-              Target timezone{" "}
-              <span className="font-normal text-slate-400">(optional)</span>
-            </label>
-            <select
-              value={form.targetTimezone ?? ""}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, targetTimezone: e.target.value || null }))
-              }
-              className="field w-full"
-            >
-              <option value="">Use account timezone</option>
-              {TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>{tz}</option>
-              ))}
-            </select>
-            <p className="mt-2 text-xs text-slate-400">
-              Active hours (8am–7pm) and weekend throttle use this timezone. Set it to match where your prospects are located.
-            </p>
-          </div>
+          {form.type !== "CONTENT_SIGNAL" && (
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-slate-300">
+                Target timezone{" "}
+                <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <select
+                value={form.targetTimezone ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, targetTimezone: e.target.value || null }))
+                }
+                className="field w-full"
+              >
+                <option value="">Use account timezone</option>
+                {TIMEZONES.map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-slate-400">
+                Active hours (8am–7pm) and weekend throttle use this timezone. Set it to match where your prospects are located.
+              </p>
+            </div>
+          )}
 
           {form.type === "CONNECT" && (
             <div>

@@ -1073,41 +1073,59 @@ export default function AccountsPage() {
                         {account.hasSession ? "Refresh LinkedIn session" : "Connect LinkedIn session"}
                       </p>
                       <p className="mt-1 text-xs leading-5 text-teal-400">
-                        Vectra needs one saved LinkedIn login for this account. Your PC does not
-                        need to stay on after the session is saved; campaign browsers run on the server.
+                        Export your LinkedIn session cookies from the browser where you are already logged in, then paste them below. This is a one-time setup — Vectra reuses the saved session for all campaign runs.
                       </p>
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="grid gap-2 sm:grid-cols-4">
                       {[
-                        "Use the same proxy location assigned to this account.",
-                        "Log in to LinkedIn and complete any 2FA or security prompt.",
-                        "Save the session here so campaigns can run later.",
-                      ].map((step, index) => (
+                        {
+                          step: 1,
+                          title: "Install extension",
+                          body: "Cookie-Editor",
+                          href: "https://cookie-editor.com",
+                        },
+                        {
+                          step: 2,
+                          title: "Go to LinkedIn",
+                          body: "Make sure you are logged in to the correct account.",
+                          href: "https://www.linkedin.com",
+                        },
+                        {
+                          step: 3,
+                          title: "Export cookies",
+                          body: 'Click the Cookie-Editor icon → "Export" → copies to clipboard.',
+                          href: null,
+                        },
+                        {
+                          step: 4,
+                          title: "Paste below",
+                          body: "Paste the copied JSON into the field below and save.",
+                          href: null,
+                        },
+                      ].map(({ step, title, body, href }) => (
                         <div
                           key={step}
                           className="rounded-xl border border-white/[0.06] bg-slate-800/60 p-3 text-xs leading-5 text-slate-300"
                         >
                           <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-teal-300">
-                            Step {index + 1}
+                            Step {step}
                           </span>
-                          {step}
+                          <span className="font-medium text-slate-200">{title}</span>
+                          {href ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 block text-teal-400 underline underline-offset-2 hover:text-teal-300"
+                            >
+                              {body} ↗
+                            </a>
+                          ) : (
+                            <p className="mt-1 text-slate-400">{body}</p>
+                          )}
                         </div>
                       ))}
                     </div>
-                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-300">
-                      Guided browser login is the preferred user experience. Until that
-                      browser handoff is enabled, this advanced importer saves the same
-                      session data after the user has logged in manually.
-                    </div>
-                    <details className="rounded-xl border border-white/[0.06] bg-slate-950/40 p-3">
-                      <summary className="cursor-pointer text-xs font-semibold text-teal-200">
-                        Advanced session import
-                      </summary>
-                      <p className="mt-3 text-xs leading-5 text-slate-400">
-                        Import a JSON array of LinkedIn cookies from the browser where
-                        the account is already logged in. This is intended as a fallback
-                        for operators, not the normal customer flow.
-                      </p>
                     <textarea
                       rows={5}
                       value={cookieInputs[account.id] ?? ""}
@@ -1117,10 +1135,9 @@ export default function AccountsPage() {
                           [account.id]: e.target.value,
                         }))
                       }
-                      placeholder='[{"name":"li_at","value":"...","domain":".linkedin.com",...}]'
-                      className="field mt-3 w-full font-mono text-xs"
+                      placeholder='Paste cookie JSON here — e.g. [{"name":"li_at","value":"...","domain":".linkedin.com",...}]'
+                      className="field w-full font-mono text-xs"
                     />
-                    </details>
                     <label className="flex items-start gap-2 rounded-xl border border-white/[0.06] bg-slate-800/60 p-3 text-xs leading-5 text-teal-200">
                       <input
                         type="checkbox"

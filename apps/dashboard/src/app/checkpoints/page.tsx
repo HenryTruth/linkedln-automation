@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, type Checkpoint } from "@/lib/api";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
+import { toast } from "sonner";
 
 export default function CheckpointsPage() {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
@@ -39,7 +40,7 @@ export default function CheckpointsPage() {
       await api.checkpoints.resolve(cp.id, who);
       await reload();
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setResolving(null);
     }

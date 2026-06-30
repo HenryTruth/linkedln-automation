@@ -3,6 +3,7 @@ import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { AuthProvider } from "@/contexts/auth";
 import { AuthGuard } from "@/components/AuthGuard";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Vectra",
@@ -22,6 +23,7 @@ export default function RootLayout({
           <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
             <AuthGuard>{children}</AuthGuard>
           </main>
+          <Toaster theme="dark" position="bottom-right" richColors />
         </AuthProvider>
       </body>
     </html>

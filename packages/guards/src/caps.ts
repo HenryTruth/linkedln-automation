@@ -27,9 +27,17 @@ export const HARD_CEILING: Record<ActionType, number> = {
 
 const ACTIVE_HOURS = { start: 8, end: 19 }; // 8am–7pm
 
-function isWeekend(): boolean {
-  const day = new Date().getDay();
-  return day === 0 || day === 6;
+function isWeekend(timezone: string): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+    }).formatToParts(new Date());
+    const day = parts.find((p) => p.type === "weekday")?.value;
+    return day === "Sat" || day === "Sun";
+  } catch {
+    return false; // fail open if timezone is invalid
+  }
 }
 
 function isActiveHour(timezone: string): boolean {
@@ -73,7 +81,7 @@ async function getEffectiveCap(
 ): Promise<number> {
   const account = await prisma.account.findUniqueOrThrow({
     where: { id: accountId },
-    select: { maxDailyCaps: true, warmUpPhase: true },
+    select: { maxDailyCaps: true, warmUpPhase: true, timezone: true },
   });
 
   return effectiveCapFromAccount(accountId, action, account, prisma);
@@ -82,7 +90,7 @@ async function getEffectiveCap(
 async function effectiveCapFromAccount(
   accountId: string,
   action: ActionType,
-  account: Pick<CapAccount, "maxDailyCaps" | "warmUpPhase">,
+  account: Pick<CapAccount, "maxDailyCaps" | "warmUpPhase" | "timezone">,
   tx: CapReader
 ): Promise<number> {
   const overrides = asOverrides(account.maxDailyCaps);
@@ -94,7 +102,7 @@ async function effectiveCapFromAccount(
     throw new WarmUpError(accountId, action, account.warmUpPhase);
   }
   const warmupClamped = Math.min(clamped, phaseCap);
-  const base = isWeekend() ? Math.floor(warmupClamped * 0.5) : warmupClamped;
+  const base = isWeekend(account.timezone) ? Math.floor(warmupClamped * 0.5) : warmupClamped;
 
   // Guard 6: accounts with 2+ checkpoints in the last 30 days run at 50% of normal caps
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

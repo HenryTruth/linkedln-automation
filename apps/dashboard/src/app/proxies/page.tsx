@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, type Proxy, type ProxyCheapRemoteProxy } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { Skeleton, SkeletonPageHeader, SkeletonTableRows } from "@/components/Skeleton";
+import { toast } from "sonner";
 
 type RotationMode = "STATIC" | "STICKY_SESSION";
 
@@ -113,7 +114,7 @@ export default function ProxiesPage() {
       await api.proxies.check(id);
       await reload();
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setBusy(null);
     }
@@ -125,8 +126,9 @@ export default function ProxiesPage() {
     try {
       await api.proxies.delete(id);
       await reload();
+      toast.success(`Proxy ${host} deleted`);
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setBusy(null);
     }

@@ -7,6 +7,7 @@ import { Badge } from "@/components/Badge";
 import { SequenceBuilder } from "@/components/SequenceBuilder";
 import { ContentSignalPanel } from "@/components/ContentSignalPanel";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
+import { toast } from "sonner";
 
 const JOB_STATUS_STYLES: Record<CampaignLeadJobStatus, string> = {
   IDLE:    "bg-slate-700/50 text-slate-400",
@@ -64,10 +65,17 @@ export default function CampaignDetailPage() {
     msg: string;
   } | null>(null);
 
+  const TIMEZONES = [
+    "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+    "America/Toronto", "America/Vancouver", "Europe/London", "Europe/Paris",
+    "Europe/Berlin", "Europe/Amsterdam", "Asia/Singapore", "Asia/Tokyo", "Asia/Shanghai",
+  ];
+
   // Inline edit state
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editLimit, setEditLimit] = useState(10);
+  const [editTimezone, setEditTimezone] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -121,6 +129,7 @@ export default function CampaignDetailPage() {
   function startEditing() {
     setEditName(campaign!.name);
     setEditLimit(campaign!.dailyLimit);
+    setEditTimezone(campaign!.targetTimezone ?? null);
     setEditing(true);
   }
 
@@ -134,7 +143,7 @@ export default function CampaignDetailPage() {
       setNoteSaved(true);
       setTimeout(() => setNoteSaved(false), 3000);
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setNoteSaving(false);
     }
@@ -151,11 +160,12 @@ export default function CampaignDetailPage() {
       const updated = await api.campaigns.update(id, {
         name: editName,
         dailyLimit: editLimit,
+        targetTimezone: editTimezone || null,
       });
-      setCampaign((prev) => prev && { ...prev, name: updated.name, dailyLimit: updated.dailyLimit });
+      setCampaign((prev) => prev && { ...prev, name: updated.name, dailyLimit: updated.dailyLimit, targetTimezone: updated.targetTimezone });
       setEditing(false);
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -166,9 +176,10 @@ export default function CampaignDetailPage() {
     setDeleting(true);
     try {
       await api.campaigns.delete(id);
+      toast.success(`"${campaign!.name}" deleted`);
       router.push("/campaigns");
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
       setDeleting(false);
     }
   }
@@ -182,7 +193,7 @@ export default function CampaignDetailPage() {
       });
       setCampaign((prev) => prev && { ...prev, status: updated.status });
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -333,6 +344,19 @@ export default function CampaignDetailPage() {
                     className="field w-20"
                   />
                 </div>
+                <div className="flex items-center gap-1">
+                  <label className="text-xs font-semibold text-slate-400">Timezone</label>
+                  <select
+                    value={editTimezone ?? ""}
+                    onChange={(e) => setEditTimezone(e.target.value || null)}
+                    className="field"
+                  >
+                    <option value="">Account default</option>
+                    {TIMEZONES.map((tz) => (
+                      <option key={tz} value={tz}>{tz}</option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   type="submit"
                   disabled={saving}
@@ -367,6 +391,11 @@ export default function CampaignDetailPage() {
                     {campaign.leads.length !== 1 ? "s" : ""} -{" "}
                     {campaign.dailyLimit}/day limit
                   </span>
+                  {campaign.targetTimezone && (
+                    <span className="text-sm font-medium text-slate-500">
+                      · {campaign.targetTimezone}
+                    </span>
+                  )}
                 </div>
               </>
             )}
@@ -611,31 +640,27 @@ export default function CampaignDetailPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {isScrape && (
-              <button
-                onClick={() => {
-                  setShowSearchForm((v) => !v);
-                  setShowLeadForm(false);
-                  setShowCsvImport(false);
-                }}
-                className="btn-secondary px-3 py-1.5 text-violet-400"
-              >
-                {showSearchForm ? "Cancel" : "Search URL"}
-              </button>
-            )}
-            {!isScrape && (
-              <button
-                onClick={() => {
-                  setShowCsvImport((v) => !v);
-                  setShowLeadForm(false);
-                  setShowSearchForm(false);
-                  setCsvResult(null);
-                }}
-                className="btn-secondary px-3 py-1.5 text-indigo-400"
-              >
-                {showCsvImport ? "Cancel" : "Import CSV"}
-              </button>
-            )}
+            <button
+              onClick={() => {
+                setShowSearchForm((v) => !v);
+                setShowLeadForm(false);
+                setShowCsvImport(false);
+              }}
+              className="btn-secondary px-3 py-1.5 text-violet-400"
+            >
+              {showSearchForm ? "Cancel" : "Search URL"}
+            </button>
+            <button
+              onClick={() => {
+                setShowCsvImport((v) => !v);
+                setShowLeadForm(false);
+                setShowSearchForm(false);
+                setCsvResult(null);
+              }}
+              className="btn-secondary px-3 py-1.5 text-indigo-400"
+            >
+              {showCsvImport ? "Cancel" : "Import CSV"}
+            </button>
             <button
               onClick={() => {
                 setShowLeadForm((v) => !v);

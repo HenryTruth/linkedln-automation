@@ -120,6 +120,7 @@ export interface Campaign {
   status: "ACTIVE" | "PAUSED" | "COMPLETED";
   dailyLimit: number;
   connectionNoteTemplate?: string | null;
+  targetTimezone?: string | null;
   _count?: { leads: number };
   createdAt: string;
 }
@@ -394,7 +395,7 @@ export const api = {
       }),
     update: (
       id: string,
-      data: Partial<Pick<Campaign, "name" | "status" | "dailyLimit" | "connectionNoteTemplate">>
+      data: Partial<Pick<Campaign, "name" | "status" | "dailyLimit" | "connectionNoteTemplate" | "targetTimezone">>
     ) =>
       apiFetch<Campaign>(`/campaigns/${id}`, {
         method: "PUT",

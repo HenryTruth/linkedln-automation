@@ -40,6 +40,7 @@ const CreateCampaignSchema = z.object({
   type: z.nativeEnum(CampaignType),
   dailyLimit: z.number().int().min(1).max(40).default(10),
   connectionNoteTemplate: z.string().max(NOTE_MAX).nullable().optional(),
+  targetTimezone: z.string().nullable().optional(),
 });
 
 const UpdateCampaignSchema = z.object({
@@ -47,6 +48,7 @@ const UpdateCampaignSchema = z.object({
   status: z.nativeEnum(CampaignStatus).optional(),
   dailyLimit: z.number().int().min(1).max(40).optional(),
   connectionNoteTemplate: z.string().max(NOTE_MAX).nullable().optional(),
+  targetTimezone: z.string().nullable().optional(),
 });
 
 const CreateMessageSchema = z.object({

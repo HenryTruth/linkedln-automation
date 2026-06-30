@@ -129,7 +129,7 @@ export function ContentSignalPanel({
           )}
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">
+            <label className="mb-1 block text-xs font-semibold text-slate-900">
               Keyword / phrase *
             </label>
             <input
@@ -143,7 +143,7 @@ export function ContentSignalPanel({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-900">
                 Post age limit (days)
               </label>
               <input
@@ -154,12 +154,12 @@ export function ContentSignalPanel({
                 onChange={(e) => setDateRange(Number(e.target.value))}
                 className="field w-full"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-slate-700">
                 Skip posts older than this
               </p>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-900">
                 Max leads to collect
               </label>
               <input
@@ -175,7 +175,7 @@ export function ContentSignalPanel({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-900">
                 Title filter (optional)
               </label>
               <input
@@ -186,7 +186,7 @@ export function ContentSignalPanel({
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+              <label className="mb-1 block text-xs font-semibold text-slate-900">
                 Company filter (optional)
               </label>
               <input
@@ -199,9 +199,9 @@ export function ContentSignalPanel({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">
+            <label className="mb-1 block text-xs font-semibold text-slate-900">
               Connection note template{" "}
-              <span className="font-normal text-slate-500">
+              <span className="font-normal text-slate-700">
                 (max 300 chars — must include{" "}
                 <code className="rounded bg-teal-100 px-1">{"{{postTopic}}"}</code>,{" "}
                 <code className="rounded bg-teal-100 px-1">{"{{postExcerpt}}"}</code>,{" "}
@@ -216,10 +216,10 @@ export function ContentSignalPanel({
               onChange={(e) => setConnectionNote(e.target.value)}
               className="field w-full font-mono text-xs"
             />
-            <p className="mt-1 text-right text-xs text-slate-400">
+            <p className="mt-1 text-right text-xs text-slate-600">
               {connectionNote.length}/300
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-700">
               Leave blank to collect leads without auto-sending connection requests.
             </p>
           </div>

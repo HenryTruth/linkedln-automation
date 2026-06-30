@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, type Campaign } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
+import { toast } from "sonner";
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -30,7 +31,7 @@ export default function CampaignsPage() {
         prev.map((x) => (x.id === updated.id ? updated : x))
       );
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -48,8 +49,9 @@ export default function CampaignsPage() {
     try {
       await api.campaigns.delete(c.id);
       setCampaigns((prev) => prev.filter((x) => x.id !== c.id));
+      toast.success(`"${c.name}" deleted`);
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setBusy(null);
     }

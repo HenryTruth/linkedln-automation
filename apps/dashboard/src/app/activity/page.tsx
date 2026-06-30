@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api, type ActivityPage, type Account } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { SkeletonTableRows } from "@/components/Skeleton";
+import { toast } from "sonner";
 
 const ACTION_TYPES = [
   "",
@@ -75,7 +76,7 @@ export default function ActivityLogPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setExporting(false);
     }

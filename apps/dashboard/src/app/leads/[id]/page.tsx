@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api, type Lead, type Campaign, type PostSignal } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
+import { toast } from "sonner";
 
 type CampaignMembership = {
   campaign: Campaign;
@@ -55,8 +56,9 @@ export default function LeadDetailPage() {
       setLead((prev) => prev && { ...prev, blacklisted: updated.blacklisted, blacklistReason: updated.blacklistReason });
       setShowBlacklistForm(false);
       setBlacklistReason("");
+      toast.success("Lead blacklisted");
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setBlacklistBusy(false);
     }
@@ -79,7 +81,7 @@ export default function LeadDetailPage() {
         };
       });
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setMarkingReplied(null);
     }
@@ -90,8 +92,9 @@ export default function LeadDetailPage() {
     try {
       const updated = await api.leads.unblacklist(id);
       setLead((prev) => prev && { ...prev, blacklisted: updated.blacklisted, blacklistReason: updated.blacklistReason });
+      toast.success("Lead removed from blacklist");
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setBlacklistBusy(false);
     }

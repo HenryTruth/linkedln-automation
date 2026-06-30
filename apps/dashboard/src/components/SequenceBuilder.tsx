@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   DndContext,
   closestCenter,
@@ -193,8 +194,9 @@ function SortableCard({
     try {
       await api.campaigns.messages.delete(campaignId, message.id);
       onDelete(message.id);
+      toast.success(`Step ${index + 1} deleted`);
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     }
   }
 
@@ -425,7 +427,7 @@ export function SequenceBuilder({
         reordered.map((m) => m.id)
       );
     } catch (e) {
-      alert(`Reorder failed: ${(e as Error).message}`);
+      toast.error(`Reorder failed: ${(e as Error).message}`);
       // Revert on failure
       setMessages([...initialMessages].sort((a, b) => a.sequenceOrder - b.sequenceOrder));
     } finally {

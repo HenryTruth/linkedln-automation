@@ -4,6 +4,22 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, type Account } from "@/lib/api";
 
+const TIMEZONES = [
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Toronto",
+  "America/Vancouver",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Europe/Amsterdam",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Asia/Shanghai",
+];
+
 const campaignTypes = [
   ["CONNECT", "Connection requests"],
   ["MESSAGE", "Drip messages"],
@@ -20,6 +36,7 @@ export default function NewCampaignPage() {
     type: "CONNECT",
     dailyLimit: 10,
     connectionNoteTemplate: "",
+    targetTimezone: "" as string | null,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +162,28 @@ export default function NewCampaignPage() {
             <p className="mt-2 text-xs text-slate-400">
               Queue guardrails still enforce hard account caps regardless of
               this dispatch limit.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-slate-300">
+              Target timezone{" "}
+              <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <select
+              value={form.targetTimezone ?? ""}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, targetTimezone: e.target.value || null }))
+              }
+              className="field w-full"
+            >
+              <option value="">Use account timezone</option>
+              {TIMEZONES.map((tz) => (
+                <option key={tz} value={tz}>{tz}</option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-slate-400">
+              Active hours (8am–7pm) and weekend throttle use this timezone. Set it to match where your prospects are located.
             </p>
           </div>
 

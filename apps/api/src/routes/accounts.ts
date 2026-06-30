@@ -204,6 +204,32 @@ accountsRouter.post("/:id/advance-warmup", async (req, res, next) => {
   }
 });
 
+// POST /accounts/:id/downgrade-warmup — move to previous warm-up phase
+accountsRouter.post("/:id/downgrade-warmup", async (req, res, next) => {
+  try {
+    const account = await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
+      select: { warmUpPhase: true },
+    });
+    const currentIndex = WARMUP_ORDER.indexOf(account.warmUpPhase);
+    if (currentIndex <= 0) {
+      res.status(409).json({ error: "Account is already at the minimum warm-up phase (MANUAL)" });
+      return;
+    }
+    await prisma.account.updateMany({
+      where: { id: req.params.id, userId: req.user.id },
+      data: { warmUpPhase: WARMUP_ORDER[currentIndex - 1] },
+    });
+    const updated = await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
+      include: { proxy: true },
+    });
+    res.json(publicAccount(updated));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PUT /accounts/:id/caps — set per-account daily cap overrides
 accountsRouter.put("/:id/caps", async (req, res, next) => {
   try {

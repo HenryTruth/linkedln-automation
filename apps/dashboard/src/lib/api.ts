@@ -330,6 +330,8 @@ export const api = {
       }),
     advanceWarmup: (id: string) =>
       apiFetch<Account>(`/accounts/${id}/advance-warmup`, { method: "POST" }),
+    downgradeWarmup: (id: string) =>
+      apiFetch<Account>(`/accounts/${id}/downgrade-warmup`, { method: "POST" }),
     updateCaps: (id: string, caps: Partial<Record<CapKey, number>>) =>
       apiFetch<Account>(`/accounts/${id}/caps`, {
         method: "PUT",

@@ -306,7 +306,7 @@ export default function AccountsPage() {
   >({});
   const [confirmingAction, setConfirmingAction] = useState<{
     accountId: string;
-    action: "pause" | "warmup";
+    action: "pause" | "warmup" | "downgrade-warmup";
   } | null>(null);
 
   // LinkedIn session import state
@@ -546,6 +546,32 @@ export default function AccountsPage() {
     }
   }
 
+  async function handleDowngradeWarmup(account: Account) {
+    const isConfirming =
+      confirmingAction?.accountId === account.id &&
+      confirmingAction.action === "downgrade-warmup";
+    if (!isConfirming) {
+      setConfirmingAction({ accountId: account.id, action: "downgrade-warmup" });
+      setAccountNotice(
+        account.id,
+        "info",
+        "Click Confirm downgrade to move this account back one warm-up phase."
+      );
+      return;
+    }
+    setBusy(account.id);
+    clearAccountNotice(account.id);
+    try {
+      await api.accounts.downgradeWarmup(account.id);
+      await reload();
+      setAccountNotice(account.id, "success", "Warm-up phase downgraded.");
+    } catch (e) {
+      setAccountNotice(account.id, "error", (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleUploadCookies(id: string) {
     const cookies = cookieInputs[id]?.trim();
     if (!cookies) return;
@@ -770,6 +796,9 @@ export default function AccountsPage() {
           const confirmingWarmup =
             confirmingAction?.accountId === account.id &&
             confirmingAction.action === "warmup";
+          const confirmingDowngrade =
+            confirmingAction?.accountId === account.id &&
+            confirmingAction.action === "downgrade-warmup";
           const canResume =
             account.status === "PAUSED" || account.status === "RESTRICTED";
           const isRestricted = account.status === "RESTRICTED";
@@ -988,6 +1017,28 @@ export default function AccountsPage() {
                     active={confirmingWarmup}
                     onClick={() => handleAdvanceWarmup(account)}
                     disabled={accountBusy || account.warmUpPhase === "FULL"}
+                  />
+
+                  <AccountActionButton
+                    title={confirmingDowngrade ? "Confirm downgrade" : "De-advance warm-up"}
+                    description={
+                      account.warmUpPhase === "MANUAL"
+                        ? "This account is already at the minimum warm-up phase."
+                        : confirmingDowngrade
+                        ? "This will reduce the daily sending caps. Confirm to proceed."
+                        : "Roll back to the previous sending volume phase."
+                    }
+                    detail={
+                      account.warmUpPhase === "MANUAL"
+                        ? "Minimum"
+                        : confirmingDowngrade
+                        ? "Confirmation needed"
+                        : account.warmUpPhase
+                    }
+                    tone={confirmingDowngrade ? "amber" : "slate"}
+                    active={confirmingDowngrade}
+                    onClick={() => handleDowngradeWarmup(account)}
+                    disabled={accountBusy || account.warmUpPhase === "MANUAL"}
                   />
 
                   <AccountActionButton

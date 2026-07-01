@@ -4,36 +4,36 @@ import { useState } from "react";
 
 const faqs = [
   {
-    q: "Will this get my LinkedIn account banned?",
-    a: "No tool can guarantee that. Vectra is built to minimize detection risk through warm-up enforcement, hard daily caps, timezone-aware scheduling, stealth browser sessions, and residential proxies. LinkedIn automation carries inherent platform risk. Run it on accounts you can afford to lose.",
+    q: "Is Vectra safe for LinkedIn outreach?",
+    a: "No automation tool can remove platform risk. Vectra reduces avoidable risk with warm-up enforcement, hard daily caps, timezone-aware scheduling, residential proxies, checkpoint pauses, and visible account health before jobs run.",
   },
   {
-    q: "Do I need a proxy?",
-    a: "Yes. Every account must be bound to a residential proxy in the same geographic location as the account's normal usage. Browser jobs are blocked until a proxy is assigned and its exit IP is verified.",
+    q: "Why does each account need a proxy?",
+    a: "LinkedIn accounts should behave consistently. Vectra requires one residential proxy per account, matched to the account's normal location, and blocks browser jobs until the exit IP is verified.",
   },
   {
-    q: "How does the warm-up phase work?",
-    a: "New accounts ramp over 4 weeks: manual-only to start, then 5 connections per day, then 10, then the full 15-per-day cap. Each phase is enforced at the job level. Campaigns cannot override it, and the system will not advance phases early.",
+    q: "How does warm-up work?",
+    a: "New accounts ramp over 4 weeks: manual-only first, then 5 connection requests per day, then 10, then the full 15-per-day ceiling. Campaigns cannot override the current warm-up phase.",
   },
   {
-    q: "What campaign types are available?",
-    a: "Connect (send connection requests with optional notes), Message (send messages to existing connections), Scrape (collect lead data from LinkedIn search results), and Content Signal (find and reach out to people who recently posted about a specific keyword).",
+    q: "What can I run in Vectra?",
+    a: "You can run connect campaigns, message campaigns, LinkedIn search scrapes, and Content Signal campaigns that find people who recently posted about a keyword.",
   },
   {
-    q: "What is Content Signal Targeting?",
-    a: "A campaign type that finds LinkedIn profiles who posted about a specific keyword within a date window you choose. It extracts the post excerpt, stores it against the lead, and generates a personalized connection note referencing what they actually wrote.",
+    q: "What is Content Signal?",
+    a: "Content Signal finds LinkedIn profiles who recently posted about a topic you care about, stores the post context beside the lead, and helps generate connection notes that reference what they actually wrote.",
   },
   {
-    q: "What happens when LinkedIn shows a checkpoint?",
-    a: "All jobs for that account stop immediately. No retry, no workaround attempt. The account sits paused until you manually resolve the checkpoint and mark it reviewed. This behavior is enforced, not configurable.",
+    q: "What happens if LinkedIn shows a checkpoint?",
+    a: "Vectra stops all jobs for that account immediately. It does not retry, work around the screen, or continue the queue. The account stays paused until a human resolves and reviews it.",
   },
   {
-    q: "How many accounts can I run?",
-    a: "There is no enforced limit on the number of accounts. Each account needs its own residential proxy and must complete its own warm-up phase independently before hitting full caps.",
+    q: "Can I scale to multiple accounts?",
+    a: "Yes, but each account runs independently. Every account needs its own residential proxy, warm-up phase, daily caps, checkpoint status, and activity history.",
   },
   {
-    q: "Can I import my own leads?",
-    a: "Yes. Leads can be added via CSV import, entered manually, scraped from LinkedIn search result URLs, or generated automatically through Content Signal campaigns.",
+    q: "Where do leads come from?",
+    a: "Leads can be imported by CSV, entered manually, scraped from LinkedIn search result URLs, or generated through Content Signal campaigns.",
   },
 ];
 

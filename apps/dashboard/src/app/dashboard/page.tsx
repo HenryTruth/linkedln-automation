@@ -185,7 +185,7 @@ export default function DashboardPage() {
             <StatCard
               title="Messages Today"
               value={stats.messagesSentToday}
-              sub="of 40 daily cap"
+              sub={`${stats.inMailsSentToday} InMails today`}
               accent="purple"
             />
             <StatCard

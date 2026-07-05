@@ -5,6 +5,7 @@ import { warmUpCap } from "./warmup.js";
 export type ActionType =
   | "connection"
   | "message"
+  | "inmail"
   | "profileView"
   | "searchPage";
 
@@ -13,6 +14,7 @@ export type ActionType =
 export const SYSTEM_CAPS: Record<ActionType, number> = {
   connection: 15,
   message: 40,
+  inmail: 10,
   profileView: 60,
   searchPage: 10,
 };
@@ -21,6 +23,7 @@ export const SYSTEM_CAPS: Record<ActionType, number> = {
 export const HARD_CEILING: Record<ActionType, number> = {
   connection: 50,
   message: 150,
+  inmail: 50,
   profileView: 250,
   searchPage: 40,
 };
@@ -56,9 +59,11 @@ function isActiveHour(timezone: string): boolean {
 
 type CapAccount = {
   dailyCaps?: unknown;
+  monthlyCaps?: unknown;
   maxDailyCaps?: unknown;
   timezone: string;
   warmUpPhase: WarmUpPhase;
+  inMailMonthlyLimit?: number;
 };
 
 type CapReader = {
@@ -115,6 +120,10 @@ async function effectiveCapFromAccount(
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function monthKey(): string {
+  return new Date().toISOString().slice(0, 7); // YYYY-MM
 }
 
 export async function remainingDailyCap(
@@ -229,6 +238,67 @@ export async function claimDailyCap(
     await tx.account.update({
       where: { id: accountId },
       data: { dailyCaps: caps },
+    });
+  });
+}
+
+async function monthlyInMailUsage(accountId: string): Promise<{
+  caps: Record<string, number>;
+  month: string;
+  used: number;
+  limit: number;
+}> {
+  const account = await prisma.account.findUniqueOrThrow({
+    where: { id: accountId },
+    select: { monthlyCaps: true, inMailMonthlyLimit: true },
+  });
+  const caps = asOverrides(account.monthlyCaps);
+  const month = monthKey();
+  return {
+    caps,
+    month,
+    used: caps[month] ?? 0,
+    limit: account.inMailMonthlyLimit,
+  };
+}
+
+export async function checkMonthlyInMailCap(accountId: string): Promise<void> {
+  const { used, limit } = await monthlyInMailUsage(accountId);
+  if (used >= limit) {
+    throw new DailyCapExceededError(accountId, "inmail (monthly credits)");
+  }
+}
+
+export async function incrementMonthlyInMailCap(accountId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<CapAccount[]>`
+      SELECT "monthlyCaps", "inMailMonthlyLimit"
+      FROM "Account"
+      WHERE "id" = ${accountId}
+      FOR UPDATE
+    `;
+    const account = rows[0];
+    if (!account) {
+      throw new Error(`Account not found: ${accountId}`);
+    }
+
+    const caps = asOverrides(account.monthlyCaps);
+    const month = monthKey();
+    const used = caps[month] ?? 0;
+    const limit = account.inMailMonthlyLimit ?? 50;
+
+    if (used >= limit) {
+      throw new DailyCapExceededError(accountId, "inmail (monthly credits)");
+    }
+
+    caps[month] = used + 1;
+    for (const key of Object.keys(caps)) {
+      if (key < month) delete caps[key];
+    }
+
+    await tx.account.update({
+      where: { id: accountId },
+      data: { monthlyCaps: caps },
     });
   });
 }

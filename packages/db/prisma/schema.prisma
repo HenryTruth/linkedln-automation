@@ -42,6 +42,7 @@ enum ConnectionStatus {
 enum CampaignType {
   CONNECT
   MESSAGE
+  INMAIL
   SCRAPE
   CONTENT_SIGNAL
 }
@@ -59,6 +60,14 @@ enum CampaignLeadJobStatus {
   SENT
   SKIPPED
   FAILED
+}
+
+enum LeadSource {
+  MANUAL
+  CSV
+  LINKEDIN_SEARCH
+  SALES_NAVIGATOR
+  CONTENT_SIGNAL
 }
 
 model User {
@@ -100,7 +109,10 @@ model Account {
   warmUpPhase       WarmUpPhase   @default(MANUAL)
   status            AccountStatus @default(ACTIVE)
   dailyCaps         Json          @default("{}")
+  monthlyCaps       Json          @default("{}")
   maxDailyCaps      Json          @default("{}")
+  salesNavigatorEnabled Boolean   @default(false)
+  inMailMonthlyLimit Int          @default(50)
   proxyId           String?
   proxy             Proxy?        @relation(fields: [proxyId], references: [id])
   campaigns         Campaign[]
@@ -144,6 +156,7 @@ model Lead {
   userId            String
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   linkedinUrl       String
+  source            LeadSource    @default(MANUAL)
   firstName         String?
   lastName          String?
   title             String?
@@ -164,6 +177,7 @@ model Lead {
   @@index([company])
   @@index([accountId])
   @@index([blacklisted])
+  @@index([source])
 }
 
 model Campaign {
@@ -215,6 +229,7 @@ model Message {
   campaignId     String
   campaign       Campaign @relation(fields: [campaignId], references: [id])
   sequenceOrder  Int
+  subjectTemplate String?  @db.Text
   bodyTemplate   String   @db.Text
   variantGroup   String   @default("A")
   delayDays      Int      @default(3)

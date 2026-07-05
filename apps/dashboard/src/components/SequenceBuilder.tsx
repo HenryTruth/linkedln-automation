@@ -54,14 +54,17 @@ function DragHandle(props: React.HTMLAttributes<HTMLButtonElement>) {
 function EditForm({
   message,
   campaignId,
+  showSubject,
   onSave,
   onCancel,
 }: {
   message: Message;
   campaignId: string;
+  showSubject: boolean;
   onSave: (updated: Message) => void;
   onCancel: () => void;
 }) {
+  const [subject, setSubject] = useState(message.subjectTemplate ?? "");
   const [body, setBody] = useState(message.bodyTemplate);
   const [variant, setVariant] = useState(message.variantGroup);
   const [delay, setDelay] = useState(message.delayDays);
@@ -75,7 +78,12 @@ function EditForm({
       const updated = await api.campaigns.messages.update(
         campaignId,
         message.id,
-        { bodyTemplate: body, variantGroup: variant, delayDays: delay }
+        {
+          subjectTemplate: showSubject ? subject || null : null,
+          bodyTemplate: body,
+          variantGroup: variant,
+          delayDays: delay,
+        }
       );
       onSave(updated);
     } catch (e) {
@@ -116,6 +124,19 @@ function EditForm({
         </div>
       </div>
       <div>
+        {showSubject && (
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-semibold text-slate-500">
+              InMail subject
+            </label>
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="field w-full font-mono"
+              placeholder="Hi {{firstName}}"
+            />
+          </div>
+        )}
         <label className="mb-1 block text-xs font-semibold text-slate-500">
           Message body{" "}
           <span className="text-slate-400">
@@ -157,12 +178,14 @@ function SortableCard({
   message,
   index,
   campaignId,
+  showSubject,
   onUpdate,
   onDelete,
 }: {
   message: Message;
   index: number;
   campaignId: string;
+  showSubject: boolean;
   onUpdate: (updated: Message) => void;
   onDelete: (id: string) => void;
 }) {
@@ -236,6 +259,7 @@ function SortableCard({
             </span>
           </div>
           <p className="line-clamp-2 whitespace-pre-wrap font-mono text-sm text-slate-700">
+            {showSubject && message.subjectTemplate ? `${message.subjectTemplate}\n` : ""}
             {message.bodyTemplate}
           </p>
         </div>
@@ -260,6 +284,7 @@ function SortableCard({
         <EditForm
           message={message}
           campaignId={campaignId}
+          showSubject={showSubject}
           onSave={(updated) => {
             onUpdate(updated);
             setEditing(false);
@@ -276,14 +301,17 @@ function SortableCard({
 function AddStepForm({
   campaignId,
   nextOrder,
+  showSubject,
   onAdded,
   onClose,
 }: {
   campaignId: string;
   nextOrder: number;
+  showSubject: boolean;
   onAdded: (msg: Message) => void;
   onClose: () => void;
 }) {
+  const [subject, setSubject] = useState("Hi {{firstName}}");
   const [body, setBody] = useState("");
   const [variant, setVariant] = useState("A");
   const [delay, setDelay] = useState(nextOrder === 0 ? 0 : 3);
@@ -297,6 +325,7 @@ function AddStepForm({
     try {
       const msg = await api.campaigns.messages.create(campaignId, {
         sequenceOrder: nextOrder,
+        subjectTemplate: showSubject ? subject || null : null,
         bodyTemplate: body,
         variantGroup: variant,
         delayDays: delay,
@@ -349,6 +378,20 @@ function AddStepForm({
         )}
       </div>
       <div>
+        {showSubject && (
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-semibold text-slate-500">
+              InMail subject
+            </label>
+            <input
+              required
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="field w-full font-mono"
+              placeholder="Hi {{firstName}}"
+            />
+          </div>
+        )}
         <label className="mb-1 block text-xs font-semibold text-slate-500">
           Message body - must include &gt;= 2 of:{" "}
           <code className="rounded bg-slate-200 px-1 text-xs">
@@ -389,11 +432,13 @@ function AddStepForm({
 interface SequenceBuilderProps {
   campaignId: string;
   initialMessages: Message[];
+  showSubject?: boolean;
 }
 
 export function SequenceBuilder({
   campaignId,
   initialMessages,
+  showSubject = false,
 }: SequenceBuilderProps) {
   const [messages, setMessages] = useState<Message[]>(
     [...initialMessages].sort((a, b) => a.sequenceOrder - b.sequenceOrder)
@@ -489,6 +534,7 @@ export function SequenceBuilder({
                 message={msg}
                 index={i}
                 campaignId={campaignId}
+                showSubject={showSubject}
                 onUpdate={handleUpdate}
                 onDelete={handleDelete}
               />
@@ -501,6 +547,7 @@ export function SequenceBuilder({
         <AddStepForm
           campaignId={campaignId}
           nextOrder={messages.length}
+          showSubject={showSubject}
           onAdded={handleAdded}
           onClose={() => setShowAddForm(false)}
         />

@@ -23,6 +23,7 @@ const TIMEZONES = [
 const campaignTypes = [
   ["CONNECT", "Connection requests"],
   ["MESSAGE", "Drip messages"],
+  ["INMAIL", "Sales Navigator InMail"],
   ["SCRAPE", "Profile scraping"],
   ["CONTENT_SIGNAL", "Post keyword sourcing"],
 ];

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, type CampaignDetail, type CampaignLeadJobStatus, type CampaignStats, type Lead } from "@/lib/api";
+import { api, type CampaignDetail, type CampaignLeadJobStatus, type CampaignStats, type Lead, type SearchScrapeCampaignJob } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { SequenceBuilder } from "@/components/SequenceBuilder";
 import { ContentSignalPanel } from "@/components/ContentSignalPanel";
@@ -78,6 +78,47 @@ const JOB_STATUS_STYLES: Record<CampaignLeadJobStatus, string> = {
   FAILED:  "bg-red-500/15 text-red-400",
 };
 
+const SEARCH_JOB_STYLES: Record<string, string> = {
+  waiting: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  active: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+  delayed: "border-violet-500/30 bg-violet-500/10 text-violet-300",
+  completed: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  failed: "border-red-500/30 bg-red-500/10 text-red-300",
+};
+
+function searchJobLabel(state: string) {
+  if (state === "waiting") return "Queued";
+  if (state === "active") return "Running now";
+  if (state === "delayed") return "Waiting to retry";
+  if (state === "completed") return "Completed";
+  if (state === "failed") return "Failed";
+  return state;
+}
+
+function searchJobDetail(job: SearchScrapeCampaignJob) {
+  if (job.state === "waiting") {
+    return "Accepted. The worker will pick this up automatically; no Start Campaign click is needed.";
+  }
+  if (job.state === "active") {
+    return "Browser automation is currently scraping this search URL.";
+  }
+  if (job.state === "delayed") {
+    return "The job is delayed, usually because it is retrying after a temporary failure.";
+  }
+  if (job.state === "completed") {
+    return "Scrape finished. Newly discovered profiles should appear in the table below after refresh.";
+  }
+  if (job.state === "failed") {
+    return job.failedReason ?? "The search scrape failed. Open Jobs for the full payload and error.";
+  }
+  return "Search scrape job recorded.";
+}
+
+function fmtJobTime(value: number | null | undefined) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString();
+}
+
 function JobStatusBadge({ status, error }: { status: CampaignLeadJobStatus; error?: string | null }) {
   return (
     <div>
@@ -107,6 +148,9 @@ function statusMismatchWarning(
   }
   if (campaignType === "MESSAGE" && lead.connectionStatus !== "CONNECTED") {
     return `This person is not connected yet (status: ${lead.connectionStatus}). LinkedIn only allows messages to first-degree connections. They need to accept a connection request first.`;
+  }
+  if (campaignType === "INMAIL" && !lead.linkedinUrl.includes("/sales/lead/")) {
+    return "InMail campaigns work best with Sales Navigator lead URLs or profiles where LinkedIn shows an InMail button.";
   }
   return null;
 }
@@ -157,8 +201,12 @@ export default function CampaignDetailPage() {
 
   // Add search URL form (SCRAPE only)
   const [searchUrl, setSearchUrl] = useState("");
+  const [searchSource, setSearchSource] = useState<"LINKEDIN" | "SALES_NAVIGATOR">("LINKEDIN");
   const [addingSearch, setAddingSearch] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
+  const [searchJobs, setSearchJobs] = useState<SearchScrapeCampaignJob[]>([]);
+  const [searchJobsLoading, setSearchJobsLoading] = useState(false);
   const [showSearchForm, setShowSearchForm] = useState(false);
 
   // LinkedIn search URL builder
@@ -179,6 +227,7 @@ export default function CampaignDetailPage() {
     const net = networkMap[builderNetwork];
     if (net) params.set("network", JSON.stringify(net));
     setSearchUrl(`https://www.linkedin.com/search/results/people/?${params}`);
+    setSearchSource("LINKEDIN");
     setShowUrlBuilder(false);
   }
 
@@ -195,11 +244,32 @@ export default function CampaignDetailPage() {
     ]);
   }
 
+  async function reloadSearchJobs() {
+    setSearchJobsLoading(true);
+    try {
+      const result = await api.campaigns.searchJobs(id);
+      setSearchJobs(result.jobs);
+    } catch {
+      // Job status is helpful context, but the campaign page should still work without it.
+    } finally {
+      setSearchJobsLoading(false);
+    }
+  }
+
   useEffect(() => {
     reload()
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (campaign?.type !== "SCRAPE") return;
+    reloadSearchJobs();
+    const interval = window.setInterval(() => {
+      reloadSearchJobs();
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [campaign?.id, campaign?.type]);
 
   useEffect(() => {
     if (campaign?.type === "CONNECT") {
@@ -332,11 +402,15 @@ export default function CampaignDetailPage() {
     e.preventDefault();
     setAddingSearch(true);
     setSearchError(null);
+    setSearchNotice(null);
     try {
-      await api.campaigns.addSearchUrl(id, searchUrl);
+      const result = await api.campaigns.addSearchUrl(id, searchUrl, searchSource);
+      setSearchNotice(
+        `Search URL accepted and queued${result.jobId ? ` as job ${result.jobId}` : ""}. It starts automatically when the search worker is available and account guardrails allow it.`
+      );
       setSearchUrl("");
       setShowSearchForm(false);
-      await reload();
+      await Promise.all([reload(), reloadSearchJobs()]);
     } catch (e) {
       setSearchError((e as Error).message);
     } finally {
@@ -390,6 +464,7 @@ export default function CampaignDetailPage() {
     return <p className="text-sm text-red-400">{error ?? "Not found"}</p>;
 
   const isMessage = campaign.type === "MESSAGE";
+  const isInMail = campaign.type === "INMAIL";
   const isScrape = campaign.type === "SCRAPE";
   const isContentSignal = campaign.type === "CONTENT_SIGNAL";
   const isConnect = campaign.type === "CONNECT";
@@ -665,23 +740,24 @@ export default function CampaignDetailPage() {
         </section>
       )}
 
-      {/* Message sequence builder (MESSAGE campaigns only) */}
-      {isMessage && (
+      {/* Message template builder */}
+      {(isMessage || isInMail) && (
         <section>
           <div className="mb-4">
-            <p className="page-kicker">Sequence</p>
+            <p className="page-kicker">{isInMail ? "InMail" : "Sequence"}</p>
             <h2 className="mt-1 text-xl font-semibold text-white">
-              Message Sequence
+              {isInMail ? "InMail Template" : "Message Sequence"}
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
-              Drag steps to reorder them. Click Edit to change content or
-              delays. Each step fires after its delay has passed since the
-              previous one.
+              {isInMail
+                ? "Create the body Vectra will send through the Sales Navigator InMail composer. The subject is generated from the lead name."
+                : "Drag steps to reorder them. Click Edit to change content or delays. Each step fires after its delay has passed since the previous one."}
             </p>
           </div>
           <SequenceBuilder
             campaignId={id}
             initialMessages={campaign.messages}
+            showSubject={isInMail}
           />
         </section>
       )}
@@ -709,6 +785,13 @@ export default function CampaignDetailPage() {
                     not yet connected with
                   </span>{" "}
                   - already-connected profiles will be skipped.
+                </>
+              ) : campaign.type === "INMAIL" ? (
+                <>
+                  Add Sales Navigator lead URLs or imported lead lists for
+                  InMail outreach. Leads do not need to be first-degree
+                  connections, but the account must have Sales Navigator InMail
+                  access.
                 </>
               ) : (
                 <>
@@ -775,6 +858,77 @@ export default function CampaignDetailPage() {
           </div>
         )}
 
+        {isScrape && searchNotice && (
+          <div className="mb-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300">
+            <p className="font-semibold">Search URL accepted</p>
+            <p className="mt-1 leading-6">{searchNotice}</p>
+          </div>
+        )}
+
+        {isScrape && (
+          <div className="mb-4 rounded-2xl border border-white/[0.08] bg-slate-900/60 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  Search automation status
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-400">
+                  Search URLs run as soon as they are queued. They can still wait on worker availability, active hours, warm-up/search caps, proxy health, or LinkedIn session checks.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={reloadSearchJobs}
+                  disabled={searchJobsLoading}
+                  className="btn-secondary px-3 py-1.5 text-xs"
+                >
+                  {searchJobsLoading ? "Refreshing..." : "Refresh status"}
+                </button>
+                <a
+                  href="/jobs?queue=searchScrape"
+                  className="btn-secondary px-3 py-1.5 text-xs text-violet-400"
+                >
+                  Open Jobs
+                </a>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {searchJobs.length === 0 ? (
+                <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 text-sm text-slate-400">
+                  No search URL jobs have been queued for this campaign yet.
+                </div>
+              ) : (
+                searchJobs.slice(0, 5).map((job) => (
+                  <div
+                    key={job.id ?? `${job.timestamp}-${job.data.searchUrl}`}
+                    className={`rounded-xl border p-3 ${
+                      SEARCH_JOB_STYLES[job.state] ?? "border-slate-700 bg-slate-800/50 text-slate-300"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">
+                        {searchJobLabel(job.state)}
+                        {job.id ? ` · Job ${job.id}` : ""}
+                      </p>
+                      <p className="text-xs opacity-80">
+                        Updated {fmtJobTime(job.finishedOn ?? job.processedOn ?? job.timestamp)}
+                      </p>
+                    </div>
+                    <p className="mt-1 break-all font-mono text-[11px] opacity-80">
+                      {job.data.source ?? "LINKEDIN"} · {job.data.searchUrl ?? "Search URL unavailable"}
+                    </p>
+                    <p className="mt-2 text-xs leading-5 opacity-90">
+                      {searchJobDetail(job)}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Bulk CSV import */}
         {showCsvImport && (
           <form
@@ -787,6 +941,7 @@ export default function CampaignDetailPage() {
               </label>
               <p className="mb-2 text-xs leading-5 text-slate-400">
                 Required column: <code className="rounded bg-slate-800 px-1 font-mono">linkedinUrl</code>.
+                Sales Navigator lead URLs are supported.
                 Optional: <code className="rounded bg-slate-800 px-1 font-mono">firstName</code>,{" "}
                 <code className="rounded bg-slate-800 px-1 font-mono">lastName</code>,{" "}
                 <code className="rounded bg-slate-800 px-1 font-mono">company</code>,{" "}
@@ -798,7 +953,7 @@ export default function CampaignDetailPage() {
                 rows={6}
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
-                placeholder={"linkedinUrl,firstName,lastName,company,title\nhttps://linkedin.com/in/alice,Alice,Smith,Acme,CEO"}
+                placeholder={"linkedinUrl,firstName,lastName,company,title\nhttps://www.linkedin.com/sales/lead/ACwAA...,Alice,Smith,Acme,CEO"}
                 className="field w-full font-mono text-xs"
               />
             </div>
@@ -899,16 +1054,37 @@ export default function CampaignDetailPage() {
               </div>
             ) : (
               <p className="text-xs leading-5 text-slate-400">
-                Paste a URL from LinkedIn, or use the <strong className="text-slate-300">Build URL</strong> button above to generate one without leaving this page.
+                Paste a LinkedIn people search URL or a Sales Navigator people
+                search/list URL. The source controls which result layout Vectra
+                extracts from.
               </p>
             )}
 
             <form onSubmit={handleAddSearchUrl} className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-300">
+                  Source
+                </label>
+                <select
+                  value={searchSource}
+                  onChange={(e) =>
+                    setSearchSource(e.target.value as "LINKEDIN" | "SALES_NAVIGATOR")
+                  }
+                  className="field w-full"
+                >
+                  <option value="LINKEDIN">LinkedIn people search</option>
+                  <option value="SALES_NAVIGATOR">Sales Navigator search/list</option>
+                </select>
+              </div>
               <input
                 required
                 value={searchUrl}
                 onChange={(e) => setSearchUrl(e.target.value)}
-                placeholder="https://www.linkedin.com/search/results/people/?keywords=doctor&geoUrn=..."
+                placeholder={
+                  searchSource === "SALES_NAVIGATOR"
+                    ? "https://www.linkedin.com/sales/search/people?query=..."
+                    : "https://www.linkedin.com/search/results/people/?keywords=doctor&geoUrn=..."
+                }
                 className="field w-full font-mono text-xs"
               />
               {searchError && (

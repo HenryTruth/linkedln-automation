@@ -1,5 +1,6 @@
 export {
   connectQueue,
+  inMailQueue,
   messageQueue,
   scrapeQueue,
   withdrawQueue,
@@ -11,6 +12,7 @@ export {
 } from "./queues.js";
 export type {
   ConnectJobData,
+  InMailJobData,
   MessageJobData,
   ScrapeJobData,
   WithdrawJobData,

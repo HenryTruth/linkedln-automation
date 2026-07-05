@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { prisma } from "@linkedin-automation/db";
+import { prisma, LeadSource } from "@linkedin-automation/db";
 
 export const leadsRouter: IRouter = Router();
 
@@ -23,6 +23,10 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "linkedin url",
     "profile url",
     "profileurl",
+    "salesnavigatorurl",
+    "sales navigator url",
+    "sales_nav_url",
+    "salesnavurl",
     "linkedin",
   ],
   firstName: ["firstname", "first_name", "first name", "first"],
@@ -216,12 +220,13 @@ leadsRouter.get("/export", async (req, res, next) => {
     });
 
     const lines = [
-      "id,linkedinUrl,firstName,lastName,title,company,connectionStatus,blacklisted,replyStatus,campaigns,createdAt",
+      "id,linkedinUrl,source,firstName,lastName,title,company,connectionStatus,blacklisted,replyStatus,campaigns,createdAt",
       ...leads.map((lead) => {
         const replied = lead.campaigns.some((campaignLead) => campaignLead.repliedAt);
         return [
           lead.id,
           csvCell(lead.linkedinUrl),
+          lead.source,
           csvCell(lead.firstName),
           csvCell(lead.lastName),
           csvCell(lead.title),
@@ -299,6 +304,7 @@ leadsRouter.post("/import-csv", async (req, res, next) => {
         },
         create: {
           ...data,
+          source: LeadSource.CSV,
           userId: req.user.id,
           accountId: campaign?.accountId,
         },
@@ -307,6 +313,7 @@ leadsRouter.post("/import-csv", async (req, res, next) => {
           lastName: data.lastName,
           company: data.company,
           title: data.title,
+          source: LeadSource.CSV,
         },
       });
 
@@ -370,6 +377,9 @@ leadsRouter.post("/", async (req, res, next) => {
       },
       create: {
         ...data,
+        source: data.linkedinUrl.includes("/sales/lead/")
+          ? LeadSource.SALES_NAVIGATOR
+          : LeadSource.MANUAL,
         userId: req.user.id,
         accountId: data.accountId ?? campaign?.accountId,
       },

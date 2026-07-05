@@ -12,6 +12,7 @@ export { scrapeProfile } from "./actions/scrapeProfile.js";
 export { scrapeSearch } from "./actions/scrapeSearch.js";
 export { sendConnect } from "./actions/sendConnect.js";
 export { sendMessage } from "./actions/sendMessage.js";
+export { sendInMail } from "./actions/sendInMail.js";
 export { withdrawPendingConnections } from "./actions/withdrawConnect.js";
 export { checkReply } from "./actions/checkReply.js";
 export { checkConnectionStatus } from "./actions/checkConnectionStatus.js";

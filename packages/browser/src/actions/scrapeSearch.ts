@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { prisma } from "@linkedin-automation/db";
+import { prisma, LeadSource } from "@linkedin-automation/db";
 import { humanDelay } from "@linkedin-automation/guards";
 import { navigateTo } from "./navigate.js";
 
@@ -11,32 +11,66 @@ interface SearchLead {
   company: string | null;
 }
 
-async function extractResultCards(page: Page): Promise<SearchLead[]> {
-  return page.evaluate(() => {
+export type SearchSource = "LINKEDIN" | "SALES_NAVIGATOR";
+
+function canonicalLinkedInUrl(href: string, source: SearchSource): string {
+  try {
+    const url = new URL(href);
+    url.search = "";
+    url.hash = "";
+    const normalized = url.toString().replace(/\/$/, "");
+    if (source === "SALES_NAVIGATOR") return normalized;
+    return normalized;
+  } catch {
+    return href.split("?")[0].replace(/\/$/, "");
+  }
+}
+
+async function extractResultCards(
+  page: Page,
+  source: SearchSource
+): Promise<SearchLead[]> {
+  return page.evaluate((searchSource) => {
     const cards = Array.from(
       document.querySelectorAll(
-        ".reusable-search__result-container, .entity-result"
+        searchSource === "SALES_NAVIGATOR"
+          ? "li, .artdeco-list__item"
+          : ".reusable-search__result-container, .entity-result"
       )
     );
 
     return cards
       .map((card) => {
         const anchor = card.querySelector(
-          "a[href*='/in/']"
+          searchSource === "SALES_NAVIGATOR"
+            ? "a[href*='/sales/lead/'], a[href*='/in/']"
+            : "a[href*='/in/']"
         ) as HTMLAnchorElement | null;
 
         if (!anchor) return null;
 
-        // Strip query params to get the canonical profile URL
-        const linkedinUrl = anchor.href.split("?")[0].replace(/\/$/, "");
+        const href = anchor.href;
+        const linkedinUrl = (() => {
+          try {
+            const url = new URL(href);
+            url.search = "";
+            url.hash = "";
+            return url.toString().replace(/\/$/, "");
+          } catch {
+            return href.split("?")[0].replace(/\/$/, "");
+          }
+        })();
 
-        // Name is in a nested span to hide from screen readers on the outer element
         const fullName =
           card
             .querySelector(
               ".entity-result__title-text a span[aria-hidden='true']"
             )
             ?.textContent?.trim() ??
+          card
+            .querySelector("[data-anonymize='person-name']")
+            ?.textContent?.trim() ??
+          anchor.textContent?.trim() ??
           card.querySelector(".actor-name")?.textContent?.trim() ??
           null;
 
@@ -46,20 +80,26 @@ async function extractResultCards(page: Page): Promise<SearchLead[]> {
         const title =
           card
             .querySelector(".entity-result__primary-subtitle")
-            ?.textContent?.trim() ?? null;
+            ?.textContent?.trim() ??
+          card.querySelector("[data-anonymize='title']")?.textContent?.trim() ??
+          null;
 
         const company =
           card
             .querySelector(".entity-result__secondary-subtitle")
-            ?.textContent?.trim() ?? null;
+            ?.textContent?.trim() ??
+          card.querySelector("[data-anonymize='company-name']")?.textContent?.trim() ??
+          null;
 
         return { linkedinUrl, firstName, lastName, title, company };
       })
       .filter(
         (l): l is SearchLead =>
-          !!l && !!l.linkedinUrl && l.linkedinUrl.includes("/in/")
+          !!l &&
+          !!l.linkedinUrl &&
+          (l.linkedinUrl.includes("/in/") || l.linkedinUrl.includes("/sales/lead/"))
       );
-  });
+  }, source);
 }
 
 function buildPageUrl(baseUrl: string, pageNum: number): string {
@@ -73,7 +113,8 @@ export async function scrapeSearch(
   page: Page,
   searchUrl: string,
   accountId: string,
-  maxPages = 5
+  maxPages = 5,
+  source: SearchSource = "LINKEDIN"
 ): Promise<{ urls: string[]; pagesScraped: number }> {
   const allUrls: string[] = [];
   let pagesScraped = 0;
@@ -87,7 +128,7 @@ export async function scrapeSearch(
     await navigateTo(page, pageUrl);
     await humanDelay(3_000, 6_000);
 
-    const leads = await extractResultCards(page);
+    const leads = await extractResultCards(page, source);
 
     if (leads.length === 0) break; // No results — past the last page
 
@@ -96,13 +137,29 @@ export async function scrapeSearch(
         where: {
           userId_linkedinUrl: {
             userId: account.userId,
-            linkedinUrl: lead.linkedinUrl,
+            linkedinUrl: canonicalLinkedInUrl(lead.linkedinUrl, source),
           },
         },
-        create: { ...lead, accountId, userId: account.userId },
-        update: { title: lead.title, company: lead.company },
+        create: {
+          ...lead,
+          linkedinUrl: canonicalLinkedInUrl(lead.linkedinUrl, source),
+          source:
+            source === "SALES_NAVIGATOR"
+              ? LeadSource.SALES_NAVIGATOR
+              : LeadSource.LINKEDIN_SEARCH,
+          accountId,
+          userId: account.userId,
+        },
+        update: {
+          title: lead.title,
+          company: lead.company,
+          source:
+            source === "SALES_NAVIGATOR"
+              ? LeadSource.SALES_NAVIGATOR
+              : LeadSource.LINKEDIN_SEARCH,
+        },
       });
-      allUrls.push(lead.linkedinUrl);
+      allUrls.push(canonicalLinkedInUrl(lead.linkedinUrl, source));
     }
 
     pagesScraped++;

@@ -11,6 +11,7 @@ statsRouter.get("/", async (req, res, next) => {
     const [
       connectsSentToday,
       messagesSentToday,
+      inMailsSentToday,
       totalLeads,
       connectedLeads,
       repliedLeads,
@@ -28,6 +29,13 @@ statsRouter.get("/", async (req, res, next) => {
       prisma.activityLog.count({
         where: {
           actionType: "message",
+          createdAt: { gte: todayStart },
+          account: { userId: req.user.id },
+        },
+      }),
+      prisma.activityLog.count({
+        where: {
+          actionType: "inmail",
           createdAt: { gte: todayStart },
           account: { userId: req.user.id },
         },
@@ -59,6 +67,7 @@ statsRouter.get("/", async (req, res, next) => {
     res.json({
       connectsSentToday,
       messagesSentToday,
+      inMailsSentToday,
       totalLeads,
       connectedLeads,
       replyRate,

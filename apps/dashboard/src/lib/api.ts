@@ -74,11 +74,12 @@ export interface ProxyCheapImportResult {
   skipped: Array<{ id: string; reason: string }>;
 }
 
-export type CapKey = "connection" | "message" | "profileView" | "searchPage";
+export type CapKey = "connection" | "message" | "inmail" | "profileView" | "searchPage";
 
 export const SYSTEM_CAPS: Record<CapKey, number> = {
   connection: 15,
   message: 40,
+  inmail: 10,
   profileView: 60,
   searchPage: 10,
 };
@@ -86,6 +87,7 @@ export const SYSTEM_CAPS: Record<CapKey, number> = {
 export const HARD_CEILING: Record<CapKey, number> = {
   connection: 50,
   message: 150,
+  inmail: 50,
   profileView: 250,
   searchPage: 40,
 };
@@ -93,6 +95,7 @@ export const HARD_CEILING: Record<CapKey, number> = {
 export const CAP_LABELS: Record<CapKey, string> = {
   connection: "Connections",
   message: "Messages",
+  inmail: "InMails",
   profileView: "Profile Views",
   searchPage: "Search Pages",
 };
@@ -103,7 +106,10 @@ export interface Account {
   status: "ACTIVE" | "PAUSED" | "RESTRICTED";
   warmUpPhase: "MANUAL" | "WEEK2" | "WEEK3" | "WEEK4" | "FULL";
   dailyCaps: Record<string, Record<string, number>>;
+  monthlyCaps: Record<string, number>;
   maxDailyCaps: Record<CapKey, number>;
+  salesNavigatorEnabled: boolean;
+  inMailMonthlyLimit: number;
   hasSession: boolean;
   sessionStatus: "ACTIVE" | "MISSING";
   cookiesConsentAt?: string | null;
@@ -116,7 +122,7 @@ export interface Campaign {
   id: string;
   name: string;
   accountId: string;
-  type: "CONNECT" | "MESSAGE" | "SCRAPE" | "CONTENT_SIGNAL";
+  type: "CONNECT" | "MESSAGE" | "INMAIL" | "SCRAPE" | "CONTENT_SIGNAL";
   status: "ACTIVE" | "PAUSED" | "COMPLETED";
   dailyLimit: number;
   connectionNoteTemplate?: string | null;
@@ -132,6 +138,7 @@ export interface Lead {
   lastName?: string | null;
   title?: string | null;
   company?: string | null;
+  source: "MANUAL" | "CSV" | "LINKEDIN_SEARCH" | "SALES_NAVIGATOR" | "CONTENT_SIGNAL";
   connectionStatus: "NONE" | "PENDING" | "CONNECTED" | "WITHDRAWN";
   blacklisted: boolean;
   blacklistReason?: string | null;
@@ -161,6 +168,7 @@ export interface Message {
   id: string;
   campaignId: string;
   sequenceOrder: number;
+  subjectTemplate?: string | null;
   bodyTemplate: string;
   variantGroup: string;
   delayDays: number;
@@ -215,9 +223,28 @@ export interface PostSignal {
   lead: Lead;
 }
 
+export interface SearchScrapeCampaignJob {
+  id?: string;
+  name: string;
+  state: "waiting" | "active" | "delayed" | "completed" | "failed" | string;
+  attemptsMade: number;
+  failedReason?: string | null;
+  timestamp: number;
+  processedOn?: number | null;
+  finishedOn?: number | null;
+  data: {
+    accountId?: string;
+    campaignId?: string;
+    searchUrl?: string;
+    source?: "LINKEDIN" | "SALES_NAVIGATOR";
+    maxPages?: number;
+  };
+}
+
 export interface Stats {
   connectsSentToday: number;
   messagesSentToday: number;
+  inMailsSentToday: number;
   totalLeads: number;
   connectedLeads: number;
   replyRate: number;
@@ -315,7 +342,13 @@ export const api = {
 
   accounts: {
     list: () => apiFetch<Account[]>("/accounts"),
-    create: (data: { email: string; timezone?: string; proxyId?: string }) =>
+    create: (data: {
+      email: string;
+      timezone?: string;
+      proxyId?: string;
+      salesNavigatorEnabled?: boolean;
+      inMailMonthlyLimit?: number;
+    }) =>
       apiFetch<Account>("/accounts", {
         method: "POST",
         body: JSON.stringify(data),
@@ -338,7 +371,13 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(caps),
       }),
-    update: (id: string, data: { email?: string; timezone?: string; proxyId?: string | null }) =>
+    update: (id: string, data: {
+      email?: string;
+      timezone?: string;
+      proxyId?: string | null;
+      salesNavigatorEnabled?: boolean;
+      inMailMonthlyLimit?: number;
+    }) =>
       apiFetch<Account>(`/accounts/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),
@@ -388,6 +427,7 @@ export const api = {
       type: string;
       dailyLimit?: number;
       connectionNoteTemplate?: string | null;
+      targetTimezone?: string | null;
     }) =>
       apiFetch<Campaign>("/campaigns", {
         method: "POST",
@@ -416,17 +456,24 @@ export const api = {
         lastName?: string;
         company?: string;
         title?: string;
+        source?: Lead["source"];
       }
     ) =>
       apiFetch<{ lead: Lead; campaignLeadId: string }>(`/campaigns/${campaignId}/leads`, {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    addSearchUrl: (campaignId: string, searchUrl: string) =>
-      apiFetch<{ queued: number }>(`/campaigns/${campaignId}/search-urls`, {
+    addSearchUrl: (
+      campaignId: string,
+      searchUrl: string,
+      source: "LINKEDIN" | "SALES_NAVIGATOR" = "LINKEDIN"
+    ) =>
+      apiFetch<{ queued: number; jobId?: string; searchUrl: string; source: "LINKEDIN" | "SALES_NAVIGATOR" }>(`/campaigns/${campaignId}/search-urls`, {
         method: "POST",
-        body: JSON.stringify({ searchUrl }),
+        body: JSON.stringify({ searchUrl, source }),
       }),
+    searchJobs: (id: string) =>
+      apiFetch<{ jobs: SearchScrapeCampaignJob[] }>(`/campaigns/${id}/search-jobs`),
     stats: (id: string) => apiFetch<CampaignStats>(`/campaigns/${id}/stats`),
     markReplied: (campaignId: string, leadId: string) =>
       apiFetch<{ ok: boolean }>(`/campaigns/${campaignId}/leads/${leadId}/mark-replied`, {
@@ -437,6 +484,7 @@ export const api = {
         campaignId: string,
         data: {
           sequenceOrder: number;
+          subjectTemplate?: string | null;
           bodyTemplate: string;
           variantGroup?: string;
           delayDays?: number;
@@ -449,7 +497,7 @@ export const api = {
       update: (
         campaignId: string,
         msgId: string,
-        data: Partial<Pick<Message, "bodyTemplate" | "variantGroup" | "delayDays">>
+        data: Partial<Pick<Message, "subjectTemplate" | "bodyTemplate" | "variantGroup" | "delayDays">>
       ) =>
         apiFetch<Message>(`/campaigns/${campaignId}/messages/${msgId}`, {
           method: "PUT",

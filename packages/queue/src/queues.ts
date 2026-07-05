@@ -28,6 +28,16 @@ export interface MessageJobData {
   company?: string | null;
 }
 
+export interface InMailJobData {
+  accountId: string;
+  leadId: string;
+  linkedinUrl: string;
+  subject: string;
+  messageBody: string;
+  campaignLeadId: string;
+  company?: string | null;
+}
+
 export interface SequenceDispatchJobData {
   /** Intentionally empty — the processor scans the DB for due leads */
   _tick: true;
@@ -49,6 +59,7 @@ export interface SearchScrapeJobData {
   searchUrl: string;
   campaignId?: string;
   maxPages?: number;
+  source?: "LINKEDIN" | "SALES_NAVIGATOR";
 }
 
 export interface ContentSignalJobData {
@@ -70,6 +81,11 @@ export const connectQueue = new Queue<ConnectJobData>("connect", {
 });
 
 export const messageQueue = new Queue<MessageJobData>("message", {
+  connection: getConnection(),
+  defaultJobOptions,
+});
+
+export const inMailQueue = new Queue<InMailJobData>("inMail", {
   connection: getConnection(),
   defaultJobOptions,
 });

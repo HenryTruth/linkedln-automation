@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { prisma } from "@linkedin-automation/db";
+import { prisma, LeadSource } from "@linkedin-automation/db";
 import {
   humanDelay,
   checkAuthorDedup,
@@ -214,6 +214,7 @@ export async function scrapeContentSearch(
           lastName: card.lastName,
           title: card.title,
           company: card.company,
+          source: LeadSource.CONTENT_SIGNAL,
           accountId,
         },
         update: {
@@ -221,6 +222,7 @@ export async function scrapeContentSearch(
           lastName: card.lastName ?? undefined,
           title: card.title ?? undefined,
           company: card.company ?? undefined,
+          source: LeadSource.CONTENT_SIGNAL,
         },
       });
 

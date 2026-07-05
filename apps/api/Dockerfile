@@ -43,7 +43,7 @@ RUN pnpm --filter @linkedin-automation/api build
 # ── Stage 2: runner ──────────────────────────────────────────────────────────
 # Use the Microsoft Playwright image — has all Chromium system dependencies
 # pre-installed and is based on Ubuntu Jammy.
-FROM mcr.microsoft.com/playwright:v1.44.0-jammy AS runner
+FROM mcr.microsoft.com/playwright:v1.61.0-jammy AS runner
 
 # Install Xvfb for virtual display (required when HEADLESS=false)
 RUN apt-get update && apt-get install -y --no-install-recommends \

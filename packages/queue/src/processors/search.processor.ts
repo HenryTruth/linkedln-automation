@@ -15,7 +15,7 @@ import type { SearchScrapeJobData } from "../queues.js";
 export async function searchScrapeProcessor(
   job: Job<SearchScrapeJobData>
 ): Promise<void> {
-  const { accountId, searchUrl, campaignId, maxPages = 5 } = job.data;
+  const { accountId, searchUrl, campaignId, maxPages = 5, source = "LINKEDIN" } = job.data;
 
   const [account, campaign] = await Promise.all([
     prisma.account.findUniqueOrThrow({
@@ -45,27 +45,29 @@ export async function searchScrapeProcessor(
     throw err;
   }
 
-  let pagesToScrape = 0;
-  for (let i = 0; i < maxPages; i++) {
-    try {
-      await claimDailyCap(accountId, "searchPage", campaignTimezone);
-      pagesToScrape++;
-    } catch (err) {
-      if (i === 0) throw err;
-      break;
-    }
-  }
-  if (pagesToScrape === 0) throw new DailyCapExceededError(accountId, "searchPage");
-
   const worker = new BrowserWorker(accountId);
   try {
     await worker.launch();
     const page = await worker.getPage();
+
+    let pagesToScrape = 0;
+    for (let i = 0; i < maxPages; i++) {
+      try {
+        await claimDailyCap(accountId, "searchPage", campaignTimezone);
+        pagesToScrape++;
+      } catch (err) {
+        if (i === 0) throw err;
+        break;
+      }
+    }
+    if (pagesToScrape === 0) throw new DailyCapExceededError(accountId, "searchPage");
+
     const { urls, pagesScraped } = await scrapeSearch(
       page,
       searchUrl,
       accountId,
-      pagesToScrape
+      pagesToScrape,
+      source
     );
 
     await prisma.activityLog.create({
@@ -73,7 +75,7 @@ export async function searchScrapeProcessor(
         accountId,
         actionType: "searchScrape",
         targetUrl: searchUrl,
-        result: `scraped ${urls.length} leads across ${pagesScraped} pages`,
+        result: `scraped ${urls.length} ${source.toLowerCase()} leads across ${pagesScraped} pages`,
       },
     });
 

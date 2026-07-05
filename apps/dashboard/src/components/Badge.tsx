@@ -20,6 +20,7 @@ const colors: Record<string, string> = {
   // Campaign type
   CONNECT:        "bg-blue-500/15 text-blue-400 ring-blue-500/30",
   MESSAGE:        "bg-violet-500/15 text-violet-400 ring-violet-500/30",
+  INMAIL:         "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
   SCRAPE:         "bg-orange-500/15 text-orange-400 ring-orange-500/30",
   CONTENT_SIGNAL: "bg-teal-500/15 text-teal-400 ring-teal-500/30",
   // Warm-up phase
@@ -31,6 +32,7 @@ const colors: Record<string, string> = {
   // Activity types (lowercase from DB)
   connect:            "bg-blue-500/15 text-blue-400 ring-blue-500/30",
   message:            "bg-violet-500/15 text-violet-400 ring-violet-500/30",
+  inmail:             "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
   scrape:             "bg-orange-500/15 text-orange-400 ring-orange-500/30",
   withdraw:           "bg-red-500/15 text-red-400 ring-red-500/30",
   success:            "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30",

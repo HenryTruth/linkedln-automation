@@ -3,6 +3,7 @@ import { prisma, AccountStatus } from "@linkedin-automation/db";
 import { getConnection } from "./redis.js";
 import { connectProcessor } from "./processors/connect.processor.js";
 import { messageProcessor } from "./processors/message.processor.js";
+import { inMailProcessor } from "./processors/inmail.processor.js";
 import { scrapeProcessor } from "./processors/scrape.processor.js";
 import { searchScrapeProcessor } from "./processors/search.processor.js";
 import { withdrawProcessor } from "./processors/withdraw.processor.js";
@@ -50,6 +51,7 @@ export function startWorkers(): void {
   // Concurrency=1 per queue: one browser session at a time per worker process
   attachCampaignLeadJobState(new Worker("connect", connectProcessor, { connection, concurrency: 1 }));
   attachCampaignLeadJobState(new Worker("message", messageProcessor, { connection, concurrency: 1 }));
+  attachCampaignLeadJobState(new Worker("inMail", inMailProcessor, { connection, concurrency: 1 }));
   attachCampaignLeadJobState(new Worker("scrape", scrapeProcessor, { connection, concurrency: 1 }));
   new Worker("searchScrape", searchScrapeProcessor, { connection, concurrency: 1 });
   new Worker("withdraw", withdrawProcessor, { connection, concurrency: 1 });

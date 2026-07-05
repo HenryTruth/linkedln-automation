@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/Skeleton";
 const BASE_CAPS: Record<string, number> = {
   connection: 15,
   message: 40,
+  inmail: 10,
   profileView: 60,
   searchPage: 10,
 };
@@ -16,6 +17,7 @@ const BASE_CAPS: Record<string, number> = {
 const CAP_LABELS: Record<string, string> = {
   connection: "Connects",
   message: "Messages",
+  inmail: "InMails",
   profileView: "Profile Views",
   searchPage: "Search Pages",
 };

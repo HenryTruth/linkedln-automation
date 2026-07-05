@@ -70,7 +70,15 @@ vi.mock("@linkedin-automation/db", () => ({
   CampaignType: {
     CONNECT: "CONNECT",
     MESSAGE: "MESSAGE",
+    INMAIL: "INMAIL",
     SCRAPE: "SCRAPE",
+    CONTENT_SIGNAL: "CONTENT_SIGNAL",
+  },
+  LeadSource: {
+    MANUAL: "MANUAL",
+    CSV: "CSV",
+    LINKEDIN_SEARCH: "LINKEDIN_SEARCH",
+    SALES_NAVIGATOR: "SALES_NAVIGATOR",
     CONTENT_SIGNAL: "CONTENT_SIGNAL",
   },
   ConnectionStatus: {

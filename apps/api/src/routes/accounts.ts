@@ -37,6 +37,8 @@ const CreateAccountSchema = z.object({
   proxyId: z.string().optional(),
   timezone: z.string().default("America/New_York"),
   userAgent: z.string().optional(),
+  salesNavigatorEnabled: z.boolean().default(false),
+  inMailMonthlyLimit: z.number().int().min(1).max(500).default(50),
 });
 
 const UpdateAccountSchema = z.object({
@@ -46,6 +48,8 @@ const UpdateAccountSchema = z.object({
   userAgent: z.string().nullable().optional(),
   viewportWidth: z.number().int().min(320).max(3840).optional(),
   viewportHeight: z.number().int().min(320).max(2160).optional(),
+  salesNavigatorEnabled: z.boolean().optional(),
+  inMailMonthlyLimit: z.number().int().min(1).max(500).optional(),
   warmUpPhase: z.nativeEnum(WarmUpPhase).optional(),
   status: z.nativeEnum(AccountStatus).optional(),
 });
@@ -236,6 +240,7 @@ accountsRouter.put("/:id/caps", async (req, res, next) => {
     const schema = z.object({
       connection:  z.number().int().min(1).max(HARD_CEILING.connection).optional(),
       message:     z.number().int().min(1).max(HARD_CEILING.message).optional(),
+      inmail:      z.number().int().min(1).max(HARD_CEILING.inmail).optional(),
       profileView: z.number().int().min(1).max(HARD_CEILING.profileView).optional(),
       searchPage:  z.number().int().min(1).max(HARD_CEILING.searchPage).optional(),
     });

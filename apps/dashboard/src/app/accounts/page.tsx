@@ -15,7 +15,7 @@ import {
 import { Badge } from "@/components/Badge";
 import { HealthScore } from "@/components/HealthScore";
 
-const CAP_KEYS: CapKey[] = ["connection", "message", "profileView", "searchPage"];
+const CAP_KEYS: CapKey[] = ["connection", "message", "inmail", "profileView", "searchPage"];
 
 // ── Account-type presets ───────────────────────────────────────────────────
 // Numbers are calibrated against LinkedIn's known enforcement thresholds.
@@ -37,7 +37,7 @@ const CAP_PRESETS: CapPreset[] = [
     id: "new",
     label: "New account",
     badge: "< 6 months",
-    caps: { connection: 5, message: 10, profileView: 20, searchPage: 4 },
+    caps: { connection: 5, message: 10, inmail: 1, profileView: 20, searchPage: 4 },
     description:
       "LinkedIn places new accounts under the highest scrutiny. Even manual users can be flagged. Start slow — build trust before increasing volume.",
     caveats: [
@@ -50,7 +50,7 @@ const CAP_PRESETS: CapPreset[] = [
     id: "established",
     label: "Established",
     badge: "6 months – 2 years",
-    caps: { connection: 15, message: 40, profileView: 80, searchPage: 12 },
+    caps: { connection: 15, message: 40, inmail: 5, profileView: 80, searchPage: 12 },
     description:
       "Standard safe baseline for most free LinkedIn accounts with some history. Keeps weekly connection sends at ~90 — just under LinkedIn's 100/week guideline.",
     caveats: [
@@ -63,7 +63,7 @@ const CAP_PRESETS: CapPreset[] = [
     id: "veteran",
     label: "Veteran",
     badge: "2+ years",
-    caps: { connection: 20, message: 80, profileView: 150, searchPage: 20 },
+    caps: { connection: 20, message: 80, inmail: 8, profileView: 150, searchPage: 20 },
     description:
       "For accounts with a proven network history and consistent engagement. LinkedIn's algorithm is more lenient with aged accounts — but the 100/week connection guideline still applies.",
     caveats: [
@@ -76,13 +76,13 @@ const CAP_PRESETS: CapPreset[] = [
     id: "sales_nav",
     label: "Sales Navigator",
     badge: "Premium subscription",
-    caps: { connection: 25, message: 100, profileView: 200, searchPage: 30 },
+    caps: { connection: 25, message: 100, inmail: 10, profileView: 200, searchPage: 30 },
     description:
-      "Sales Navigator signals legitimate sales activity to LinkedIn's algorithm and removes the commercial-use limit on search and profile views. InMails (50/month) are a separate quota not tracked here.",
+      "Sales Navigator gives richer prospecting and InMail access. Vectra still keeps InMail on a separate daily cap and does not raise connection safety limits automatically.",
     caveats: [
       "~150 connection requests/week — SN accounts have a higher threshold (~150–200/week)",
       "Profile views and search pages are unrestricted by commercial-use limits on SN",
-      "InMail credits (50/month) are not affected by the message cap here — this tracks direct messages only",
+      "InMail credits are separate from direct messages and should stay below the account's available Sales Navigator credits",
     ],
   },
 ];
@@ -101,6 +101,11 @@ const CAP_FIELD_INFO: Record<
     weeklyNote: "First-degree connections only. No weekly hard cap, but volume triggers spam filters.",
     safeZone: 60,
     amberZone: 100,
+  },
+  inmail: {
+    weeklyNote: "Sales Navigator InMail credits are separate from direct messages.",
+    safeZone: 10,
+    amberZone: 25,
   },
   profileView: {
     weeklyNote: "Free accounts hit LinkedIn's commercial-use limit around 80–100/day. SN removes this limit.",
@@ -327,6 +332,8 @@ export default function AccountsPage() {
   const [editEmail, setEditEmail] = useState("");
   const [editTimezone, setEditTimezone] = useState("America/New_York");
   const [editProxyId, setEditProxyId] = useState("");
+  const [editSalesNavigatorEnabled, setEditSalesNavigatorEnabled] = useState(false);
+  const [editInMailMonthlyLimit, setEditInMailMonthlyLimit] = useState(50);
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Add account form
@@ -334,6 +341,8 @@ export default function AccountsPage() {
   const [newEmail, setNewEmail] = useState("");
   const [newTimezone, setNewTimezone] = useState("America/New_York");
   const [newProxyId, setNewProxyId] = useState("");
+  const [newSalesNavigatorEnabled, setNewSalesNavigatorEnabled] = useState(false);
+  const [newInMailMonthlyLimit, setNewInMailMonthlyLimit] = useState(50);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const selectedProxy = proxies.find((proxy) => proxy.id === newProxyId) ?? null;
@@ -442,9 +451,13 @@ export default function AccountsPage() {
         email: newEmail,
         timezone: newTimezone,
         proxyId: newProxyId || undefined,
+        salesNavigatorEnabled: newSalesNavigatorEnabled,
+        inMailMonthlyLimit: newInMailMonthlyLimit,
       });
       setNewEmail("");
       setNewProxyId("");
+      setNewSalesNavigatorEnabled(false);
+      setNewInMailMonthlyLimit(50);
       setShowForm(false);
       await reload();
     } catch (err) {
@@ -498,6 +511,8 @@ export default function AccountsPage() {
     setEditEmail(account.email);
     setEditTimezone(account.timezone);
     setEditProxyId(account.proxy?.id ?? "");
+    setEditSalesNavigatorEnabled(account.salesNavigatorEnabled);
+    setEditInMailMonthlyLimit(account.inMailMonthlyLimit);
     setShowEditFor(account.id);
   }
 
@@ -509,6 +524,8 @@ export default function AccountsPage() {
         email: editEmail,
         timezone: editTimezone,
         proxyId: editProxyId || null,
+        salesNavigatorEnabled: editSalesNavigatorEnabled,
+        inMailMonthlyLimit: editInMailMonthlyLimit,
       });
       setShowEditFor(null);
       await reload();
@@ -651,8 +668,35 @@ export default function AccountsPage() {
               Each LinkedIn account runs its own browser session with independent
               safety caps, warm-up state, proxy status, and checkpoint handling.
             </p>
-          </div>
-          <button
+	                  </div>
+	                  <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+	                    <label className="flex items-start gap-3 text-sm font-semibold text-slate-200">
+	                      <input
+	                        type="checkbox"
+	                        checked={editSalesNavigatorEnabled}
+	                        onChange={(e) => setEditSalesNavigatorEnabled(e.target.checked)}
+	                        className="mt-1"
+	                      />
+	                      <span>
+	                        Sales Navigator enabled
+	                        <span className="mt-1 block text-xs font-normal leading-5 text-slate-400">
+	                          Allows Sales Navigator search/list scraping and InMail campaigns for this account.
+	                        </span>
+	                      </span>
+	                    </label>
+	                    <label className="mt-3 block text-xs font-semibold text-slate-400">
+	                      Monthly InMail limit
+	                    </label>
+	                    <input
+	                      type="number"
+	                      min={1}
+	                      max={500}
+	                      value={editInMailMonthlyLimit}
+	                      onChange={(e) => setEditInMailMonthlyLimit(Number(e.target.value))}
+	                      className="field mt-1 w-full"
+	                    />
+	                  </div>
+	                  <button
             onClick={() => setShowForm((v) => !v)}
             className={showForm ? "btn-secondary" : "btn-primary"}
           >
@@ -747,6 +791,34 @@ export default function AccountsPage() {
                 stable residential proxy is assigned.
               </p>
             )}
+          </div>
+
+          <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+            <label className="flex items-start gap-3 text-sm font-semibold text-slate-200">
+              <input
+                type="checkbox"
+                checked={newSalesNavigatorEnabled}
+                onChange={(e) => setNewSalesNavigatorEnabled(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                Sales Navigator enabled
+                <span className="mt-1 block text-xs font-normal leading-5 text-slate-400">
+                  Required for Sales Navigator search/list scraping and InMail campaigns.
+                </span>
+              </span>
+            </label>
+            <label className="mt-3 block text-xs font-semibold text-slate-300">
+              Monthly InMail limit
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={newInMailMonthlyLimit}
+              onChange={(e) => setNewInMailMonthlyLimit(Number(e.target.value))}
+              className="field mt-1 w-full"
+            />
           </div>
 
           <button

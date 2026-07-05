@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { prisma, CampaignType, CampaignStatus, ConnectionStatus } from "@linkedin-automation/db";
+import { prisma, CampaignType, CampaignStatus, ConnectionStatus, LeadSource } from "@linkedin-automation/db";
 import {
   connectQueue,
+  inMailQueue,
   messageQueue,
   scrapeQueue,
   searchScrapeQueue,
@@ -14,11 +15,22 @@ export const campaignsRouter: IRouter = Router();
 
 const NOTE_MAX = 300;
 
+function isSalesNavigatorUrl(value: string): boolean {
+  const url = new URL(value);
+  return (
+    url.hostname.endsWith("linkedin.com") &&
+    (url.pathname.startsWith("/sales/search/people") ||
+      url.pathname.startsWith("/sales/lists/people") ||
+      url.pathname.startsWith("/sales/lead/"))
+  );
+}
+
 type CampaignReadyAccount = {
   id: string;
   status: string;
   cookiesEncrypted: string | null;
   proxyId: string | null;
+  salesNavigatorEnabled?: boolean;
 };
 
 function assertCampaignAccountReady(account: CampaignReadyAccount): string | null {
@@ -32,6 +44,14 @@ function assertCampaignAccountReady(account: CampaignReadyAccount): string | nul
     return "LinkedIn session required. Connect or refresh this account's LinkedIn session before starting a campaign.";
   }
   return null;
+}
+
+function isSalesNavigatorLeadUrl(value: string): boolean {
+  try {
+    return new URL(value).pathname.startsWith("/sales/lead/");
+  } catch {
+    return false;
+  }
 }
 
 const CreateCampaignSchema = z.object({
@@ -53,6 +73,7 @@ const UpdateCampaignSchema = z.object({
 
 const CreateMessageSchema = z.object({
   sequenceOrder: z.number().int().min(0),
+  subjectTemplate: z.string().min(1).max(200).nullable().optional(),
   bodyTemplate: z.string().min(1),
   variantGroup: z.string().default("A"),
   delayDays: z.number().int().min(0).default(3),
@@ -60,6 +81,7 @@ const CreateMessageSchema = z.object({
 
 const UpdateMessageSchema = z.object({
   sequenceOrder: z.number().int().min(0).optional(),
+  subjectTemplate: z.string().min(1).max(200).nullable().optional(),
   bodyTemplate: z.string().min(1).optional(),
   variantGroup: z.string().min(1).optional(),
   delayDays: z.number().int().min(0).optional(),
@@ -115,8 +137,9 @@ campaignsRouter.post("/:id/duplicate", async (req, res, next) => {
         dailyLimit: source.dailyLimit,
         messages: {
           create: source.messages.map((message) => ({
-            sequenceOrder: message.sequenceOrder,
-            bodyTemplate: message.bodyTemplate,
+                sequenceOrder: message.sequenceOrder,
+                subjectTemplate: message.subjectTemplate,
+                bodyTemplate: message.bodyTemplate,
             variantGroup: message.variantGroup,
             delayDays: message.delayDays,
           })),
@@ -295,6 +318,7 @@ campaignsRouter.delete("/:id/messages/:msgId", async (req, res, next) => {
 
 const AddLeadSchema = z.object({
   linkedinUrl: z.string().url(),
+  source: z.nativeEnum(LeadSource).optional(),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   company: z.string().optional(),
@@ -308,6 +332,9 @@ campaignsRouter.post("/:id/leads", async (req, res, next) => {
       where: { id: req.params.id, account: { userId: req.user.id } },
     });
 
+    const source =
+      data.source ?? (isSalesNavigatorLeadUrl(data.linkedinUrl) ? LeadSource.SALES_NAVIGATOR : LeadSource.MANUAL);
+
     const lead = await prisma.lead.upsert({
       where: {
         userId_linkedinUrl: {
@@ -315,7 +342,7 @@ campaignsRouter.post("/:id/leads", async (req, res, next) => {
           linkedinUrl: data.linkedinUrl,
         },
       },
-      create: { ...data, userId: req.user.id, accountId: campaign.accountId },
+      create: { ...data, source, userId: req.user.id, accountId: campaign.accountId },
       update: {},
     });
 
@@ -335,8 +362,24 @@ campaignsRouter.post("/:id/leads", async (req, res, next) => {
 
 campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
   try {
-    const schema = z.object({ searchUrl: z.string().url() });
-    const { searchUrl } = schema.parse(req.body);
+    const schema = z.object({
+      searchUrl: z.string().url(),
+      source: z.enum(["LINKEDIN", "SALES_NAVIGATOR"]).default("LINKEDIN"),
+    });
+    const { searchUrl, source } = schema.parse(req.body);
+
+    if (source === "SALES_NAVIGATOR" && !isSalesNavigatorUrl(searchUrl)) {
+      res.status(422).json({
+        error: "Sales Navigator source requires a linkedin.com/sales search, list, or lead URL.",
+      });
+      return;
+    }
+    if (source === "LINKEDIN" && isSalesNavigatorUrl(searchUrl)) {
+      res.status(422).json({
+        error: "This is a Sales Navigator URL. Select Sales Navigator as the source.",
+      });
+      return;
+    }
 
     const campaign = await prisma.campaign.findFirstOrThrow({
       where: { id: req.params.id, account: { userId: req.user.id } },
@@ -347,6 +390,7 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
             status: true,
             cookiesEncrypted: true,
             proxyId: true,
+            salesNavigatorEnabled: true,
           },
         },
       },
@@ -357,15 +401,67 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
       res.status(422).json({ error: readinessError });
       return;
     }
+    if (source === "SALES_NAVIGATOR" && !campaign.account.salesNavigatorEnabled) {
+      res.status(422).json({
+        error: "Enable Sales Navigator on this account before scraping Sales Navigator URLs.",
+      });
+      return;
+    }
 
     // Queue a search-scrape job to crawl results pages and discover profiles
-    await searchScrapeQueue.add("scrape-search", {
+    const job = await searchScrapeQueue.add("scrape-search", {
       accountId: campaign.accountId,
       searchUrl,
       campaignId: campaign.id,
+      source,
     });
 
-    res.status(201).json({ queued: 1, searchUrl });
+    res.status(201).json({ queued: 1, jobId: job.id, searchUrl, source });
+  } catch (err) {
+    next(err);
+  }
+});
+
+campaignsRouter.get("/:id/search-jobs", async (req, res, next) => {
+  try {
+    const campaign = await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
+      select: { id: true },
+    });
+
+    const jobs = await searchScrapeQueue.getJobs(
+      ["waiting", "active", "delayed", "completed", "failed"],
+      0,
+      24,
+      false
+    );
+
+    const scoped = await Promise.all(
+      jobs
+        .filter((job) => {
+          const data = job.data as { campaignId?: string };
+          return data.campaignId === campaign.id;
+        })
+        .map(async (job) => ({
+          id: job.id,
+          name: job.name,
+          state: await job.getState(),
+          attemptsMade: job.attemptsMade,
+          failedReason: job.failedReason ?? null,
+          timestamp: job.timestamp,
+          processedOn: job.processedOn ?? null,
+          finishedOn: job.finishedOn ?? null,
+          data: job.data,
+        }))
+    );
+
+    scoped.sort(
+      (a, b) =>
+        (b.finishedOn ?? b.processedOn ?? b.timestamp) -
+        (a.finishedOn ?? a.processedOn ?? a.timestamp)
+    );
+
+    res.json({ jobs: scoped });
   } catch (err) {
     next(err);
   }
@@ -384,6 +480,7 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
             status: true,
             cookiesEncrypted: true,
             proxyId: true,
+            salesNavigatorEnabled: true,
           },
         },
         messages: { orderBy: { sequenceOrder: "asc" } },
@@ -402,6 +499,15 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
       res.status(422).json({ error: readinessError });
       return;
     }
+    if (
+      fullCampaign.type === CampaignType.INMAIL &&
+      !fullCampaign.account.salesNavigatorEnabled
+    ) {
+      res.status(422).json({
+        error: "Enable Sales Navigator on this account before starting an InMail campaign.",
+      });
+      return;
+    }
 
     const batch = fullCampaign.leads.slice(0, fullCampaign.dailyLimit);
     const dispatched: string[] = [];
@@ -409,7 +515,10 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
     // Determine available variant groups from step-0 messages
     const step0Messages = fullCampaign.messages.filter((m) => m.sequenceOrder === 0);
     const variantGroups = [...new Set(step0Messages.map((m) => m.variantGroup))];
-    if (variantGroups.length === 0 && fullCampaign.type === CampaignType.MESSAGE) {
+    if (
+      variantGroups.length === 0 &&
+      (fullCampaign.type === CampaignType.MESSAGE || fullCampaign.type === CampaignType.INMAIL)
+    ) {
       res.status(422).json({ error: "No message templates defined for this campaign" });
       return;
     }
@@ -418,6 +527,17 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
       const lead = cl.lead;
 
       if (fullCampaign.type === CampaignType.CONNECT) {
+        if (isSalesNavigatorLeadUrl(lead.linkedinUrl)) {
+          await prisma.campaignLead.update({
+            where: { id: cl.id },
+            data: {
+              jobStatus: "SKIPPED",
+              lastJobError:
+                "Sales Navigator lead URLs cannot be used for connection requests. Add the public LinkedIn profile URL instead.",
+            },
+          });
+          continue;
+        }
         const note = fullCampaign.connectionNoteTemplate
           ? renderTemplate(fullCampaign.connectionNoteTemplate, {
               firstName: lead.firstName,
@@ -462,6 +582,17 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
         if (lead.connectionStatus !== ConnectionStatus.CONNECTED) {
           continue;
         }
+        if (isSalesNavigatorLeadUrl(lead.linkedinUrl)) {
+          await prisma.campaignLead.update({
+            where: { id: cl.id },
+            data: {
+              jobStatus: "SKIPPED",
+              lastJobError:
+                "Sales Navigator lead URLs cannot be used for first-degree messages. Add the public LinkedIn profile URL instead.",
+            },
+          });
+          continue;
+        }
 
         const messageBody = renderTemplate(template.bodyTemplate, {
           firstName: lead.firstName,
@@ -491,6 +622,53 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
             messageBody,
             campaignLeadId: cl.id,
             sequenceStep: 0,
+            company: lead.company,
+          },
+          { jobId }
+        );
+        await prisma.campaignLead.update({
+          where: { id: cl.id },
+          data: { jobStatus: "QUEUED", queuedJobId: jobId, lastJobError: null },
+        });
+      } else if (fullCampaign.type === CampaignType.INMAIL) {
+        const assignedVariant =
+          variantGroups[Math.floor(Math.random() * variantGroups.length)];
+
+        await prisma.campaignLead.update({
+          where: { id: cl.id },
+          data: { variantGroup: assignedVariant },
+        });
+
+        const template =
+          step0Messages.find((m) => m.variantGroup === assignedVariant) ??
+          step0Messages[0];
+
+        const messageBody = renderTemplate(template.bodyTemplate, {
+          firstName: lead.firstName,
+          lastName: lead.lastName,
+          company: lead.company,
+          title: lead.title,
+        });
+        const subject = renderTemplate(
+          template.subjectTemplate ?? "Hi {{firstName}}",
+          {
+            firstName: lead.firstName,
+            lastName: lead.lastName,
+            company: lead.company,
+            title: lead.title,
+          }
+        ).trim() || "Quick question";
+        const jobId = `campaign-${fullCampaign.id}-lead-${lead.id}-inmail`;
+
+        await inMailQueue.add(
+          "inmail",
+          {
+            accountId: fullCampaign.accountId,
+            leadId: lead.id,
+            linkedinUrl: lead.linkedinUrl,
+            subject,
+            messageBody,
+            campaignLeadId: cl.id,
             company: lead.company,
           },
           { jobId }

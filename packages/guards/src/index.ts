@@ -1,6 +1,6 @@
 export { encrypt, decrypt } from "./crypto.js";
 export { humanDelay, delays } from "./delay.js";
-export { checkDailyCap, incrementDailyCap, claimDailyCap, remainingDailyCap, SYSTEM_CAPS, HARD_CEILING } from "./caps.js";
+export { checkDailyCap, incrementDailyCap, claimDailyCap, checkMonthlyInMailCap, incrementMonthlyInMailCap, remainingDailyCap, SYSTEM_CAPS, HARD_CEILING } from "./caps.js";
 export type { ActionType } from "./caps.js";
 export { assertWarmUpAllowed, warmUpCap } from "./warmup.js";
 export { checkActionWindow, checkDuplicate, checkSessionErrorRate, pauseAccountForAnomaly } from "./anomaly.js";

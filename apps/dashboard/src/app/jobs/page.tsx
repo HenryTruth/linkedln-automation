@@ -33,6 +33,7 @@ function fmt(value: number | null | undefined) {
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<QueueJob[]>([]);
+  const [counts, setCounts] = useState<Record<JobState, number> | null>(null);
   const [state, setState] = useState<JobState>("active");
   const [queue, setQueue] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -50,6 +51,7 @@ export default function JobsPage() {
         limit: 50,
       });
       setJobs(page.jobs);
+      setCounts(page.counts ?? null);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -63,7 +65,7 @@ export default function JobsPage() {
     try {
       await api.jobs.clearFailed();
       setClearMsg("All failed jobs cleared.");
-      if (state === "failed") setJobs([]);
+      await load();
     } catch (err) {
       setClearMsg((err as Error).message);
     } finally {
@@ -107,20 +109,34 @@ export default function JobsPage() {
       </section>
 
       <section className="app-panel p-4">
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="text-xs font-semibold text-slate-300">
-            State
-            <select
-              value={state}
-              onChange={(e) => setState(e.target.value as JobState)}
-              className="field mt-1 w-full"
-            >
-              {states.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs font-semibold text-slate-300">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-300">State</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {states.map((s) => {
+                const active = state === s;
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setState(s)}
+                    className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                      active
+                        ? "border-white/20 bg-white/10 text-white"
+                        : "border-white/[0.07] bg-slate-900/70 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {s}
+                    {counts && (
+                      <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[11px] ${STATE_STYLES[s]}`}>
+                        {counts[s]}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <label className="text-xs font-semibold text-slate-300 lg:w-64">
             Queue
             <select
               value={queue}
@@ -157,7 +173,7 @@ export default function JobsPage() {
               <tr>
                 <td className="px-6 py-10 text-center text-sm text-slate-400" colSpan={7}>
                   {state === "active"
-                    ? "No jobs running right now — the queue is idle."
+                    ? "No jobs running right now — jobs only appear here for the moments they're being processed. Check completed or failed for history."
                     : state === "failed"
                     ? "No failed jobs. Everything is healthy."
                     : `No ${state} jobs.`}

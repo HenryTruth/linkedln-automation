@@ -27,11 +27,11 @@ const queues = {
   syncStatus: syncStatusQueue,
 };
 
+const jobStates = ["active", "waiting", "delayed", "completed", "failed"] as const;
+
 const JobQuerySchema = z.object({
   queue: z.enum(Object.keys(queues) as [keyof typeof queues, ...(keyof typeof queues)[]]).optional(),
-  state: z
-    .enum(["failed", "waiting", "active", "delayed", "completed"])
-    .default("failed"),
+  state: z.enum(jobStates).default("failed"),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
@@ -84,7 +84,14 @@ jobsRouter.get("/", async (req, res, next) => {
       .sort((a, b) => (b.finishedOn ?? b.processedOn ?? b.timestamp) - (a.finishedOn ?? a.processedOn ?? a.timestamp))
       .slice(0, limit);
 
-    res.json({ jobs, state, queue: queue ?? "all", limit });
+    const countsPerQueue = await Promise.all(
+      queueEntries.map(([, bullQueue]) => bullQueue.getJobCounts(...jobStates))
+    );
+    const counts = Object.fromEntries(
+      jobStates.map((s) => [s, countsPerQueue.reduce((sum, c) => sum + (c[s] ?? 0), 0)])
+    );
+
+    res.json({ jobs, state, queue: queue ?? "all", limit, counts });
   } catch (err) {
     next(err);
   }

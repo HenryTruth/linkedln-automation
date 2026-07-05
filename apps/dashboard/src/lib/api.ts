@@ -316,6 +316,7 @@ export interface JobsPage {
   state: JobState;
   queue: string;
   limit: number;
+  counts: Record<JobState, number>;
 }
 
 // ─── API functions ─────────────────────────────────────────────────────────────

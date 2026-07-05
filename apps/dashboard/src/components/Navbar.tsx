@@ -20,7 +20,7 @@ const links = [
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
 
   async function handleLogout() {
     await logout();
@@ -77,7 +77,7 @@ export function Navbar() {
                 </button>
               </div>
             </div>
-          ) : (
+          ) : loading ? null : (
             <div className="flex items-center gap-2">
               <Link
                 href="/login"

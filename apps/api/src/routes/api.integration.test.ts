@@ -42,16 +42,30 @@ const makePrismaMock = () => ({
 
 const prisma = makePrismaMock();
 
+const emptyJobCounts = {
+  active: 0,
+  waiting: 0,
+  delayed: 0,
+  completed: 0,
+  failed: 0,
+};
+
+const makeQueueMock = () => ({
+  add: vi.fn(),
+  getJobs: vi.fn(),
+  getJobCounts: vi.fn().mockResolvedValue(emptyJobCounts),
+});
+
 const queues = {
-  connectQueue: { add: vi.fn(), getJobs: vi.fn() },
-  messageQueue: { add: vi.fn(), getJobs: vi.fn() },
-  scrapeQueue: { add: vi.fn(), getJobs: vi.fn() },
-  searchScrapeQueue: { add: vi.fn(), getJobs: vi.fn() },
-  withdrawQueue: { add: vi.fn(), getJobs: vi.fn() },
-  sequenceDispatchQueue: { add: vi.fn(), getJobs: vi.fn() },
-  contentSignalQueue: { add: vi.fn(), getJobs: vi.fn() },
-  anomalyCheckQueue: { add: vi.fn(), getJobs: vi.fn() },
-  syncStatusQueue: { add: vi.fn(), getJobs: vi.fn() },
+  connectQueue: makeQueueMock(),
+  messageQueue: makeQueueMock(),
+  scrapeQueue: makeQueueMock(),
+  searchScrapeQueue: makeQueueMock(),
+  withdrawQueue: makeQueueMock(),
+  sequenceDispatchQueue: makeQueueMock(),
+  contentSignalQueue: makeQueueMock(),
+  anomalyCheckQueue: makeQueueMock(),
+  syncStatusQueue: makeQueueMock(),
   scheduleWithdrawalForAccount: vi.fn(),
 };
 
@@ -408,9 +422,15 @@ describe("API route integration", () => {
       },
     ]);
 
+    queues.connectQueue.getJobCounts.mockResolvedValue({
+      ...emptyJobCounts,
+      failed: 1,
+    });
+
     const res = await request(app, "/jobs?queue=connect&state=failed");
 
     expect(res.status).toBe(200);
+    expect(res.body.counts).toMatchObject({ failed: 1 });
     expect(res.body.jobs).toHaveLength(1);
     expect(res.body.jobs[0]).toMatchObject({
       id: "job_1",

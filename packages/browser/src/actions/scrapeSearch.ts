@@ -157,6 +157,19 @@ export async function scrapeSearch(
       );
     }
 
+    // Results render client-side well after domcontentloaded — wait for an
+    // actual result link before extracting, or page 1 reads as empty.
+    const resultsSelector =
+      source === "SALES_NAVIGATOR"
+        ? "a[href*='/sales/lead/'], .artdeco-list__item a[href*='/in/']"
+        : "main a[href*='/in/'], .reusable-search__result-container, div[data-chameleon-result-urn]";
+    await page
+      .waitForSelector(resultsSelector, { timeout: 20_000 })
+      .catch(() => {
+        // Genuinely empty result pages exist — extractResultCards below
+        // returns [] and the caller records the page with an artifact.
+      });
+
     const leads = await extractResultCards(page, source);
 
     if (leads.length === 0) break; // No results — past the last page

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api, type CampaignDetail, type CampaignLeadJobStatus, type CampaignStats, type Lead, type SearchScrapeCampaignJob } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { SequenceBuilder } from "@/components/SequenceBuilder";
+import { SequenceGraphBuilder, STEP_TYPE_LABELS } from "@/components/SequenceGraphBuilder";
 import { ContentSignalPanel } from "@/components/ContentSignalPanel";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
 import { toast } from "sonner";
@@ -489,6 +490,8 @@ export default function CampaignDetailPage() {
   const isScrape = campaign.type === "SCRAPE";
   const isContentSignal = campaign.type === "CONTENT_SIGNAL";
   const isConnect = campaign.type === "CONNECT";
+  const isSequence = campaign.type === "SEQUENCE";
+  const stepById = new Map((campaign.steps ?? []).map((s) => [s.id, s]));
 
   return (
     <div className="space-y-8">
@@ -779,6 +782,29 @@ export default function CampaignDetailPage() {
             campaignId={id}
             initialMessages={campaign.messages}
             showSubject={isInMail}
+          />
+        </section>
+      )}
+
+      {/* Sequence graph builder */}
+      {isSequence && (
+        <section>
+          <div className="mb-4">
+            <p className="page-kicker">Sequence</p>
+            <h2 className="mt-1 text-xl font-semibold text-white">
+              Sequence Graph
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
+              Drag steps from the palette onto the canvas, connect them, and
+              configure each one. Connection request steps have two outputs —
+              wire up what happens when a request is accepted vs. times out.
+            </p>
+          </div>
+          <SequenceGraphBuilder
+            campaignId={id}
+            campaignStatus={campaign.status}
+            initialSteps={campaign.steps ?? []}
+            initialEdges={campaign.edges ?? []}
           />
         </section>
       )}
@@ -1286,7 +1312,25 @@ export default function CampaignDetailPage() {
                           )}
                       </td>
                       <td className="table-cell text-slate-400">
-                        Step {cl.stage}
+                        {isSequence ? (
+                          cl.currentStepId && stepById.get(cl.currentStepId) ? (
+                            <div>
+                              <p className="font-medium text-slate-300">
+                                {STEP_TYPE_LABELS[stepById.get(cl.currentStepId)!.type]}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                since{" "}
+                                {cl.stepEnteredAt
+                                  ? new Date(cl.stepEnteredAt).toLocaleDateString()
+                                  : "-"}
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="italic text-slate-500">graph complete</span>
+                          )
+                        ) : (
+                          `Step ${cl.stage}`
+                        )}
                       </td>
                       <td className="table-cell">
                         {cl.repliedAt ? (

@@ -213,11 +213,15 @@ campaignsRouter.delete("/:id", async (req, res, next) => {
       where: { id, account: { userId: req.user.id } },
       select: { id: true },
     });
-    // Delete children in FK-safe order — no cascade configured in schema
+    // Delete children in FK-safe order — no cascade configured in schema.
+    // campaignLead first: it FKs into SequenceStep via currentStepId, so it
+    // must clear before SequenceEdge/SequenceStep can be removed.
     await prisma.campaignLead.deleteMany({ where: { campaignId: id } });
     await prisma.postSignal.deleteMany({ where: { campaignId: id } });
     await prisma.contentSignalConfig.deleteMany({ where: { campaignId: id } });
     await prisma.message.deleteMany({ where: { campaignId: id } });
+    await prisma.sequenceEdge.deleteMany({ where: { campaignId: id } });
+    await prisma.sequenceStep.deleteMany({ where: { campaignId: id } });
     await prisma.campaign.delete({ where: { id } });
     res.status(204).send();
   } catch (err) {

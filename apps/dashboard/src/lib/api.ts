@@ -122,7 +122,7 @@ export interface Campaign {
   id: string;
   name: string;
   accountId: string;
-  type: "CONNECT" | "MESSAGE" | "INMAIL" | "SCRAPE" | "CONTENT_SIGNAL";
+  type: "CONNECT" | "MESSAGE" | "INMAIL" | "SCRAPE" | "CONTENT_SIGNAL" | "SEQUENCE";
   status: "ACTIVE" | "PAUSED" | "COMPLETED";
   dailyLimit: number;
   connectionNoteTemplate?: string | null;
@@ -161,7 +161,45 @@ export interface CampaignLead {
   lastJobError?: string | null;
   postSignalId?: string | null;
   postSignal?: PostSignal | null;
+  currentStepId?: string | null;
+  stepEnteredAt?: string | null;
+  branchAwaitingSince?: string | null;
   lead: Lead;
+}
+
+export type StepType =
+  | "SCRAPE_SEARCH"
+  | "VISIT_PROFILE"
+  | "LIKE_POST"
+  | "WAIT"
+  | "SEND_CONNECTION_REQUEST"
+  | "SEND_MESSAGE"
+  | "SEND_INMAIL"
+  | "WITHDRAW_CONNECTION";
+
+export type EdgeCondition = "DEFAULT" | "CONNECTION_ACCEPTED" | "CONNECTION_TIMEOUT";
+
+export interface SequenceStep {
+  id: string;
+  campaignId: string;
+  type: StepType;
+  config: Record<string, unknown>;
+  positionX: number;
+  positionY: number;
+  isEntry: boolean;
+}
+
+export interface SequenceEdge {
+  id?: string;
+  campaignId?: string;
+  fromStepId: string;
+  toStepId: string;
+  condition: EdgeCondition;
+}
+
+export interface SequenceGraph {
+  steps: SequenceStep[];
+  edges: SequenceEdge[];
 }
 
 export interface Message {
@@ -178,6 +216,8 @@ export interface CampaignDetail extends Campaign {
   leads: CampaignLead[];
   messages: Message[];
   contentSignalConfig?: ContentSignalConfig | null;
+  steps?: SequenceStep[];
+  edges?: SequenceEdge[];
 }
 
 export interface Checkpoint {
@@ -521,6 +561,18 @@ export const api = {
         apiFetch<{ ok: boolean }>(`/campaigns/${campaignId}/messages/reorder`, {
           method: "PUT",
           body: JSON.stringify({ ids }),
+        }),
+    },
+  },
+
+  sequences: {
+    graph: {
+      get: (campaignId: string) =>
+        apiFetch<SequenceGraph>(`/campaigns/${campaignId}/graph`),
+      save: (campaignId: string, data: SequenceGraph) =>
+        apiFetch<SequenceGraph>(`/campaigns/${campaignId}/graph`, {
+          method: "PUT",
+          body: JSON.stringify(data),
         }),
     },
   },

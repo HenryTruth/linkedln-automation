@@ -26,6 +26,7 @@ const campaignTypes = [
   ["INMAIL", "Sales Navigator InMail"],
   ["SCRAPE", "Profile scraping"],
   ["CONTENT_SIGNAL", "Post keyword sourcing"],
+  ["SEQUENCE", "Visual sequence builder"],
 ];
 
 export default function NewCampaignPage() {
@@ -187,6 +188,15 @@ export default function NewCampaignPage() {
               <p className="mt-2 text-xs text-slate-400">
                 Active hours (8am–7pm) and weekend throttle use this timezone. Set it to match where your prospects are located.
               </p>
+            </div>
+          )}
+
+          {form.type === "SEQUENCE" && (
+            <div className="rounded-2xl border border-teal-500/30 bg-teal-500/10 p-4 text-sm leading-6 text-teal-200">
+              Sequence campaigns are built with a drag-and-drop graph — visit
+              profile, like a post, wait, connect, branch on accepted/timed
+              out, and more. You&apos;ll design the graph on the next screen
+              after creating the campaign.
             </div>
           )}
 

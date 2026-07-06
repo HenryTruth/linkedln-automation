@@ -106,6 +106,13 @@ function searchJobDetail(job: SearchScrapeCampaignJob) {
     return "The job is delayed, usually because it is retrying after a temporary failure.";
   }
   if (job.state === "completed") {
+    const scraped = job.returnvalue?.scraped;
+    if (typeof scraped === "number") {
+      if (scraped === 0) {
+        return "Scrape finished but found 0 profiles. LinkedIn may have served an unrecognized page layout or an expired session — check the Activity page for the landing URL and screenshot artifact.";
+      }
+      return `Scrape finished — discovered ${scraped} profile${scraped === 1 ? "" : "s"} across ${job.returnvalue?.pagesScraped ?? "?"} page${job.returnvalue?.pagesScraped === 1 ? "" : "s"}. Refresh to see them in the table below.`;
+    }
     return "Scrape finished. Newly discovered profiles should appear in the table below after refresh.";
   }
   if (job.state === "failed") {

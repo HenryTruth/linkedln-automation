@@ -12,9 +12,15 @@ import {
 import { BrowserWorker, scrapeSearch } from "@linkedin-automation/browser";
 import type { SearchScrapeJobData } from "../queues.js";
 
+export interface SearchScrapeResult {
+  scraped: number;
+  pagesScraped: number;
+  lastUrl: string;
+}
+
 export async function searchScrapeProcessor(
   job: Job<SearchScrapeJobData>
-): Promise<void> {
+): Promise<SearchScrapeResult> {
   const { accountId, searchUrl, campaignId, maxPages = 5, source = "LINKEDIN" } = job.data;
 
   const [account, campaign] = await Promise.all([
@@ -62,7 +68,7 @@ export async function searchScrapeProcessor(
     }
     if (pagesToScrape === 0) throw new DailyCapExceededError(accountId, "searchPage");
 
-    const { urls, pagesScraped } = await scrapeSearch(
+    const { urls, pagesScraped, lastUrl } = await scrapeSearch(
       page,
       searchUrl,
       accountId,
@@ -70,12 +76,22 @@ export async function searchScrapeProcessor(
       source
     );
 
+    // A "successful" scrape with zero results usually means LinkedIn served a
+    // layout our selectors don't recognize — keep a screenshot for diagnosis.
+    let emptyNote = "";
+    if (urls.length === 0) {
+      const artifact = await worker.captureFailureArtifacts(
+        `search-empty-${job.id ?? "unknown"}`
+      );
+      emptyNote = `; landed on ${lastUrl}${artifact ? `; artifact: ${artifact}` : ""}`;
+    }
+
     await prisma.activityLog.create({
       data: {
         accountId,
         actionType: "searchScrape",
         targetUrl: searchUrl,
-        result: `scraped ${urls.length} ${source.toLowerCase()} leads across ${pagesScraped} pages`,
+        result: `scraped ${urls.length} ${source.toLowerCase()} leads across ${pagesScraped} pages${emptyNote}`,
       },
     });
 
@@ -99,6 +115,8 @@ export async function searchScrapeProcessor(
         });
       }
     }
+
+    return { scraped: urls.length, pagesScraped, lastUrl };
   } catch (err) {
     const artifact = await worker.captureFailureArtifacts(`search-${job.id ?? "unknown"}`);
     if (artifact) {

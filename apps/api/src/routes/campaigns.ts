@@ -452,6 +452,7 @@ campaignsRouter.get("/:id/search-jobs", async (req, res, next) => {
           processedOn: job.processedOn ?? null,
           finishedOn: job.finishedOn ?? null,
           data: job.data,
+          returnvalue: job.returnvalue ?? null,
         }))
     );
 

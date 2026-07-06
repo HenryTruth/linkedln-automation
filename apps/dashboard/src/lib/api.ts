@@ -239,6 +239,11 @@ export interface SearchScrapeCampaignJob {
     source?: "LINKEDIN" | "SALES_NAVIGATOR";
     maxPages?: number;
   };
+  returnvalue?: {
+    scraped?: number;
+    pagesScraped?: number;
+    lastUrl?: string;
+  } | null;
 }
 
 export interface Stats {

@@ -41,24 +41,37 @@ async function extractResultCards(
 
     // LinkedIn periodically ships search results with obfuscated class names.
     // Fall back to finding profile links inside the main results area and
-    // treating each enclosing list item as a result card.
+    // treating each enclosing list item as a result card. Result rows are
+    // <div role="listitem"> in the current markup, not <li>.
     if (cards.length === 0 && searchSource === "LINKEDIN") {
       const root = document.querySelector("main") ?? document;
       const items = new Set<Element>();
       for (const a of Array.from(root.querySelectorAll("a[href*='/in/']"))) {
-        const item = a.closest("li");
-        if (item) items.add(item);
+        items.add(a.closest("li, [role='listitem']") ?? a);
       }
       cards = Array.from(items);
     }
 
+    const directText = (el: Element) =>
+      Array.from(el.childNodes)
+        .filter((n) => n.nodeType === Node.TEXT_NODE)
+        .map((n) => n.textContent?.trim() ?? "")
+        .filter(Boolean)
+        .join(" ");
+
     return cards
       .map((card) => {
-        const anchor = card.querySelector(
+        const anchorSelector =
           searchSource === "SALES_NAVIGATOR"
             ? "a[href*='/sales/lead/'], a[href*='/in/']"
-            : "a[href*='/in/']"
-        ) as HTMLAnchorElement | null;
+            : "a[href*='/in/']";
+        const anchors = card.matches(anchorSelector)
+          ? [card as HTMLAnchorElement]
+          : (Array.from(card.querySelectorAll(anchorSelector)) as HTMLAnchorElement[]);
+
+        // A card usually has several profile links (avatar + name); the one
+        // carrying the person's name as direct text is the name link.
+        const anchor = anchors.find((a) => directText(a)) ?? anchors[0] ?? null;
 
         if (!anchor) return null;
 
@@ -83,10 +96,11 @@ async function extractResultCards(
           card
             .querySelector("[data-anonymize='person-name']")
             ?.textContent?.trim() ??
-          anchor.querySelector("span[aria-hidden='true']")?.textContent?.trim() ??
-          anchor.textContent?.trim().replace(/\s+/g, " ") ??
-          card.querySelector(".actor-name")?.textContent?.trim() ??
-          null;
+          (directText(anchor) ||
+            anchor.querySelector("span[aria-hidden='true']")?.textContent?.trim() ||
+            anchor.textContent?.trim().replace(/\s+/g, " ") ||
+            card.querySelector(".actor-name")?.textContent?.trim() ||
+            null);
 
         const [firstName = null, ...rest] = fullName?.split(" ") ?? [];
         const lastName = rest.join(" ") || null;

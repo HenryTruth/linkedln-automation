@@ -840,6 +840,17 @@ export default function CampaignDetailPage() {
                   connections, but the account must have Sales Navigator InMail
                   access.
                 </>
+              ) : isSequence ? (
+                <>
+                  Add leads the same way as any other campaign — manually,
+                  via CSV, or from a search URL. They don&apos;t need to be
+                  pre-connected. Each lead enters the graph at its entry step
+                  the next time you click{" "}
+                  <span className="font-semibold text-slate-200">
+                    Start Campaign
+                  </span>
+                  .
+                </>
               ) : (
                 <>
                   Connected contacts to message. Only people who have{" "}
@@ -1243,6 +1254,8 @@ export default function CampaignDetailPage() {
                       ? "No profiles yet - add a profile URL or a search URL above."
                       : campaign.type === "CONNECT"
                       ? 'No leads yet - add people you want to connect with.'
+                      : isSequence
+                      ? "No leads yet - add people to run through the sequence above."
                       : 'No leads yet - add connected contacts to message.'}
                   </td>
                 </tr>

@@ -38,7 +38,7 @@ type StepNodeData = {
 type StepFlowNode = Node<StepNodeData, "step">;
 
 const STEP_META: Record<StepType, { label: string; accent: string }> = {
-  SCRAPE_SEARCH: { label: "Scrape Search", accent: "border-violet-500/50 bg-violet-500/10 text-violet-200" },
+  SCRAPE_SEARCH: { label: "Refresh Profile Data", accent: "border-violet-500/50 bg-violet-500/10 text-violet-200" },
   VISIT_PROFILE: { label: "Visit Profile", accent: "border-blue-500/50 bg-blue-500/10 text-blue-200" },
   LIKE_POST: { label: "Like Post", accent: "border-pink-500/50 bg-pink-500/10 text-pink-200" },
   WAIT: { label: "Wait", accent: "border-slate-500/50 bg-slate-500/10 text-slate-200" },
@@ -93,13 +93,22 @@ function StepNodeComponent({ data, selected }: NodeProps<StepFlowNode>) {
 
   return (
     <div
-      className={`min-w-[190px] rounded-2xl border-2 bg-slate-900 px-3 py-2.5 shadow-lg transition ${meta.accent} ${
+      className={`relative min-w-[190px] rounded-2xl border-2 bg-slate-900 px-3 py-2.5 shadow-lg transition ${meta.accent} ${
         selected ? "ring-2 ring-white/50" : ""
       }`}
     >
+      {/* Incoming connections accepted from the left or from above — lets the
+          graph be laid out either left-to-right or top-to-bottom. */}
       <Handle
         type="target"
         position={Position.Left}
+        id="target-left"
+        className="!h-2.5 !w-2.5 !border-white/30 !bg-slate-400"
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="target-top"
         className="!h-2.5 !w-2.5 !border-white/30 !bg-slate-400"
       />
 
@@ -134,14 +143,37 @@ function StepNodeComponent({ data, selected }: NodeProps<StepFlowNode>) {
               className="!h-2.5 !w-2.5 !border-white/30 !bg-amber-400"
             />
           </div>
+          {/* Same two outputs, mirrored onto the bottom edge for vertical layouts. */}
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="accepted-bottom"
+            style={{ left: "35%" }}
+            className="!h-2.5 !w-2.5 !border-white/30 !bg-emerald-400"
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="timeout-bottom"
+            style={{ left: "65%" }}
+            className="!h-2.5 !w-2.5 !border-white/30 !bg-amber-400"
+          />
         </div>
       ) : (
-        <Handle
-          type="source"
-          position={Position.Right}
-          id="default"
-          className="!h-2.5 !w-2.5 !border-white/30 !bg-slate-400"
-        />
+        <>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="default"
+            className="!h-2.5 !w-2.5 !border-white/30 !bg-slate-400"
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="default-bottom"
+            className="!h-2.5 !w-2.5 !border-white/30 !bg-slate-400"
+          />
+        </>
       )}
     </div>
   );
@@ -150,9 +182,16 @@ function StepNodeComponent({ data, selected }: NodeProps<StepFlowNode>) {
 const nodeTypes: NodeTypes = { step: StepNodeComponent };
 
 function conditionForHandle(handle: string | null | undefined): EdgeCondition {
-  if (handle === "accepted") return "CONNECTION_ACCEPTED";
-  if (handle === "timeout") return "CONNECTION_TIMEOUT";
+  if (handle === "accepted" || handle === "accepted-bottom") return "CONNECTION_ACCEPTED";
+  if (handle === "timeout" || handle === "timeout-bottom") return "CONNECTION_TIMEOUT";
   return "DEFAULT";
+}
+
+function edgeLabelForHandle(handle: string | null | undefined): string | undefined {
+  const condition = conditionForHandle(handle);
+  if (condition === "CONNECTION_ACCEPTED") return "Accepted";
+  if (condition === "CONNECTION_TIMEOUT") return "Timed out";
+  return undefined;
 }
 
 function stepsToNodes(steps: SequenceStep[]): StepFlowNode[] {
@@ -335,8 +374,15 @@ function ConfigPanel({
         </>
       )}
 
-      {(node.data.type === "SCRAPE_SEARCH" ||
-        node.data.type === "VISIT_PROFILE" ||
+      {node.data.type === "SCRAPE_SEARCH" && (
+        <p className="text-xs leading-5 text-slate-500">
+          No configuration needed — re-visits this lead&apos;s own profile and
+          refreshes their name/company/title. It does not search LinkedIn or
+          discover new leads; leads are added via the Leads section below.
+        </p>
+      )}
+
+      {(node.data.type === "VISIT_PROFILE" ||
         node.data.type === "WITHDRAW_CONNECTION") && (
         <p className="text-xs leading-5 text-slate-500">This step needs no configuration.</p>
       )}
@@ -377,12 +423,7 @@ function Builder({ campaignId, campaignStatus, initialSteps, initialEdges }: Seq
             ...connection,
             id: `${connection.source}-${connection.target}-${connection.sourceHandle ?? "default"}`,
             style: { stroke: "#64748b" },
-            label:
-              connection.sourceHandle === "accepted"
-                ? "Accepted"
-                : connection.sourceHandle === "timeout"
-                ? "Timed out"
-                : undefined,
+            label: edgeLabelForHandle(connection.sourceHandle),
             labelStyle: { fill: "#cbd5e1", fontSize: 10, fontWeight: 600 },
           },
           eds

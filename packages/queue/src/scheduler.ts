@@ -11,12 +11,25 @@ import { sequenceProcessor } from "./processors/sequence.processor.js";
 import { contentSignalProcessor } from "./processors/contentSignal.processor.js";
 import { anomalyCheckProcessor } from "./processors/anomaly.processor.js";
 import { syncStatusProcessor } from "./processors/syncStatus.processor.js";
-import { withdrawQueue, sequenceDispatchQueue, anomalyCheckQueue, syncStatusQueue } from "./queues.js";
+import { sequenceEngineProcessor } from "./processors/sequenceEngine.processor.js";
+import { likePostProcessor } from "./processors/likePost.processor.js";
+import { withdrawSingleProcessor } from "./processors/withdrawSingle.processor.js";
+import { visitProfileProcessor } from "./processors/visitProfile.processor.js";
+import {
+  withdrawQueue,
+  sequenceDispatchQueue,
+  anomalyCheckQueue,
+  syncStatusQueue,
+  sequenceEngineDispatchQueue,
+} from "./queues.js";
 import { maybeCompleteCampaignForLead } from "./campaignCompletion.js";
+import { advanceSequenceLead } from "./sequenceGraph.js";
 
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
 const SEQUENCE_TICK_MS = 15 * 60 * 1000; // 15 minutes
+
+const SEQUENCE_ENGINE_TICK_MS = 5 * 60 * 1000; // 5 minutes — day-scale WAITs need finer granularity
 
 function attachCampaignLeadJobState(worker: Worker): void {
   worker.on("active", async (job: Job) => {
@@ -33,6 +46,8 @@ function attachCampaignLeadJobState(worker: Worker): void {
   worker.on("completed", async (job: Job) => {
     const campaignLeadId = (job.data as { campaignLeadId?: string }).campaignLeadId;
     if (!campaignLeadId) return;
+    // No-op for non-SEQUENCE leads — see sequenceGraph.ts.
+    await advanceSequenceLead(campaignLeadId).catch(() => {});
     await maybeCompleteCampaignForLead(campaignLeadId).catch(() => {});
   });
 
@@ -72,6 +87,12 @@ export function startWorkers(): void {
   new Worker("contentSignal", contentSignalProcessor, { connection, concurrency: 1 });
   new Worker("anomalyCheck", anomalyCheckProcessor, { connection, concurrency: 1 });
   new Worker("syncStatus", syncStatusProcessor, { connection, concurrency: 1 });
+  // SEQUENCE engine — parallel to the legacy MESSAGE dispatcher above, only
+  // ever touches CampaignLead rows on SEQUENCE campaigns.
+  new Worker("sequenceEngineDispatch", sequenceEngineProcessor, { connection, concurrency: 1 });
+  attachCampaignLeadJobState(new Worker("likePost", likePostProcessor, { connection, concurrency: 1 }));
+  attachCampaignLeadJobState(new Worker("withdrawSingle", withdrawSingleProcessor, { connection, concurrency: 1 }));
+  attachCampaignLeadJobState(new Worker("visitProfile", visitProfileProcessor, { connection, concurrency: 1 }));
 
   console.log("BullMQ workers started");
 }
@@ -86,6 +107,18 @@ export async function startSequenceTicker(): Promise<void> {
     }
   );
   console.log("Sequence dispatcher ticker registered (every 15 min)");
+}
+
+export async function startSequenceEngineTicker(): Promise<void> {
+  await sequenceEngineDispatchQueue.add(
+    "sequence-engine-tick",
+    { _tick: true },
+    {
+      repeat: { every: SEQUENCE_ENGINE_TICK_MS },
+      jobId: "sequence-engine-tick",
+    }
+  );
+  console.log("SEQUENCE engine ticker registered (every 5 min)");
 }
 
 export async function scheduleWithdrawalJobs(): Promise<void> {

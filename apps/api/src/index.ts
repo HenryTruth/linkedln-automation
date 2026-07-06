@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { accountsRouter } from "./routes/accounts.js";
 import { campaignsRouter } from "./routes/campaigns.js";
+import { sequencesRouter } from "./routes/sequences.js";
 import { leadsRouter } from "./routes/leads.js";
 import { activityRouter } from "./routes/activity.js";
 import { checkpointsRouter } from "./routes/checkpoints.js";
@@ -22,6 +23,7 @@ import {
   startSequenceTicker,
   startAnomalyTicker,
   startSyncStatusTicker,
+  startSequenceEngineTicker,
 } from "@linkedin-automation/queue";
 
 const app = express();
@@ -64,6 +66,7 @@ app.use(requireAuth);
 
 app.use("/accounts", accountsRouter);
 app.use("/campaigns", campaignsRouter);
+app.use("/campaigns", sequencesRouter);
 app.use("/leads", leadsRouter);
 app.use("/activity", activityRouter);
 app.use("/checkpoints", checkpointsRouter);
@@ -83,6 +86,7 @@ app.listen(PORT, async () => {
     await startSequenceTicker();
     await startAnomalyTicker();
     await startSyncStatusTicker();
+    await startSequenceEngineTicker();
   } else {
     console.log("Queue workers disabled for this API process");
   }

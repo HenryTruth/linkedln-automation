@@ -10,6 +10,8 @@ const PENDING_JOB_STATUSES = ["IDLE", "QUEUED", "RUNNING"] as const;
  * - SCRAPE / CONNECT / INMAIL: every lead's one-shot job has settled.
  * - MESSAGE: additionally, every unreplied lead has no future sequence step
  *   scheduled (nextActionAt cleared after the final step).
+ * - SEQUENCE: additionally, every lead has walked off the end of the graph
+ *   (currentStepId cleared).
  * - CONTENT_SIGNAL: never auto-completes — it keeps discovering new leads.
  *
  * Returns true if the campaign was transitioned to COMPLETED.
@@ -34,6 +36,12 @@ export async function maybeCompleteCampaign(campaignId: string): Promise<boolean
             { repliedAt: null, nextActionAt: { not: null } },
           ],
         }
+      : campaign.type === CampaignType.SEQUENCE
+      ? // jobStatus alone can't signal "still owes work" here — advanceSequenceLead
+        // sets it to IDLE both mid-graph (waiting for the next tick) and on
+        // exhaustion (currentStepId cleared). currentStepId is the only reliable
+        // "still has graph to walk" signal for this campaign type.
+        { campaignId, currentStepId: { not: null } }
       : { campaignId, jobStatus: { in: [...PENDING_JOB_STATUSES] } };
 
   const pending = await prisma.campaignLead.count({ where: pendingWhere });

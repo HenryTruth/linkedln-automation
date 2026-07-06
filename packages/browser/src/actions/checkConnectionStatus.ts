@@ -23,15 +23,21 @@ export async function checkConnectionStatus(
 
   // "Message" → already a first-degree connection
   const messageVisible = await page
-    .locator("button:has-text('Message'), button[aria-label*='Message']")
+    .locator(
+      "button:has-text('Message'), button[aria-label*='Message'], a:has-text('Message'), a[aria-label*='Message']"
+    )
     .first()
     .isVisible()
     .catch(() => false);
   if (messageVisible) return "CONNECTED";
 
-  // "Pending" → connection request sent but not yet accepted
+  // "Pending" → connection request sent but not yet accepted.
+  // LinkedIn renders the profile top-card's primary CTA as either a <button>
+  // or an <a> depending on layout/experiment — match both (see withdrawConnect.ts).
   const pendingVisible = await page
-    .locator("button:has-text('Pending'), button[aria-label*='Pending']")
+    .locator(
+      "button:has-text('Pending'), button[aria-label*='Pending'], a:has-text('Pending'), a[aria-label*='Pending']"
+    )
     .first()
     .isVisible()
     .catch(() => false);

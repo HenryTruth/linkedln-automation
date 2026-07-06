@@ -1,11 +1,20 @@
 import type { Job } from "bullmq";
-import { prisma, ConnectionStatus, AccountStatus } from "@linkedin-automation/db";
+import {
+  prisma,
+  ConnectionStatus,
+  AccountStatus,
+  CampaignType,
+  CampaignStatus,
+  StepType,
+  EdgeCondition,
+} from "@linkedin-automation/db";
 import {
   BrowserWorker,
   checkConnectionStatus,
 } from "@linkedin-automation/browser";
 import { claimDailyCap } from "@linkedin-automation/guards";
 import type { SyncStatusJobData } from "../queues.js";
+import { maybeCompleteCampaign } from "../campaignCompletion.js";
 
 // Only re-check pending connections that have been waiting at least this long.
 // Avoids hammering profiles of people who were just sent a request.
@@ -115,6 +124,7 @@ export async function syncStatusProcessor(
               lead.connectionStatus === ConnectionStatus.PENDING
             ) {
               await activateMessageSequences(lead.id, accountId);
+              await activateSequenceEngineAcceptedBranch(lead.id, accountId);
             }
 
             // Old connection discovered (was NONE, now CONNECTED) → same activation
@@ -123,6 +133,7 @@ export async function syncStatusProcessor(
               lead.connectionStatus === ConnectionStatus.NONE
             ) {
               await activateMessageSequences(lead.id, accountId);
+              await activateSequenceEngineAcceptedBranch(lead.id, accountId);
             }
           }
         } catch {
@@ -135,6 +146,9 @@ export async function syncStatusProcessor(
       await worker.close();
     }
   }
+
+  // Pure DB pass, no browser needed — runs every tick alongside the scans above.
+  await activateSequenceEngineTimeoutBranch();
 }
 
 /**
@@ -159,4 +173,110 @@ async function activateMessageSequences(
     },
     data: { nextActionAt: new Date() },
   });
+}
+
+/**
+ * A SEQUENCE lead's SEND_CONNECTION_REQUEST step got accepted — follow the
+ * CONNECTION_ACCEPTED edge out of the current step (if any; a missing edge
+ * ends this lead's walk through the graph).
+ */
+export async function activateSequenceEngineAcceptedBranch(
+  leadId: string,
+  accountId: string
+): Promise<void> {
+  const candidates = await prisma.campaignLead.findMany({
+    where: {
+      leadId,
+      branchAwaitingSince: { not: null },
+      currentStep: { type: StepType.SEND_CONNECTION_REQUEST },
+      campaign: { type: CampaignType.SEQUENCE, status: CampaignStatus.ACTIVE, accountId },
+    },
+    select: { id: true, campaignId: true, currentStepId: true },
+  });
+
+  for (const cl of candidates) {
+    const edge = await prisma.sequenceEdge.findUnique({
+      where: {
+        fromStepId_condition: {
+          fromStepId: cl.currentStepId!,
+          condition: EdgeCondition.CONNECTION_ACCEPTED,
+        },
+      },
+    });
+    await prisma.campaignLead.update({
+      where: { id: cl.id },
+      data: {
+        currentStepId: edge?.toStepId ?? null,
+        stepEnteredAt: edge ? new Date() : null,
+        branchAwaitingSince: null,
+        jobStatus: "IDLE",
+      },
+    });
+    if (!edge) {
+      await maybeCompleteCampaign(cl.campaignId).catch(() => {});
+    }
+  }
+}
+
+/**
+ * DB-only pass (no browser session needed): SEQUENCE leads whose connection
+ * request has been awaiting a response longer than the step's configured
+ * timeoutDays follow the CONNECTION_TIMEOUT edge instead. Re-checks
+ * branchAwaitingSince right before writing so an accept resolved earlier in
+ * this same tick wins the race rather than being overwritten by a timeout.
+ */
+export async function activateSequenceEngineTimeoutBranch(): Promise<void> {
+  const candidates = await prisma.campaignLead.findMany({
+    where: {
+      branchAwaitingSince: { not: null },
+      currentStep: { type: StepType.SEND_CONNECTION_REQUEST },
+      campaign: { type: CampaignType.SEQUENCE, status: CampaignStatus.ACTIVE },
+    },
+    select: {
+      id: true,
+      campaignId: true,
+      currentStepId: true,
+      branchAwaitingSince: true,
+      currentStep: { select: { config: true } },
+    },
+  });
+
+  const now = Date.now();
+
+  for (const cl of candidates) {
+    const timeoutDays = (cl.currentStep?.config as { timeoutDays?: number } | null)
+      ?.timeoutDays;
+    if (typeof timeoutDays !== "number" || !cl.branchAwaitingSince) continue;
+
+    const elapsedMs = now - cl.branchAwaitingSince.getTime();
+    if (elapsedMs < timeoutDays * 24 * 60 * 60 * 1000) continue;
+
+    // Accepted wins the race — re-check just before writing.
+    const fresh = await prisma.campaignLead.findUnique({
+      where: { id: cl.id },
+      select: { branchAwaitingSince: true },
+    });
+    if (!fresh?.branchAwaitingSince) continue;
+
+    const edge = await prisma.sequenceEdge.findUnique({
+      where: {
+        fromStepId_condition: {
+          fromStepId: cl.currentStepId!,
+          condition: EdgeCondition.CONNECTION_TIMEOUT,
+        },
+      },
+    });
+    await prisma.campaignLead.update({
+      where: { id: cl.id },
+      data: {
+        currentStepId: edge?.toStepId ?? null,
+        stepEnteredAt: edge ? new Date() : null,
+        branchAwaitingSince: null,
+        jobStatus: "IDLE",
+      },
+    });
+    if (!edge) {
+      await maybeCompleteCampaign(cl.campaignId).catch(() => {});
+    }
+  }
 }

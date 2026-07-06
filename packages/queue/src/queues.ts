@@ -43,6 +43,32 @@ export interface SequenceDispatchJobData {
   _tick: true;
 }
 
+export interface SequenceEngineTickJobData {
+  /** Intentionally empty — the processor scans the DB for due SEQUENCE leads */
+  _tick: true;
+}
+
+export interface LikePostJobData {
+  accountId: string;
+  leadId: string;
+  campaignLeadId: string;
+  postUrl: string;
+}
+
+export interface WithdrawSingleJobData {
+  accountId: string;
+  leadId: string;
+  linkedinUrl: string;
+  campaignLeadId: string;
+}
+
+export interface VisitProfileJobData {
+  accountId: string;
+  leadId: string;
+  linkedinUrl: string;
+  campaignLeadId: string;
+}
+
 export interface ScrapeJobData {
   accountId: string;
   linkedinUrl: string;
@@ -107,6 +133,26 @@ export const searchScrapeQueue = new Queue<SearchScrapeJobData>("searchScrape", 
 
 export const sequenceDispatchQueue = new Queue<SequenceDispatchJobData>(
   "sequenceDispatch",
+  { connection: getConnection(), defaultJobOptions }
+);
+
+export const sequenceEngineDispatchQueue = new Queue<SequenceEngineTickJobData>(
+  "sequenceEngineDispatch",
+  { connection: getConnection(), defaultJobOptions }
+);
+
+export const likePostQueue = new Queue<LikePostJobData>("likePost", {
+  connection: getConnection(),
+  defaultJobOptions,
+});
+
+export const withdrawSingleQueue = new Queue<WithdrawSingleJobData>(
+  "withdrawSingle",
+  { connection: getConnection(), defaultJobOptions }
+);
+
+export const visitProfileQueue = new Queue<VisitProfileJobData>(
+  "visitProfile",
   { connection: getConnection(), defaultJobOptions }
 );
 

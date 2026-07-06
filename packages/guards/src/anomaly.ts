@@ -50,7 +50,13 @@ export async function checkSessionErrorRate(accountId: string): Promise<void> {
 
   if (recent.length < SESSION_ERROR_RATE_SAMPLE) return; // not enough history yet
 
-  const errorCount = recent.filter((l) => l.result !== "success").length;
+  // Every processor's failure path prefixes its activityLog result with
+  // "failed:" (search/contentSignal explicitly; others simply don't log on
+  // failure). Success strings vary per action ("success", "liked", "scraped
+  // N leads across M pages", "withdrew N pending requests", etc.) — an exact
+  // "success" match here mistook those legitimate non-"success" successes for
+  // errors and inflated the rate for perfectly healthy accounts.
+  const errorCount = recent.filter((l) => l.result === null || l.result.startsWith("failed:")).length;
   const rate = errorCount / recent.length;
 
   if (rate > MAX_SESSION_ERROR_RATE) {

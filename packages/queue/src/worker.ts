@@ -3,6 +3,7 @@ import {
   startAnomalyTicker,
   startSequenceTicker,
   startSyncStatusTicker,
+  startSequenceEngineTicker,
   startWorkers,
 } from "./scheduler.js";
 
@@ -12,6 +13,7 @@ async function main(): Promise<void> {
   await startSequenceTicker();
   await startAnomalyTicker();
   await startSyncStatusTicker();
+  await startSequenceEngineTicker();
 }
 
 main().catch((err) => {

@@ -176,6 +176,8 @@ campaignsRouter.get("/:id", async (req, res, next) => {
         leads: { include: { lead: true, postSignal: true } },
         messages: { orderBy: { sequenceOrder: "asc" } },
         contentSignalConfig: true,
+        steps: true,
+        edges: true,
       },
     });
     res.json(campaign);
@@ -516,6 +518,7 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
           },
         },
         messages: { orderBy: { sequenceOrder: "asc" } },
+        steps: { where: { isEntry: true }, take: 1 },
         leads: {
           where: {
             OR: [{ nextActionAt: null }, { nextActionAt: { lte: new Date() } }],
@@ -552,6 +555,14 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
       (fullCampaign.type === CampaignType.MESSAGE || fullCampaign.type === CampaignType.INMAIL)
     ) {
       res.status(422).json({ error: "No message templates defined for this campaign" });
+      return;
+    }
+
+    const entryStep = fullCampaign.steps[0];
+    if (fullCampaign.type === CampaignType.SEQUENCE && !entryStep) {
+      res.status(422).json({
+        error: "No entry step defined — build the graph via PUT /campaigns/:id/graph first",
+      });
       return;
     }
 
@@ -724,6 +735,16 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
         await prisma.campaignLead.update({
           where: { id: cl.id },
           data: { jobStatus: "QUEUED", queuedJobId: jobId, lastJobError: null },
+        });
+      } else if (fullCampaign.type === CampaignType.SEQUENCE) {
+        if (cl.currentStepId) continue; // already entered the graph
+        await prisma.campaignLead.update({
+          where: { id: cl.id },
+          data: {
+            currentStepId: entryStep!.id,
+            stepEnteredAt: new Date(),
+            jobStatus: "IDLE",
+          },
         });
       }
 

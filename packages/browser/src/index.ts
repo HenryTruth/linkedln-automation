@@ -25,3 +25,4 @@ export { scrapeContentSearch } from "./actions/scrapeContentSearch.js";
 export type { CollectedLead } from "./actions/scrapeContentSearch.js";
 export { likePost } from "./actions/likePost.js";
 export type { LikePostResult } from "./actions/likePost.js";
+export { visitProfile } from "./actions/visitProfile.js";

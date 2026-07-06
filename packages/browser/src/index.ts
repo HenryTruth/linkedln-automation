@@ -13,9 +13,15 @@ export { scrapeSearch } from "./actions/scrapeSearch.js";
 export { sendConnect } from "./actions/sendConnect.js";
 export { sendMessage } from "./actions/sendMessage.js";
 export { sendInMail } from "./actions/sendInMail.js";
-export { withdrawPendingConnections } from "./actions/withdrawConnect.js";
+export {
+  withdrawPendingConnections,
+  withdrawConnection,
+} from "./actions/withdrawConnect.js";
+export type { WithdrawConnectionResult } from "./actions/withdrawConnect.js";
 export { checkReply } from "./actions/checkReply.js";
 export { checkConnectionStatus } from "./actions/checkConnectionStatus.js";
 export type { DetectedConnectionStatus } from "./actions/checkConnectionStatus.js";
 export { scrapeContentSearch } from "./actions/scrapeContentSearch.js";
 export type { CollectedLead } from "./actions/scrapeContentSearch.js";
+export { likePost } from "./actions/likePost.js";
+export type { LikePostResult } from "./actions/likePost.js";

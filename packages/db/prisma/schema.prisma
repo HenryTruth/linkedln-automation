@@ -45,6 +45,24 @@ enum CampaignType {
   INMAIL
   SCRAPE
   CONTENT_SIGNAL
+  SEQUENCE
+}
+
+enum StepType {
+  SCRAPE_SEARCH
+  VISIT_PROFILE
+  LIKE_POST
+  WAIT
+  SEND_CONNECTION_REQUEST
+  SEND_MESSAGE
+  SEND_INMAIL
+  WITHDRAW_CONNECTION
+}
+
+enum EdgeCondition {
+  DEFAULT
+  CONNECTION_ACCEPTED
+  CONNECTION_TIMEOUT
 }
 
 enum CampaignStatus {
@@ -193,6 +211,8 @@ model Campaign {
   leads                 CampaignLead[]
   messages              Message[]
   contentSignalConfig   ContentSignalConfig?
+  steps                 SequenceStep[]
+  edges                 SequenceEdge[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -215,6 +235,10 @@ model CampaignLead {
   lastJobError   String?     @db.Text
   postSignalId   String?
   postSignal     PostSignal? @relation(fields: [postSignalId], references: [id])
+  currentStepId       String?
+  currentStep         SequenceStep? @relation("CurrentStep", fields: [currentStepId], references: [id])
+  stepEnteredAt       DateTime?
+  branchAwaitingSince DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -222,6 +246,7 @@ model CampaignLead {
   @@index([nextActionAt])
   @@index([repliedAt])
   @@index([jobStatus])
+  @@index([currentStepId])
 }
 
 model Message {
@@ -237,6 +262,39 @@ model Message {
   updatedAt      DateTime @updatedAt
 
   @@unique([campaignId, sequenceOrder, variantGroup])
+}
+
+model SequenceStep {
+  id            String         @id @default(cuid())
+  campaignId    String
+  campaign      Campaign       @relation(fields: [campaignId], references: [id])
+  type          StepType
+  config        Json           @default("{}")
+  positionX     Float          @default(0)
+  positionY     Float          @default(0)
+  isEntry       Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  outgoingEdges SequenceEdge[] @relation("FromStep")
+  incomingEdges SequenceEdge[] @relation("ToStep")
+  campaignLeads CampaignLead[] @relation("CurrentStep")
+
+  @@index([campaignId])
+}
+
+model SequenceEdge {
+  id         String        @id @default(cuid())
+  campaignId String
+  campaign   Campaign      @relation(fields: [campaignId], references: [id])
+  fromStepId String
+  fromStep   SequenceStep  @relation("FromStep", fields: [fromStepId], references: [id])
+  toStepId   String
+  toStep     SequenceStep  @relation("ToStep", fields: [toStepId], references: [id])
+  condition  EdgeCondition @default(DEFAULT)
+
+  @@unique([fromStepId, condition])
+  @@index([campaignId])
+  @@index([toStepId])
 }
 
 model ActivityLog {

@@ -8,6 +8,7 @@ import {
   scrapeQueue,
   searchScrapeQueue,
   contentSignalQueue,
+  maybeCompleteCampaign,
 } from "@linkedin-automation/queue";
 import { renderTemplate, validateTemplate } from "@linkedin-automation/guards";
 
@@ -758,6 +759,15 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
       dispatched.push(`content-signal:${config.keyword}`);
     }
 
+    // Restarting a completed campaign (e.g. after new leads were added)
+    // puts it back to ACTIVE so workers pick its leads up again.
+    if (dispatched.length > 0 && fullCampaign.status === CampaignStatus.COMPLETED) {
+      await prisma.campaign.update({
+        where: { id: fullCampaign.id },
+        data: { status: CampaignStatus.ACTIVE },
+      });
+    }
+
     res.json({ dispatched: dispatched.length, urls: dispatched });
   } catch (err) {
     next(err);
@@ -810,6 +820,8 @@ campaignsRouter.post("/:id/leads/:leadId/mark-replied", async (req, res, next) =
       },
       data: { repliedAt: new Date() },
     });
+    // A manual reply can be the last outstanding item in a message sequence.
+    await maybeCompleteCampaign(req.params.id);
     res.json({ ok: true });
   } catch (err) {
     next(err);

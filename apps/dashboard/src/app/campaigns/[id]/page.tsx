@@ -1194,7 +1194,7 @@ export default function CampaignDetailPage() {
             <thead className="table-head">
               <tr>
                 {(isScrape
-                  ? ["Profile URL", "Name", "Company", "Title", "Stage", "Status"]
+                  ? ["Profile URL", "Name", "Company", "Title", "Status"]
                   : ["Name", "Company", "Connection", "Stage", "Replied", "Last Action", "Status"]
                 ).map((h) => (
                   <th
@@ -1210,7 +1210,7 @@ export default function CampaignDetailPage() {
               {campaign.leads.length === 0 && (
                 <tr>
                   <td
-                    colSpan={isScrape ? 6 : 7}
+                    colSpan={isScrape ? 5 : 7}
                     className="px-6 py-10 text-center text-sm text-slate-400"
                   >
                     {isScrape
@@ -1248,9 +1248,6 @@ export default function CampaignDetailPage() {
                       </td>
                       <td className="table-cell text-slate-400">
                         {cl.lead.title ?? <span className="italic text-slate-300">pending</span>}
-                      </td>
-                      <td className="table-cell text-slate-400">
-                        Step {cl.stage}
                       </td>
                       <td className="table-cell">
                         <JobStatusBadge status={cl.jobStatus} error={cl.lastJobError} />

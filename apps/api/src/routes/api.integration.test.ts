@@ -67,6 +67,7 @@ const queues = {
   anomalyCheckQueue: makeQueueMock(),
   syncStatusQueue: makeQueueMock(),
   scheduleWithdrawalForAccount: vi.fn(),
+  maybeCompleteCampaign: vi.fn().mockResolvedValue(false),
 };
 
 vi.mock("@linkedin-automation/db", () => ({

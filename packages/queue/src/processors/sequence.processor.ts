@@ -4,6 +4,7 @@ import { renderTemplate, checkDailyCap } from "@linkedin-automation/guards";
 import { BrowserWorker, checkReply } from "@linkedin-automation/browser";
 import { messageQueue } from "../queues.js";
 import type { SequenceDispatchJobData } from "../queues.js";
+import { maybeCompleteCampaign } from "../campaignCompletion.js";
 
 const REPLY_CHECK_CONCURRENCY = 1; // one browser session at a time for reply checks
 
@@ -60,6 +61,7 @@ export async function sequenceProcessor(
         where: { id: cl.id },
         data: { nextActionAt: null },
       });
+      await maybeCompleteCampaign(campaign.id).catch(() => {});
       continue;
     }
 
@@ -77,6 +79,7 @@ export async function sequenceProcessor(
         where: { id: cl.id },
         data: { repliedAt: new Date() },
       });
+      await maybeCompleteCampaign(campaign.id).catch(() => {});
       continue;
     }
 

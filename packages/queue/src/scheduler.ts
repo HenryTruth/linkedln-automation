@@ -12,6 +12,7 @@ import { contentSignalProcessor } from "./processors/contentSignal.processor.js"
 import { anomalyCheckProcessor } from "./processors/anomaly.processor.js";
 import { syncStatusProcessor } from "./processors/syncStatus.processor.js";
 import { withdrawQueue, sequenceDispatchQueue, anomalyCheckQueue, syncStatusQueue } from "./queues.js";
+import { maybeCompleteCampaignForLead } from "./campaignCompletion.js";
 
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -29,6 +30,12 @@ function attachCampaignLeadJobState(worker: Worker): void {
       .catch(() => {});
   });
 
+  worker.on("completed", async (job: Job) => {
+    const campaignLeadId = (job.data as { campaignLeadId?: string }).campaignLeadId;
+    if (!campaignLeadId) return;
+    await maybeCompleteCampaignForLead(campaignLeadId).catch(() => {});
+  });
+
   worker.on("failed", async (job, err) => {
     const campaignLeadId = (job?.data as { campaignLeadId?: string } | undefined)
       ?.campaignLeadId;
@@ -42,6 +49,11 @@ function attachCampaignLeadJobState(worker: Worker): void {
         },
       })
       .catch(() => {});
+    // Only a final failure settles the lead — earlier attempts will retry.
+    const willRetry = job && job.attemptsMade < (job.opts.attempts ?? 1);
+    if (!willRetry) {
+      await maybeCompleteCampaignForLead(campaignLeadId).catch(() => {});
+    }
   });
 }
 

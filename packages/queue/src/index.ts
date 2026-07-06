@@ -22,6 +22,7 @@ export type {
   AnomalyCheckJobData,
   SyncStatusJobData,
 } from "./queues.js";
+export { maybeCompleteCampaign } from "./campaignCompletion.js";
 export {
   startWorkers,
   scheduleWithdrawalJobs,

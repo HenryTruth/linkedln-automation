@@ -1,5 +1,5 @@
 import type { Job } from "bullmq";
-import { prisma, AccountStatus } from "@linkedin-automation/db";
+import { prisma, AccountStatus, CampaignStatus } from "@linkedin-automation/db";
 import {
   assertWarmUpAllowed,
   checkActionWindow,
@@ -114,6 +114,13 @@ export async function searchScrapeProcessor(
           update: {},
         });
       }
+
+      // Fresh leads mean fresh work — a campaign that had auto-completed
+      // goes back to ACTIVE so the new profiles can be scraped.
+      await prisma.campaign.updateMany({
+        where: { id: campaignId, status: CampaignStatus.COMPLETED },
+        data: { status: CampaignStatus.ACTIVE },
+      });
     }
 
     return { scraped: urls.length, pagesScraped, lastUrl };

@@ -480,6 +480,10 @@ export const api = {
       }),
     searchJobs: (id: string) =>
       apiFetch<{ jobs: SearchScrapeCampaignJob[] }>(`/campaigns/${id}/search-jobs`),
+    clearSearchJobs: (id: string) =>
+      apiFetch<{ removed: number }>(`/campaigns/${id}/search-jobs`, {
+        method: "DELETE",
+      }),
     stats: (id: string) => apiFetch<CampaignStats>(`/campaigns/${id}/stats`),
     markReplied: (campaignId: string, leadId: string) =>
       apiFetch<{ ok: boolean }>(`/campaigns/${campaignId}/leads/${leadId}/mark-replied`, {

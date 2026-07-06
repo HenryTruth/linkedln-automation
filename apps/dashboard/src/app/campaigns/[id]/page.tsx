@@ -214,6 +214,7 @@ export default function CampaignDetailPage() {
   const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const [searchJobs, setSearchJobs] = useState<SearchScrapeCampaignJob[]>([]);
   const [searchJobsLoading, setSearchJobsLoading] = useState(false);
+  const [clearingSearchJobs, setClearingSearchJobs] = useState(false);
   const [showSearchForm, setShowSearchForm] = useState(false);
 
   // LinkedIn search URL builder
@@ -249,6 +250,19 @@ export default function CampaignDetailPage() {
       api.campaigns.get(id).then(setCampaign),
       api.campaigns.stats(id).then(setStats).catch(() => {}),
     ]);
+  }
+
+  async function clearSearchJobs() {
+    setClearingSearchJobs(true);
+    try {
+      await api.campaigns.clearSearchJobs(id);
+      const result = await api.campaigns.searchJobs(id);
+      setSearchJobs(result.jobs);
+    } catch {
+      // Clearing history is cosmetic — a failure here shouldn't break the page.
+    } finally {
+      setClearingSearchJobs(false);
+    }
   }
 
   async function reloadSearchJobs() {
@@ -898,6 +912,14 @@ export default function CampaignDetailPage() {
                 >
                   Open Jobs
                 </a>
+                <button
+                  type="button"
+                  onClick={clearSearchJobs}
+                  disabled={clearingSearchJobs || searchJobs.length === 0}
+                  className="btn-secondary px-3 py-1.5 text-xs text-rose-400 disabled:opacity-40"
+                >
+                  {clearingSearchJobs ? "Clearing..." : "Clear history"}
+                </button>
               </div>
             </div>
 

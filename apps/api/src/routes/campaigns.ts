@@ -468,6 +468,36 @@ campaignsRouter.get("/:id/search-jobs", async (req, res, next) => {
   }
 });
 
+campaignsRouter.delete("/:id/search-jobs", async (req, res, next) => {
+  try {
+    const campaign = await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
+      select: { id: true },
+    });
+
+    // Only finished jobs are cleared — waiting/active/delayed ones are still
+    // doing work and stay visible until they resolve.
+    const jobs = await searchScrapeQueue.getJobs(
+      ["completed", "failed"],
+      0,
+      200,
+      false
+    );
+
+    let removed = 0;
+    for (const job of jobs) {
+      const data = job.data as { campaignId?: string };
+      if (data.campaignId !== campaign.id) continue;
+      await job.remove();
+      removed++;
+    }
+
+    res.json({ removed });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Start campaign ─────────────────────────────────────────────────────────
 
 campaignsRouter.post("/:id/start", async (req, res, next) => {

@@ -178,3 +178,13 @@ export const syncStatusQueue = new Queue<SyncStatusJobData>(
   "syncStatus",
   { connection: getConnection(), defaultJobOptions }
 );
+
+export interface SessionHealthCheckJobData {
+  /** Intentionally empty — the processor scans the DB for active accounts with a session */
+  _tick: true;
+}
+
+export const sessionHealthCheckQueue = new Queue<SessionHealthCheckJobData>(
+  "sessionHealthCheck",
+  { connection: getConnection(), defaultJobOptions }
+);

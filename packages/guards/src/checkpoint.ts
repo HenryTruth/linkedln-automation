@@ -22,7 +22,10 @@ export async function detectCheckpoint(page: Page): Promise<boolean> {
   }
 
   const url = page.url();
-  if (url.includes("/checkpoint/") || url.includes("/authwall")) {
+  // A dead/expired session is redirected to a login page rather than
+  // erroring — scrapeSearch.ts learned this the hard way before this check
+  // covered anything beyond /checkpoint/ and /authwall.
+  if (/\/(checkpoint\/|authwall|login|uas\/login)/.test(url)) {
     return true;
   }
 

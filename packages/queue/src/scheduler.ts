@@ -15,12 +15,14 @@ import { sequenceEngineProcessor } from "./processors/sequenceEngine.processor.j
 import { likePostProcessor } from "./processors/likePost.processor.js";
 import { withdrawSingleProcessor } from "./processors/withdrawSingle.processor.js";
 import { visitProfileProcessor } from "./processors/visitProfile.processor.js";
+import { sessionHealthCheckProcessor } from "./processors/sessionHealthCheck.processor.js";
 import {
   withdrawQueue,
   sequenceDispatchQueue,
   anomalyCheckQueue,
   syncStatusQueue,
   sequenceEngineDispatchQueue,
+  sessionHealthCheckQueue,
 } from "./queues.js";
 import { maybeCompleteCampaignForLead } from "./campaignCompletion.js";
 import { advanceSequenceLead } from "./sequenceGraph.js";
@@ -93,6 +95,9 @@ export function startWorkers(): void {
   attachCampaignLeadJobState(new Worker("likePost", likePostProcessor, { connection, concurrency: 1 }));
   attachCampaignLeadJobState(new Worker("withdrawSingle", withdrawSingleProcessor, { connection, concurrency: 1 }));
   attachCampaignLeadJobState(new Worker("visitProfile", visitProfileProcessor, { connection, concurrency: 1 }));
+  // Not lead-scoped — proactively visits LinkedIn per account to surface a
+  // dead session early instead of waiting for some other job to hit it.
+  new Worker("sessionHealthCheck", sessionHealthCheckProcessor, { connection, concurrency: 1 });
 
   console.log("BullMQ workers started");
 }
@@ -167,6 +172,20 @@ export async function startSyncStatusTicker(): Promise<void> {
     }
   );
   console.log("Sync-status ticker registered (every 4 hours)");
+}
+
+const SESSION_HEALTH_CHECK_TICK_MS = 30 * 60 * 1000; // every 30 minutes
+
+export async function startSessionHealthCheckTicker(): Promise<void> {
+  await sessionHealthCheckQueue.add(
+    "session-health-tick",
+    { _tick: true },
+    {
+      repeat: { every: SESSION_HEALTH_CHECK_TICK_MS },
+      jobId: "session-health-tick",
+    }
+  );
+  console.log("Session health check ticker registered (every 30 min)");
 }
 
 export async function scheduleWithdrawalForAccount(

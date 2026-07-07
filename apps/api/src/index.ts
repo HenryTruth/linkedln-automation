@@ -24,6 +24,7 @@ import {
   startAnomalyTicker,
   startSyncStatusTicker,
   startSequenceEngineTicker,
+  startSessionHealthCheckTicker,
 } from "@linkedin-automation/queue";
 
 const app = express();
@@ -87,6 +88,7 @@ app.listen(PORT, async () => {
     await startAnomalyTicker();
     await startSyncStatusTicker();
     await startSequenceEngineTicker();
+    await startSessionHealthCheckTicker();
   } else {
     console.log("Queue workers disabled for this API process");
   }

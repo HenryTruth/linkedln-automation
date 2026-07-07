@@ -10,10 +10,35 @@ export async function sendConnect(
   await navigateTo(page, linkedinUrl);
   await delays.betweenActions();
 
-  // Click "Connect" button on the profile
-  const connectBtn = page.locator(
-    "button:has-text('Connect'), button[aria-label*='Connect']"
-  ).first();
+  // A dead/expired session redirects to a login page instead of erroring,
+  // which would otherwise surface as a confusing "Connect button not found"
+  // — same lesson scrapeSearch.ts already learned.
+  const landedUrl = page.url();
+  if (/\/(login|uas\/login|authwall|checkpoint)/.test(landedUrl)) {
+    throw new Error(
+      `LinkedIn redirected to ${landedUrl} instead of the profile page — the session cookies are likely expired or invalid. Re-import fresh cookies for this account.`
+    );
+  }
+
+  // "Connect" is either a direct top-level button, or tucked inside the
+  // "More" overflow menu — which one LinkedIn shows varies per profile.
+  let connectBtn = page
+    .locator("button:has-text('Connect'), button[aria-label*='Connect']")
+    .first();
+  const directlyVisible = await connectBtn.isVisible().catch(() => false);
+  if (!directlyVisible) {
+    const moreBtn = page
+      .locator("button:has-text('More'), button[aria-label='More actions']")
+      .first();
+    await moreBtn.waitFor({ timeout: 10_000 });
+    await moreBtn.click();
+    await humanDelay(500, 1_000);
+    connectBtn = page
+      .locator(
+        "div.artdeco-dropdown__item:has-text('Connect'), [role='button']:has-text('Connect'), button:has-text('Connect')"
+      )
+      .first();
+  }
   await connectBtn.waitFor({ timeout: 10_000 });
   await connectBtn.click();
   await humanDelay(1_500, 3_000);

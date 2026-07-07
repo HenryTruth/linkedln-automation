@@ -8,50 +8,53 @@ type ConnectLabelResult =
 
 /**
  * Resolve the exact aria-label of the Connect control that belongs to THIS
- * profile — without clicking. The caller then clicks it by that unique label
- * with a real Playwright click so LinkedIn's (React-delegated) menuitem handler
- * actually fires; a programmatic `el.click()` on the obfuscated dropdown <div>
- * bubbles but does not reliably trigger it.
+ * profile — without clicking — and tag that exact element so the caller can act
+ * on it (not a hidden pre-rendered duplicate).
  *
- * Safety — never invite the wrong person: the right-rail "More profiles for you"
- * cards each render their own visible "Invite <OtherName> to connect" control,
- * and the profile's own Connect item is portalled *outside* <main> when it
- * lives in the More menu, so neither a plain text match nor a `main`-scoped
- * selector can distinguish the intended person. Two discriminators are used
- * together: (1) the right-rail recommendation controls are always `<a>` anchors
- * whereas the profile's own Connect is a `<button>`/`<div role=button>` — so
- * anchors are excluded; (2) if the profile name is known, only the control whose
- * aria-label names *this* profile is eligible. If more than one non-anchor
- * "Invite … to connect" control is visible and we can't disambiguate by name,
- * we refuse rather than guess.
+ * Safety — never invite the wrong person: several "Invite <Name> to connect"
+ * controls can be on-screen at once (the right-rail "More profiles for you"
+ * cards, "People also viewed", a sticky-header duplicate of the subject's own
+ * button). The reliable discriminator is the **exact profile name**, NOT the
+ * element tag: the subject's own direct Connect button is often an `<a>` anchor
+ * — the same tag the recommendation cards use — so an anchor-exclusion would
+ * wrongly skip the real button on Connect-primary profiles. We therefore match
+ * `invite <name> to connect` exactly (any tag), preferring the largest visible
+ * one when the subject's button is duplicated (top-card vs. condensed sticky
+ * header). When the name is unknown we only proceed if every visible Connect
+ * control names the same person (i.e. no recommendations to confuse it with) —
+ * otherwise we refuse rather than guess.
  */
 async function findConnectLabel(page: Page, profileName: string): Promise<ConnectLabelResult> {
   return page.evaluate((name) => {
     const wanted = name ? `invite ${name.toLowerCase()} to connect` : null;
-    const nodes = Array.from(document.querySelectorAll<HTMLElement>("[aria-label]"));
-    const candidates = nodes.filter((el) => {
-      const label = (el.getAttribute("aria-label") || "").trim().toLowerCase();
-      if (!/^invite .+ to connect$/.test(label)) return false;
-      if (el.tagName === "A") return false; // right-rail recommendations are anchors
+    const labelOf = (el: HTMLElement) => (el.getAttribute("aria-label") || "").trim();
+    const area = (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      return r.width * r.height;
+    };
+    const candidates = Array.from(document.querySelectorAll<HTMLElement>("[aria-label]")).filter((el) => {
+      if (!/^invite .+ to connect$/.test(labelOf(el).toLowerCase())) return false;
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     });
-    const labelOf = (el: HTMLElement) => (el.getAttribute("aria-label") || "").trim();
     const choose = (el: HTMLElement) => {
-      // Tag the exact element so the caller acts on *this* one, not a hidden
-      // pre-rendered duplicate that a `[aria-label=…]` selector's .first() might
-      // resolve to instead.
       for (const prev of Array.from(document.querySelectorAll("[data-vectra-connect]"))) prev.removeAttribute("data-vectra-connect");
       el.setAttribute("data-vectra-connect", "1");
       return { ok: true as const, label: labelOf(el) };
     };
+    const pickLargest = (els: HTMLElement[]) => els.slice().sort((a, b) => area(b) - area(a))[0];
+
     if (wanted) {
-      const named = candidates.find((el) => labelOf(el).toLowerCase() === wanted);
-      if (named) return choose(named);
+      const named = candidates.filter((el) => labelOf(el).toLowerCase() === wanted);
+      if (named.length) return choose(pickLargest(named));
+      // Name known but its Connect isn't on-screen yet (may be in the More menu).
+      return { ok: false, reason: "none", labels: [] };
     }
-    if (candidates.length === 1) return choose(candidates[0]);
+    // Name unknown — safe only if there's nothing to confuse the subject with.
     if (candidates.length === 0) return { ok: false, reason: "none", labels: [] };
-    return { ok: false, reason: "ambiguous", labels: candidates.map(labelOf) };
+    const distinct = new Set(candidates.map((el) => labelOf(el).toLowerCase()));
+    if (distinct.size === 1) return choose(pickLargest(candidates));
+    return { ok: false, reason: "ambiguous", labels: [...distinct] };
   }, profileName);
 }
 
@@ -112,18 +115,21 @@ export async function sendConnect(
     );
   }
 
-  // Best-effort read of the profile owner's name to tighten the Connect match
-  // (the anchor-exclusion in clickConnectFor is the primary safety guard; the
-  // name is an extra disambiguator when several profiles are on-screen). The
-  // name lives in a top-card heading that hydrates after domcontentloaded and
-  // isn't always an <h1>, so this is opportunistic, not required.
+  // Read the profile owner's name — the exact-name match is the *primary* safety
+  // guard against inviting the wrong person, so getting it right matters. The
+  // top-card heading isn't reliably an <h1> in LinkedIn's obfuscated markup, so
+  // prefer document.title ("<Name> | LinkedIn", sometimes "(N) <Name> | …"),
+  // which is stable, and fall back to any non-empty <h1>.
   await page.locator("h1").first().waitFor({ state: "attached", timeout: 15_000 }).catch(() => {});
   const profileName = await page.evaluate(() => {
-    for (const sel of ["h1", "main h1", "h1 span", "section h1"]) {
-      for (const el of Array.from(document.querySelectorAll(sel))) {
-        const t = (el.textContent || "").trim();
-        if (t) return t;
-      }
+    const fromTitle = (document.title || "")
+      .replace(/^\(\d+\+?\)\s*/, "")
+      .split(" | ")[0]
+      .trim();
+    if (fromTitle && !/^linkedin$/i.test(fromTitle)) return fromTitle;
+    for (const el of Array.from(document.querySelectorAll("h1"))) {
+      const t = (el.textContent || "").trim();
+      if (t) return t;
     }
     return "";
   });

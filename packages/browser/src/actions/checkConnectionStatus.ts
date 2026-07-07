@@ -12,10 +12,15 @@ interface TopCardState {
 
 /**
  * Read what the profile top-card / open More-menu currently offers. `name` (the
- * profile owner's name, lowercased) scopes the Connect detection to THIS
- * profile so the right-rail "More profiles for you" recommendation cards — which
- * render their own "Invite <OtherName> to connect" *anchors* — can never be
- * mistaken for the subject's own Connect option.
+ * profile owner's name, lowercased) scopes both the Connect and Message
+ * detection to THIS profile so the right-rail "More profiles for you" cards —
+ * which render their own "Invite <OtherName> to connect" and "Message
+ * <OtherName>" controls — can't be mistaken for the subject's own.
+ *
+ * The name is the discriminator, NOT the element tag: the subject's own direct
+ * Connect button is frequently an `<a>` anchor (the same tag recommendation
+ * cards use), so an anchor-exclusion would wrongly miss it on Connect-primary
+ * profiles and could fall through to a false CONNECTED.
  */
 function readTopCard(page: Page, name: string): Promise<TopCardState> {
   return page.evaluate((nameL) => {
@@ -34,14 +39,16 @@ function readTopCard(page: Page, name: string): Promise<TopCardState> {
       if (/^pending\b/.test(text) || label.startsWith("pending") || /withdraw/.test(label) || text === "withdraw") {
         pending = true;
       }
-      // A Connect option for THIS profile means it is NOT connected. Exclude
-      // anchors (recommendation cards) and require the name to match when known.
-      if (el.tagName !== "A" && /^invite .+ to connect$/.test(label)) {
-        if (!nameL || label === `invite ${nameL} to connect`) connectAvailable = true;
+      // A Connect option for THIS profile means it is NOT connected. Match the
+      // exact name (any tag); without a name we can't safely tell the subject's
+      // Connect from a recommendation's, so leave it false and let Message/None
+      // decide conservatively.
+      if (nameL && /^invite .+ to connect$/.test(label) && label === `invite ${nameL} to connect`) {
+        connectAvailable = true;
       }
-      // Message control — ambiguous on its own (shown on 2nd-degree too), only
-      // decisive once we know no Connect option exists.
-      if (el.tagName !== "A" && (/^message\b/.test(text) || label.startsWith("message"))) {
+      // Message control for THIS profile ("Message <Name>") — ambiguous on its
+      // own (shown on 2nd-degree too), only decisive once no Connect exists.
+      if (/^message\b/.test(label) && (!nameL || label.includes(nameL))) {
         message = true;
       }
     }
@@ -109,8 +116,15 @@ export async function checkConnectionStatus(
     );
   }
 
+  // Prefer document.title ("<Name> | LinkedIn") — the name isn't reliably an
+  // <h1> in LinkedIn's obfuscated markup — falling back to any non-empty <h1>.
   const name = (
     await page.evaluate(() => {
+      const fromTitle = (document.title || "")
+        .replace(/^\(\d+\+?\)\s*/, "")
+        .split(" | ")[0]
+        .trim();
+      if (fromTitle && !/^linkedin$/i.test(fromTitle)) return fromTitle;
       for (const el of Array.from(document.querySelectorAll("h1"))) {
         const t = (el.textContent || "").trim();
         if (t) return t;

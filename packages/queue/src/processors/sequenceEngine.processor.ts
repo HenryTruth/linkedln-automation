@@ -66,6 +66,18 @@ function resolvePostUrl(cl: DueLead): string | null {
   return cl.postSignal?.postUrl ?? null; // "referenced" is the default
 }
 
+// A cap/active-hours guard failure is an expected, recurring "not yet" —
+// not a real error — so it's recorded (not left completely silent) without
+// touching jobStatus, and gets overwritten by the next successful dispatch.
+async function recordCapSkip(campaignLeadId: string, err: unknown): Promise<void> {
+  await prisma.campaignLead
+    .update({
+      where: { id: campaignLeadId },
+      data: { lastJobError: `Skipped this tick: ${(err as Error).message}` },
+    })
+    .catch(() => {});
+}
+
 export async function sequenceEngineProcessor(
   _job: Job<SequenceEngineTickJobData>
 ): Promise<void> {
@@ -91,7 +103,8 @@ export async function sequenceEngineProcessor(
       case StepType.SEND_CONNECTION_REQUEST: {
         try {
           await checkDailyCap(accountId, "connection");
-        } catch {
+        } catch (err) {
+          await recordCapSkip(cl.id, err);
           continue;
         }
         const bodyTemplate = config.bodyTemplate as string | undefined;
@@ -122,7 +135,8 @@ export async function sequenceEngineProcessor(
         if (!bodyTemplate) continue;
         try {
           await checkDailyCap(accountId, "message");
-        } catch {
+        } catch (err) {
+          await recordCapSkip(cl.id, err);
           continue;
         }
         const messageBody = renderTemplate(bodyTemplate, templateFieldsFor(cl));
@@ -155,7 +169,8 @@ export async function sequenceEngineProcessor(
         if (!bodyTemplate) continue;
         try {
           await checkDailyCap(accountId, "inmail");
-        } catch {
+        } catch (err) {
+          await recordCapSkip(cl.id, err);
           continue;
         }
         const fields = templateFieldsFor(cl);
@@ -186,7 +201,8 @@ export async function sequenceEngineProcessor(
       case StepType.SCRAPE_SEARCH: {
         try {
           await checkDailyCap(accountId, "profileView");
-        } catch {
+        } catch (err) {
+          await recordCapSkip(cl.id, err);
           continue;
         }
         const jobId = `sequence-${cl.id}-step-${step.id}-scrape`;
@@ -218,7 +234,8 @@ export async function sequenceEngineProcessor(
         }
         try {
           await checkDailyCap(accountId, "profileView");
-        } catch {
+        } catch (err) {
+          await recordCapSkip(cl.id, err);
           continue;
         }
         const jobId = `sequence-${cl.id}-step-${step.id}-like`;
@@ -237,7 +254,8 @@ export async function sequenceEngineProcessor(
       case StepType.VISIT_PROFILE: {
         try {
           await checkDailyCap(accountId, "profileView");
-        } catch {
+        } catch (err) {
+          await recordCapSkip(cl.id, err);
           continue;
         }
         const jobId = `sequence-${cl.id}-step-${step.id}-visit`;
@@ -261,7 +279,8 @@ export async function sequenceEngineProcessor(
       case StepType.WITHDRAW_CONNECTION: {
         try {
           await checkDailyCap(accountId, "connection");
-        } catch {
+        } catch (err) {
+          await recordCapSkip(cl.id, err);
           continue;
         }
         const jobId = `sequence-${cl.id}-step-${step.id}-withdraw`;

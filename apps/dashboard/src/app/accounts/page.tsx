@@ -1399,11 +1399,7 @@ export default function AccountsPage() {
                     )}
                     <button
                       onClick={() => handleUploadCookies(account.id)}
-                      disabled={
-                        uploadingCookies ||
-                        !(cookieInputs[account.id]?.trim()) ||
-                        !(cookieConsent[account.id] ?? false)
-                      }
+                      disabled={uploadingCookies || !(cookieInputs[account.id]?.trim())}
                       className="btn-primary px-4 py-1.5"
                     >
                       {uploadingCookies ? "Saving..." : "Save session"}

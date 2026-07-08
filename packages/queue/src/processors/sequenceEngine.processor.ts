@@ -112,6 +112,11 @@ export async function sequenceEngineProcessor(
           ? renderTemplate(bodyTemplate, templateFieldsFor(cl))
           : undefined;
         const jobId = `sequence-${cl.id}-step-${step.id}-connect`;
+        // A prior attempt's failed/completed job lingers under this
+        // deterministic jobId (queues retain failed jobs via removeOnFail), and
+        // BullMQ silently dedupes add() on an existing jobId — so without this
+        // remove a retry would flip the lead to QUEUED but never actually run.
+        await connectQueue.remove(jobId).catch(() => {});
         await connectQueue.add(
           "connect",
           {
@@ -141,6 +146,7 @@ export async function sequenceEngineProcessor(
         }
         const messageBody = renderTemplate(bodyTemplate, templateFieldsFor(cl));
         const jobId = `sequence-${cl.id}-step-${step.id}-message`;
+        await messageQueue.remove(jobId).catch(() => {});
         await messageQueue.add(
           "message",
           {
@@ -178,6 +184,7 @@ export async function sequenceEngineProcessor(
         const subjectTemplate = (config.subjectTemplate as string | undefined) ?? "Hi {{firstName}}";
         const subject = renderTemplate(subjectTemplate, fields).trim() || "Quick question";
         const jobId = `sequence-${cl.id}-step-${step.id}-inmail`;
+        await inMailQueue.remove(jobId).catch(() => {});
         await inMailQueue.add(
           "inmail",
           {
@@ -206,6 +213,7 @@ export async function sequenceEngineProcessor(
           continue;
         }
         const jobId = `sequence-${cl.id}-step-${step.id}-scrape`;
+        await scrapeQueue.remove(jobId).catch(() => {});
         await scrapeQueue.add(
           "scrape",
           {
@@ -239,6 +247,7 @@ export async function sequenceEngineProcessor(
           continue;
         }
         const jobId = `sequence-${cl.id}-step-${step.id}-like`;
+        await likePostQueue.remove(jobId).catch(() => {});
         await likePostQueue.add(
           "likePost",
           { accountId, leadId: cl.leadId, campaignLeadId: cl.id, postUrl },
@@ -259,6 +268,7 @@ export async function sequenceEngineProcessor(
           continue;
         }
         const jobId = `sequence-${cl.id}-step-${step.id}-visit`;
+        await visitProfileQueue.remove(jobId).catch(() => {});
         await visitProfileQueue.add(
           "visitProfile",
           {
@@ -284,6 +294,7 @@ export async function sequenceEngineProcessor(
           continue;
         }
         const jobId = `sequence-${cl.id}-step-${step.id}-withdraw`;
+        await withdrawSingleQueue.remove(jobId).catch(() => {});
         await withdrawSingleQueue.add(
           "withdrawSingle",
           {

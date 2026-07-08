@@ -238,7 +238,17 @@ export class BrowserWorker {
     if (this.context && this.page) {
       try {
         const cookies = await this.context.cookies();
-        await saveCookies(this.accountId, cookies);
+        // Only persist cookies from a session that still looks logged in.
+        // A run that ended on a login/authwall/checkpoint page, or that lost
+        // its auth token (li_at), would otherwise overwrite the last known-good
+        // stored session with a dead one — turning one bad run into a permanent
+        // logout that needs a manual cookie re-import.
+        const url = this.page.url();
+        const loggedOutUrl = /\/(login|uas\/login|authwall|checkpoint)/.test(url);
+        const liAt = cookies.find((c) => c.name === "li_at")?.value ?? "";
+        if (!loggedOutUrl && liAt) {
+          await saveCookies(this.accountId, cookies);
+        }
       } catch {
         // Don't throw on cookie save failure during close
       }

@@ -6,6 +6,11 @@ const ACTION_WINDOW_MINUTES = 10;
 const MAX_ACTIONS_PER_WINDOW = 5;
 const SESSION_ERROR_RATE_SAMPLE = 10;
 const MAX_SESSION_ERROR_RATE = 0.2;
+// Only failures newer than this count toward the error rate. Without it, the
+// last-N sample let stale failures (e.g. from an earlier session-death episode)
+// keep pausing an account that has since recovered — and a paused account can't
+// log the fresh successes needed to push them out, a deadlock.
+const SESSION_ERROR_RATE_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 export async function checkActionWindow(accountId: string): Promise<void> {
   const since = new Date(Date.now() - ACTION_WINDOW_MINUTES * 60 * 1000);
@@ -45,7 +50,7 @@ export async function checkSessionErrorRate(accountId: string): Promise<void> {
     where: { accountId },
     orderBy: { createdAt: "desc" },
     take: SESSION_ERROR_RATE_SAMPLE,
-    select: { result: true },
+    select: { result: true, createdAt: true },
   });
 
   if (recent.length < SESSION_ERROR_RATE_SAMPLE) return; // not enough history yet
@@ -56,7 +61,16 @@ export async function checkSessionErrorRate(accountId: string): Promise<void> {
   // N leads across M pages", "withdrew N pending requests", etc.) — an exact
   // "success" match here mistook those legitimate non-"success" successes for
   // errors and inflated the rate for perfectly healthy accounts.
-  const errorCount = recent.filter((l) => l.result === null || l.result.startsWith("failed:")).length;
+  //
+  // Only count failures within SESSION_ERROR_RATE_WINDOW_MS: a stale failure
+  // still occupies a sample slot but no longer counts as an error, so an account
+  // that has recovered isn't held hostage by old failures.
+  const cutoff = Date.now() - SESSION_ERROR_RATE_WINDOW_MS;
+  const errorCount = recent.filter(
+    (l) =>
+      (l.result === null || l.result.startsWith("failed:")) &&
+      l.createdAt.getTime() >= cutoff
+  ).length;
   const rate = errorCount / recent.length;
 
   if (rate > MAX_SESSION_ERROR_RATE) {

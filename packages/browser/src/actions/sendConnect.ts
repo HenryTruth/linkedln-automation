@@ -187,6 +187,25 @@ export async function sendConnect(
   }
   console.log(`[sendConnect] activated "${result.label}" — invite dialog open: ${opened}`);
   if (!opened) {
+    // LinkedIn sometimes rejects the invite outright (a toast, no dialog).
+    // Surface the specific reason rather than a generic "dialog never opened" —
+    // these are business rules the engine should recognise, not code failures.
+    const notice = await page.evaluate(() => {
+      const t = document.body?.innerText ?? "";
+      if (/Invitation not sent|resend an invitation|weeks? after withdrawing/i.test(t)) return "cooldown";
+      if (/weekly invitation limit|reached the weekly|invitations? left this week/i.test(t)) return "weekly_limit";
+      return "";
+    });
+    if (notice === "cooldown") {
+      throw new Error(
+        `LinkedIn declined the invite to "${result.label}": a request was recently withdrawn and can't be resent for ~3 weeks (LinkedIn re-invite cooldown) — not a code failure.`
+      );
+    }
+    if (notice === "weekly_limit") {
+      throw new Error(
+        `LinkedIn declined the invite to "${result.label}": the account has hit LinkedIn's weekly invitation limit.`
+      );
+    }
     throw new Error(`Clicked Connect for "${result.label}" but the invite dialog never opened on ${linkedinUrl}.`);
   }
 

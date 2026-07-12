@@ -13,6 +13,7 @@ export { scrapeSearch } from "./actions/scrapeSearch.js";
 export { sendConnect } from "./actions/sendConnect.js";
 export { sendMessage } from "./actions/sendMessage.js";
 export { sendInMail } from "./actions/sendInMail.js";
+export type { SendInMailOptions } from "./actions/sendInMail.js";
 export {
   withdrawPendingConnections,
   withdrawConnection,

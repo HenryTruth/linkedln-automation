@@ -42,8 +42,36 @@ export async function inMailProcessor(job: Job<InMailJobData>): Promise<void> {
     throw new AccountPausedError(accountId);
   }
 
+  // Capability gate: InMail to a non-open-profile only works through Sales
+  // Navigator. If this account doesn't have it, the lead can't be InMailed at
+  // all — skip it cleanly with a reason rather than throwing (a throw makes the
+  // job fail + retry + count toward the anomaly guard, which is wrong for a
+  // structural limitation that won't resolve on retry).
   if (!account.salesNavigatorEnabled) {
-    throw new Error("Sales Navigator must be enabled on this account before InMail can run.");
+    await prisma.campaignLead.update({
+      where: { id: campaignLeadId },
+      data: {
+        jobStatus: "SKIPPED",
+        lastJobError: "InMail requires Sales Navigator on this account.",
+      },
+    });
+    return;
+  }
+
+  // With Sales Navigator, InMail runs on the /sales/lead/ surface. Leads that
+  // come in as a regular /in/ profile can't be routed yet (the /in/ → /sales/lead
+  // bridge isn't built) — skip cleanly with a reason instead of failing.
+  const isSalesNavLeadUrl = /linkedin\.com\/sales\/(lead|people)\//.test(linkedinUrl);
+  if (!isSalesNavLeadUrl) {
+    await prisma.campaignLead.update({
+      where: { id: campaignLeadId },
+      data: {
+        jobStatus: "SKIPPED",
+        lastJobError:
+          "InMail via Sales Navigator needs a /sales/lead/ URL; the /in/ bridge isn't available yet.",
+      },
+    });
+    return;
   }
 
   if (lead.blacklisted) {
@@ -76,7 +104,9 @@ export async function inMailProcessor(job: Job<InMailJobData>): Promise<void> {
   try {
     await worker.launch();
     const page = await worker.getPage();
-    await sendInMail(page, linkedinUrl, subject, messageBody);
+    await sendInMail(page, linkedinUrl, subject, messageBody, {
+      salesNavigator: account.salesNavigatorEnabled,
+    });
     await incrementMonthlyInMailCap(accountId);
 
     await prisma.activityLog.create({

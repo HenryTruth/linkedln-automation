@@ -36,6 +36,7 @@ async function fetchDueLeads() {
         select: {
           id: true,
           accountId: true,
+          targetTimezone: true,
           account: { select: { status: true } },
         },
       },
@@ -89,6 +90,7 @@ export async function sequenceEngineProcessor(
     if (!step) continue;
     const config = (step.config ?? {}) as Record<string, unknown>;
     const accountId = cl.campaign.accountId;
+    const campaignTimezone = cl.campaign.targetTimezone ?? undefined;
 
     switch (step.type) {
       case StepType.WAIT: {
@@ -102,7 +104,7 @@ export async function sequenceEngineProcessor(
 
       case StepType.SEND_CONNECTION_REQUEST: {
         try {
-          await checkDailyCap(accountId, "connection");
+          await checkDailyCap(accountId, "connection", campaignTimezone);
         } catch (err) {
           await recordCapSkip(cl.id, err);
           continue;
@@ -139,7 +141,7 @@ export async function sequenceEngineProcessor(
         const bodyTemplate = config.bodyTemplate as string | undefined;
         if (!bodyTemplate) continue;
         try {
-          await checkDailyCap(accountId, "message");
+          await checkDailyCap(accountId, "message", campaignTimezone);
         } catch (err) {
           await recordCapSkip(cl.id, err);
           continue;
@@ -174,7 +176,7 @@ export async function sequenceEngineProcessor(
         const bodyTemplate = config.bodyTemplate as string | undefined;
         if (!bodyTemplate) continue;
         try {
-          await checkDailyCap(accountId, "inmail");
+          await checkDailyCap(accountId, "inmail", campaignTimezone);
         } catch (err) {
           await recordCapSkip(cl.id, err);
           continue;
@@ -207,7 +209,7 @@ export async function sequenceEngineProcessor(
 
       case StepType.SCRAPE_SEARCH: {
         try {
-          await checkDailyCap(accountId, "profileView");
+          await checkDailyCap(accountId, "profileView", campaignTimezone);
         } catch (err) {
           await recordCapSkip(cl.id, err);
           continue;
@@ -241,7 +243,7 @@ export async function sequenceEngineProcessor(
           continue;
         }
         try {
-          await checkDailyCap(accountId, "profileView");
+          await checkDailyCap(accountId, "profileView", campaignTimezone);
         } catch (err) {
           await recordCapSkip(cl.id, err);
           continue;
@@ -262,7 +264,7 @@ export async function sequenceEngineProcessor(
 
       case StepType.VISIT_PROFILE: {
         try {
-          await checkDailyCap(accountId, "profileView");
+          await checkDailyCap(accountId, "profileView", campaignTimezone);
         } catch (err) {
           await recordCapSkip(cl.id, err);
           continue;
@@ -288,7 +290,7 @@ export async function sequenceEngineProcessor(
 
       case StepType.WITHDRAW_CONNECTION: {
         try {
-          await checkDailyCap(accountId, "connection");
+          await checkDailyCap(accountId, "connection", campaignTimezone);
         } catch (err) {
           await recordCapSkip(cl.id, err);
           continue;

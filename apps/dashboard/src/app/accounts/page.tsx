@@ -176,8 +176,24 @@ function locationMismatchMessage(proxy: Proxy | null | undefined, timezone: stri
   return `Timezone ${timezone} usually maps to ${expected}, but this proxy is ${proxy.country}. Use the location the account normally logs in from.`;
 }
 
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+function dayKeyForTimezone(timezone: string, date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const part = (type: string) => parts.find((p) => p.type === type)?.value;
+    const year = part("year");
+    const month = part("month");
+    const day = part("day");
+    if (year && month && day) return `${year}-${month}-${day}`;
+  } catch {
+    // Fall through to UTC if the timezone is invalid.
+  }
+
+  return date.toISOString().slice(0, 10);
 }
 
 function effectiveCap(account: Account, key: CapKey): number {
@@ -655,8 +671,6 @@ export default function AccountsPage() {
       </div>
     );
 
-  const today = todayKey();
-
   return (
     <div className="space-y-6">
       <section className="app-panel p-6 lg:p-8">
@@ -852,6 +866,7 @@ export default function AccountsPage() {
       {/* Account cards */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {accounts.map((account) => {
+          const today = dayKeyForTimezone(account.timezone);
           const todayCaps =
             (account.dailyCaps as Record<string, Record<string, number>>)[
               today

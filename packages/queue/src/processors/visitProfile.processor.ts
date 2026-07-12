@@ -17,7 +17,7 @@ export async function visitProfileProcessor(
 ): Promise<void> {
   const { accountId, leadId, campaignLeadId, linkedinUrl } = job.data;
 
-  const [account, lead] = await Promise.all([
+  const [account, lead, campaignData] = await Promise.all([
     prisma.account.findUniqueOrThrow({
       where: { id: accountId },
       select: { status: true, warmUpPhase: true },
@@ -26,7 +26,12 @@ export async function visitProfileProcessor(
       where: { id: leadId },
       select: { blacklisted: true },
     }),
+    prisma.campaignLead.findUnique({
+      where: { id: campaignLeadId },
+      select: { campaign: { select: { targetTimezone: true } } },
+    }),
   ]);
+  const campaignTimezone = campaignData?.campaign?.targetTimezone ?? undefined;
 
   if (account.status === AccountStatus.PAUSED) {
     throw new AccountPausedError(accountId);
@@ -42,7 +47,7 @@ export async function visitProfileProcessor(
 
   try {
     assertWarmUpAllowed(accountId, account.warmUpPhase, "profileView");
-    await claimDailyCap(accountId, "profileView");
+    await claimDailyCap(accountId, "profileView", campaignTimezone);
     await checkActionWindow(accountId);
     await checkSessionErrorRate(accountId);
   } catch (err) {

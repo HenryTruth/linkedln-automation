@@ -22,15 +22,31 @@ const CAP_LABELS: Record<string, string> = {
   searchPage: "Search Pages",
 };
 
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+function dayKeyForTimezone(timezone: string, date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const part = (type: string) => parts.find((p) => p.type === type)?.value;
+    const year = part("year");
+    const month = part("month");
+    const day = part("day");
+    if (year && month && day) return `${year}-${month}-${day}`;
+  } catch {
+    // Fall through to UTC if the timezone is invalid.
+  }
+
+  return date.toISOString().slice(0, 10);
 }
 
-function lastNDays(n: number): string[] {
+function lastNDays(n: number, timezone: string): string[] {
   return Array.from({ length: n }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (n - 1 - i));
-    return d.toISOString().slice(0, 10);
+    return dayKeyForTimezone(timezone, d);
   });
 }
 
@@ -78,17 +94,20 @@ export default function RateLimitsPage() {
     api.accounts.list().then(setAccounts).catch(console.error).finally(() => setLoading(false));
   }, []);
 
-  const today = todayKey();
-  const days = lastNDays(7);
+  const todayByAccount = new Map(
+    accounts.map((account) => [account.id, dayKeyForTimezone(account.timezone)])
+  );
+  const accountToday = (account: Account) =>
+    todayByAccount.get(account.id) ?? dayKeyForTimezone(account.timezone);
 
   const atRisk = accounts.filter((a) =>
-    accountUtilization(a, today).some((u) => u.pct >= 80)
+    accountUtilization(a, accountToday(a)).some((u) => u.pct >= 80)
   ).length;
 
   const atWarning = accounts.filter(
     (a) =>
-      accountUtilization(a, today).some((u) => u.pct >= 60) &&
-      !accountUtilization(a, today).some((u) => u.pct >= 80)
+      accountUtilization(a, accountToday(a)).some((u) => u.pct >= 60) &&
+      !accountUtilization(a, accountToday(a)).some((u) => u.pct >= 80)
   ).length;
 
   if (loading)
@@ -207,6 +226,7 @@ export default function RateLimitsPage() {
               </thead>
               <tbody className="divide-y divide-white/[0.06]">
                 {accounts.map((account) => {
+                  const today = accountToday(account);
                   const utils = accountUtilization(account, today);
                   const worstPct = Math.max(...utils.map((u) => u.pct));
                   return (
@@ -257,6 +277,8 @@ export default function RateLimitsPage() {
           </h2>
           <div className="grid gap-4 lg:grid-cols-2">
             {accounts.map((account) => {
+              const today = accountToday(account);
+              const days = lastNDays(7, account.timezone);
               const capsJson = account.dailyCaps as Record<
                 string,
                 Record<string, number>

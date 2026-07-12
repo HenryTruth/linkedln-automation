@@ -17,7 +17,7 @@ export async function withdrawSingleProcessor(
 ): Promise<void> {
   const { accountId, leadId, campaignLeadId, linkedinUrl } = job.data;
 
-  const [account, lead] = await Promise.all([
+  const [account, lead, campaignData] = await Promise.all([
     prisma.account.findUniqueOrThrow({
       where: { id: accountId },
       select: { status: true, warmUpPhase: true },
@@ -26,7 +26,12 @@ export async function withdrawSingleProcessor(
       where: { id: leadId },
       select: { blacklisted: true },
     }),
+    prisma.campaignLead.findUnique({
+      where: { id: campaignLeadId },
+      select: { campaign: { select: { targetTimezone: true } } },
+    }),
   ]);
+  const campaignTimezone = campaignData?.campaign?.targetTimezone ?? undefined;
 
   if (account.status === AccountStatus.PAUSED) {
     throw new AccountPausedError(accountId);
@@ -44,7 +49,7 @@ export async function withdrawSingleProcessor(
     // Reuses the "connection" bucket — inverse of sending a request, same
     // LinkedIn surface. See §4 of docs/plans/sequence-builder-engine.md.
     assertWarmUpAllowed(accountId, account.warmUpPhase, "connection");
-    await claimDailyCap(accountId, "connection");
+    await claimDailyCap(accountId, "connection", campaignTimezone);
     await checkActionWindow(accountId);
     await checkSessionErrorRate(accountId);
   } catch (err) {

@@ -15,7 +15,7 @@ import type { LikePostJobData } from "../queues.js";
 export async function likePostProcessor(job: Job<LikePostJobData>): Promise<void> {
   const { accountId, leadId, campaignLeadId, postUrl } = job.data;
 
-  const [account, lead] = await Promise.all([
+  const [account, lead, campaignData] = await Promise.all([
     prisma.account.findUniqueOrThrow({
       where: { id: accountId },
       select: { status: true, warmUpPhase: true },
@@ -24,7 +24,12 @@ export async function likePostProcessor(job: Job<LikePostJobData>): Promise<void
       where: { id: leadId },
       select: { blacklisted: true },
     }),
+    prisma.campaignLead.findUnique({
+      where: { id: campaignLeadId },
+      select: { campaign: { select: { targetTimezone: true } } },
+    }),
   ]);
+  const campaignTimezone = campaignData?.campaign?.targetTimezone ?? undefined;
 
   if (account.status === AccountStatus.PAUSED) {
     throw new AccountPausedError(accountId);
@@ -43,7 +48,7 @@ export async function likePostProcessor(job: Job<LikePostJobData>): Promise<void
     // see §4 of docs/plans/sequence-builder-engine.md for why this doesn't get
     // its own ActionType.
     assertWarmUpAllowed(accountId, account.warmUpPhase, "profileView");
-    await claimDailyCap(accountId, "profileView");
+    await claimDailyCap(accountId, "profileView", campaignTimezone);
     await checkActionWindow(accountId);
     await checkSessionErrorRate(accountId);
   } catch (err) {

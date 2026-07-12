@@ -43,7 +43,7 @@ export async function sequenceProcessor(
 
     // Check daily cap before doing anything expensive
     try {
-      await checkDailyCap(campaign.accountId, "message");
+      await checkDailyCap(campaign.accountId, "message", campaign.targetTimezone ?? undefined);
     } catch {
       // Cap hit for this account — skip all remaining leads for it
       continue;

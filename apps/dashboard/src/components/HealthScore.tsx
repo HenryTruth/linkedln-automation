@@ -5,8 +5,24 @@ const BASE_CAPS: Record<string, number> = {
   message: 40,
 };
 
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+function dayKeyForTimezone(timezone: string, date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const part = (type: string) => parts.find((p) => p.type === type)?.value;
+    const year = part("year");
+    const month = part("month");
+    const day = part("day");
+    if (year && month && day) return `${year}-${month}-${day}`;
+  } catch {
+    // Fall through to UTC if the timezone is invalid.
+  }
+
+  return date.toISOString().slice(0, 10);
 }
 
 export function computeHealthScore(
@@ -23,7 +39,7 @@ export function computeHealthScore(
   if (account.proxy?.healthStatus === "DEAD") score -= 20;
   else if (account.proxy?.healthStatus === "DEGRADED") score -= 10;
 
-  const today = todayKey();
+  const today = dayKeyForTimezone(account.timezone);
   const todayCaps =
     (account.dailyCaps as Record<string, Record<string, number>>)[today] ?? {};
   const heavyUsage = Object.entries(BASE_CAPS).some(

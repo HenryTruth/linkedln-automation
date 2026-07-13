@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { Message } from "@/lib/api";
 import { api } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 // Drag handle icon
 
@@ -190,6 +191,8 @@ function SortableCard({
   onDelete: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const {
     attributes,
@@ -208,18 +211,16 @@ function SortableCard({
   };
 
   async function handleDelete() {
-    if (
-      !confirm(
-        `Delete step ${index + 1} (variant ${message.variantGroup})? This can't be undone.`
-      )
-    )
-      return;
+    setDeleting(true);
     try {
       await api.campaigns.messages.delete(campaignId, message.id);
       onDelete(message.id);
       toast.success(`Step ${index + 1} deleted`);
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      setDeleting(false);
+      setConfirmDeleteOpen(false);
     }
   }
 
@@ -272,7 +273,7 @@ function SortableCard({
             {editing ? "Close" : "Edit"}
           </button>
           <button
-            onClick={handleDelete}
+            onClick={() => setConfirmDeleteOpen(true)}
             className="text-xs font-semibold text-red-500 hover:underline"
           >
             Delete
@@ -292,6 +293,16 @@ function SortableCard({
           onCancel={() => setEditing(false)}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete step"
+        description={`Delete step ${index + 1} (variant ${message.variantGroup})? This can't be undone.`}
+        confirmLabel="Delete"
+        busy={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
     </div>
   );
 }

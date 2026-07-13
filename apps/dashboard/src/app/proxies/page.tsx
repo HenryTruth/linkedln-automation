@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, type Proxy, type ProxyCheapRemoteProxy } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { Skeleton, SkeletonPageHeader, SkeletonTableRows } from "@/components/Skeleton";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
 
 type RotationMode = "STATIC" | "STICKY_SESSION";
@@ -43,6 +44,7 @@ export default function ProxiesPage() {
   const [proxyCheapProxies, setProxyCheapProxies] = useState<ProxyCheapRemoteProxy[]>([]);
   const [selectedProxyCheapIds, setSelectedProxyCheapIds] = useState<Set<string>>(new Set());
   const [importSummary, setImportSummary] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; host: string } | null>(null);
 
   // Add form
   const [showForm, setShowForm] = useState(false);
@@ -121,7 +123,7 @@ export default function ProxiesPage() {
   }
 
   async function handleDelete(id: string, host: string) {
-    if (!confirm(`Delete proxy ${host}? Any account using it will lose its proxy assignment.`)) return;
+    setDeleteTarget(null);
     setBusy(id);
     try {
       await api.proxies.delete(id);
@@ -571,7 +573,7 @@ export default function ProxiesPage() {
                         {busy === proxy.id ? "Checking..." : "Health Check"}
                       </button>
                       <button
-                        onClick={() => handleDelete(proxy.id, proxy.host)}
+                        onClick={() => setDeleteTarget({ id: proxy.id, host: proxy.host })}
                         disabled={busy === proxy.id}
                         className="text-xs font-semibold text-red-500 hover:underline disabled:opacity-40"
                       >
@@ -585,6 +587,20 @@ export default function ProxiesPage() {
           </table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete proxy"
+        description={
+          deleteTarget
+            ? `Delete proxy ${deleteTarget.host}? Any account using it will lose its proxy assignment.`
+            : ""
+        }
+        confirmLabel="Delete"
+        busy={busy === deleteTarget?.id}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id, deleteTarget.host)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

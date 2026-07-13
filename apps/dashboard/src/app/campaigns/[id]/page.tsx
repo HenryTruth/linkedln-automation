@@ -8,6 +8,7 @@ import { SequenceBuilder } from "@/components/SequenceBuilder";
 import { SequenceGraphBuilder, STEP_TYPE_LABELS } from "@/components/SequenceGraphBuilder";
 import { ContentSignalPanel } from "@/components/ContentSignalPanel";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
 
 const SEARCH_LOCATIONS: { label: string; geoUrn: string }[] = [
@@ -190,6 +191,7 @@ export default function CampaignDetailPage() {
   const [editTimezone, setEditTimezone] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   // Connection note editor state
   const [noteText, setNoteText] = useState("");
@@ -345,7 +347,7 @@ export default function CampaignDetailPage() {
   }
 
   async function handleDelete() {
-    if (!confirm(`Delete "${campaign!.name}"? This removes all leads and messages in this campaign and cannot be undone.`)) return;
+    setConfirmDeleteOpen(false);
     setDeleting(true);
     try {
       await api.campaigns.delete(id);
@@ -603,7 +605,7 @@ export default function CampaignDetailPage() {
               {campaign.status === "PAUSED" ? "Resume" : "Pause"}
             </button>
             <button
-              onClick={handleDelete}
+              onClick={() => setConfirmDeleteOpen(true)}
               disabled={deleting}
               className="btn-danger"
             >
@@ -1389,6 +1391,16 @@ export default function CampaignDetailPage() {
           </table>
         </div>
       </section>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete campaign"
+        description={`Delete "${campaign.name}"? This removes all leads and messages in this campaign and cannot be undone.`}
+        confirmLabel="Delete"
+        busy={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, type Campaign } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
 
 export default function CampaignsPage() {
@@ -12,6 +13,7 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Campaign | null>(null);
 
   useEffect(() => {
     api.campaigns
@@ -38,18 +40,12 @@ export default function CampaignsPage() {
   }
 
   async function deleteCampaign(c: Campaign) {
-    if (
-      !confirm(
-        `Delete "${c.name}"? This removes all its leads and messages and cannot be undone.`
-      )
-    ) {
-      return;
-    }
     setBusy(c.id);
     try {
       await api.campaigns.delete(c.id);
       setCampaigns((prev) => prev.filter((x) => x.id !== c.id));
       toast.success(`"${c.name}" deleted`);
+      setDeleteTarget(null);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -176,7 +172,7 @@ export default function CampaignsPage() {
                       {c.status === "PAUSED" ? "Resume" : "Pause"}
                     </button>
                     <button
-                      onClick={() => deleteCampaign(c)}
+                      onClick={() => setDeleteTarget(c)}
                       disabled={busy === c.id}
                       className="btn-danger px-3 py-1.5"
                     >
@@ -189,6 +185,20 @@ export default function CampaignsPage() {
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete campaign"
+        description={
+          deleteTarget
+            ? `Delete "${deleteTarget.name}"? This removes all its leads and messages and cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        busy={busy === deleteTarget?.id}
+        onConfirm={() => deleteTarget && deleteCampaign(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

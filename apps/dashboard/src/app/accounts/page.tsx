@@ -477,7 +477,27 @@ export default function AccountsPage() {
       setShowForm(false);
       await reload();
     } catch (err) {
-      setAddError((err as Error).message);
+      const message = (err as Error).message;
+      const existing = accounts.find(
+        (a) => a.email.toLowerCase() === newEmail.trim().toLowerCase()
+      );
+      if (message.includes("already exists") && existing) {
+        setShowForm(false);
+        setNewEmail("");
+        setNewProxyId("");
+        setNewSalesNavigatorEnabled(false);
+        setNewInMailMonthlyLimit(50);
+        setAddError(null);
+        openEditFor(existing);
+        setAccountNotice(existing.id, "info", "An account with this email already exists — editing it below.");
+        requestAnimationFrame(() => {
+          document
+            .getElementById(`account-${existing.id}`)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      } else {
+        setAddError(message);
+      }
     } finally {
       setAdding(false);
     }
@@ -870,6 +890,7 @@ export default function AccountsPage() {
           return (
             <div
               key={account.id}
+              id={`account-${account.id}`}
               className={`app-panel space-y-5 p-6 ${
                 openCount > 0 || account.status === "RESTRICTED"
                   ? "border-red-500/40 ring-2 ring-red-500/20"

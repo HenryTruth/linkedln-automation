@@ -788,29 +788,6 @@ export default function CampaignDetailPage() {
         </section>
       )}
 
-      {/* Sequence graph builder */}
-      {isSequence && (
-        <section>
-          <div className="mb-4">
-            <p className="page-kicker">Sequence</p>
-            <h2 className="mt-1 text-xl font-semibold text-white">
-              Sequence Graph
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
-              Drag steps from the palette onto the canvas, connect them, and
-              configure each one. Connection request steps have two outputs —
-              wire up what happens when a request is accepted vs. times out.
-            </p>
-          </div>
-          <SequenceGraphBuilder
-            campaignId={id}
-            campaignStatus={campaign.status}
-            initialSteps={campaign.steps ?? []}
-            initialEdges={campaign.edges ?? []}
-          />
-        </section>
-      )}
-
       {/* Profiles / Leads section */}
       <section>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -1257,7 +1234,7 @@ export default function CampaignDetailPage() {
                       : campaign.type === "CONNECT"
                       ? 'No leads yet - add people you want to connect with.'
                       : isSequence
-                      ? "No leads yet - add people to run through the sequence above."
+                      ? "No leads yet - add people to run through the sequence graph below."
                       : 'No leads yet - add connected contacts to message.'}
                   </td>
                 </tr>
@@ -1391,6 +1368,29 @@ export default function CampaignDetailPage() {
           </table>
         </div>
       </section>
+
+      {/* Sequence graph builder */}
+      {isSequence && (
+        <section>
+          <div className="mb-4">
+            <p className="page-kicker">Sequence</p>
+            <h2 className="mt-1 text-xl font-semibold text-white">
+              Sequence Graph
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
+              Drag steps from the palette onto the canvas, connect them, and
+              configure each one. Connection request steps have two outputs —
+              wire up what happens when a request is accepted vs. times out.
+            </p>
+          </div>
+          <SequenceGraphBuilder
+            campaignId={id}
+            campaignStatus={campaign.status}
+            initialSteps={campaign.steps ?? []}
+            initialEdges={campaign.edges ?? []}
+          />
+        </section>
+      )}
 
       <ConfirmDialog
         open={confirmDeleteOpen}

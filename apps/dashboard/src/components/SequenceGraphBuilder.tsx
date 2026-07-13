@@ -10,6 +10,10 @@ import {
   Handle,
   Position,
   addEdge,
+  reconnectEdge,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -18,6 +22,8 @@ import {
   type Connection,
   type NodeProps,
   type NodeTypes,
+  type EdgeProps,
+  type EdgeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { toast } from "sonner";
@@ -103,13 +109,13 @@ function StepNodeComponent({ data, selected }: NodeProps<StepFlowNode>) {
         type="target"
         position={Position.Left}
         id="target-left"
-        className="!h-2.5 !w-2.5 !border-white/30 !bg-slate-400"
+        className="!h-3.5 !w-3.5 !border-white/30 !bg-slate-400"
       />
       <Handle
         type="target"
         position={Position.Top}
         id="target-top"
-        className="!h-2.5 !w-2.5 !border-white/30 !bg-slate-400"
+        className="!h-3.5 !w-3.5 !border-white/30 !bg-slate-400"
       />
 
       <div className="flex items-center gap-1.5">
@@ -130,7 +136,7 @@ function StepNodeComponent({ data, selected }: NodeProps<StepFlowNode>) {
               position={Position.Right}
               id="accepted"
               style={{ position: "relative", top: 0, right: -8, transform: "none" }}
-              className="!h-2.5 !w-2.5 !border-white/30 !bg-emerald-400"
+              className="!h-3.5 !w-3.5 !border-white/30 !bg-emerald-400"
             />
           </div>
           <div className="flex items-center justify-between gap-2 text-[10px] font-medium text-amber-300">
@@ -140,7 +146,7 @@ function StepNodeComponent({ data, selected }: NodeProps<StepFlowNode>) {
               position={Position.Right}
               id="timeout"
               style={{ position: "relative", top: 0, right: -8, transform: "none" }}
-              className="!h-2.5 !w-2.5 !border-white/30 !bg-amber-400"
+              className="!h-3.5 !w-3.5 !border-white/30 !bg-amber-400"
             />
           </div>
           {/* Same two outputs, mirrored onto the bottom edge for vertical layouts. */}
@@ -149,14 +155,14 @@ function StepNodeComponent({ data, selected }: NodeProps<StepFlowNode>) {
             position={Position.Bottom}
             id="accepted-bottom"
             style={{ left: "35%" }}
-            className="!h-2.5 !w-2.5 !border-white/30 !bg-emerald-400"
+            className="!h-3.5 !w-3.5 !border-white/30 !bg-emerald-400"
           />
           <Handle
             type="source"
             position={Position.Bottom}
             id="timeout-bottom"
             style={{ left: "65%" }}
-            className="!h-2.5 !w-2.5 !border-white/30 !bg-amber-400"
+            className="!h-3.5 !w-3.5 !border-white/30 !bg-amber-400"
           />
         </div>
       ) : (
@@ -165,13 +171,13 @@ function StepNodeComponent({ data, selected }: NodeProps<StepFlowNode>) {
             type="source"
             position={Position.Right}
             id="default"
-            className="!h-2.5 !w-2.5 !border-white/30 !bg-slate-400"
+            className="!h-3.5 !w-3.5 !border-white/30 !bg-slate-400"
           />
           <Handle
             type="source"
             position={Position.Bottom}
             id="default-bottom"
-            className="!h-2.5 !w-2.5 !border-white/30 !bg-slate-400"
+            className="!h-3.5 !w-3.5 !border-white/30 !bg-slate-400"
           />
         </>
       )}
@@ -180,6 +186,74 @@ function StepNodeComponent({ data, selected }: NodeProps<StepFlowNode>) {
 }
 
 const nodeTypes: NodeTypes = { step: StepNodeComponent };
+
+// Edge with an always-visible delete button — the only way to remove a
+// connection used to be selecting the thin edge line and hitting Backspace,
+// which nobody found on their own.
+function DeletableEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style,
+  markerEnd,
+  selected,
+  data,
+}: EdgeProps) {
+  const { setEdges } = useReactFlow();
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+  const label = (data as { label?: string } | undefined)?.label;
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{ ...style, strokeWidth: selected ? 2.5 : 1.5 }}
+      />
+      <EdgeLabelRenderer>
+        <div
+          style={{
+            position: "absolute",
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            pointerEvents: "all",
+          }}
+          className="nodrag nopan flex items-center gap-1"
+        >
+          {label && (
+            <span className="rounded border border-white/10 bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
+              {label}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEdges((eds) => eds.filter((edge) => edge.id !== id));
+            }}
+            title="Remove connection"
+            className="flex h-4 w-4 items-center justify-center rounded-full border border-red-500/40 bg-slate-900 text-[11px] font-bold leading-none text-red-400 hover:bg-red-500/20"
+          >
+            ×
+          </button>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const edgeTypes: EdgeTypes = { step: DeletableEdge };
 
 function conditionForHandle(handle: string | null | undefined): EdgeCondition {
   if (handle === "accepted" || handle === "accepted-bottom") return "CONNECTION_ACCEPTED";
@@ -206,6 +280,7 @@ function stepsToNodes(steps: SequenceStep[]): StepFlowNode[] {
 function edgesToFlow(edges: SequenceEdge[]): Edge[] {
   return edges.map((e) => ({
     id: `${e.fromStepId}-${e.toStepId}-${e.condition}`,
+    type: "step",
     source: e.fromStepId,
     target: e.toStepId,
     sourceHandle:
@@ -214,9 +289,15 @@ function edgesToFlow(edges: SequenceEdge[]): Edge[] {
         : e.condition === "CONNECTION_TIMEOUT"
         ? "timeout"
         : "default",
-    label: e.condition === "DEFAULT" ? undefined : e.condition === "CONNECTION_ACCEPTED" ? "Accepted" : "Timed out",
+    data: {
+      label:
+        e.condition === "CONNECTION_ACCEPTED"
+          ? "Accepted"
+          : e.condition === "CONNECTION_TIMEOUT"
+          ? "Timed out"
+          : undefined,
+    },
     style: { stroke: "#64748b" },
-    labelStyle: { fill: "#cbd5e1", fontSize: 10, fontWeight: 600 },
   }));
 }
 
@@ -422,13 +503,20 @@ function Builder({ campaignId, campaignStatus, initialSteps, initialEdges }: Seq
           {
             ...connection,
             id: `${connection.source}-${connection.target}-${connection.sourceHandle ?? "default"}`,
+            type: "step",
             style: { stroke: "#64748b" },
-            label: edgeLabelForHandle(connection.sourceHandle),
-            labelStyle: { fill: "#cbd5e1", fontSize: 10, fontWeight: 600 },
+            data: { label: edgeLabelForHandle(connection.sourceHandle) },
           },
           eds
         )
       );
+    },
+    [setEdges]
+  );
+
+  const onReconnect = useCallback(
+    (oldEdge: Edge, newConnection: Connection) => {
+      setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds));
     },
     [setEdges]
   );
@@ -565,7 +653,11 @@ function Builder({ campaignId, campaignStatus, initialSteps, initialEdges }: Seq
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onReconnect={onReconnect}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            connectionRadius={32}
+            connectionLineStyle={{ stroke: "#2dd4bf", strokeWidth: 2 }}
             onNodeClick={(_, node) => setSelectedId(node.id)}
             onPaneClick={() => setSelectedId(null)}
             colorMode="dark"

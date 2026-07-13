@@ -123,6 +123,26 @@ function searchJobDetail(job: SearchScrapeCampaignJob) {
   return "Search scrape job recorded.";
 }
 
+// Mirrors isSalesNavigatorUrl in apps/api/src/routes/campaigns.ts so the
+// source dropdown can auto-sync with whatever URL gets pasted in, instead of
+// silently defaulting to the wrong source and tripping the backend's guard.
+function detectSearchSource(value: string): "LINKEDIN" | "SALES_NAVIGATOR" | null {
+  try {
+    const url = new URL(value);
+    if (!url.hostname.endsWith("linkedin.com")) return null;
+    if (
+      url.pathname.startsWith("/sales/search/people") ||
+      url.pathname.startsWith("/sales/lists/people") ||
+      url.pathname.startsWith("/sales/lead/")
+    ) {
+      return "SALES_NAVIGATOR";
+    }
+    return "LINKEDIN";
+  } catch {
+    return null;
+  }
+}
+
 function fmtJobTime(value: number | null | undefined) {
   if (!value) return "-";
   return new Date(value).toLocaleString();
@@ -1124,7 +1144,12 @@ export default function CampaignDetailPage() {
               <input
                 required
                 value={searchUrl}
-                onChange={(e) => setSearchUrl(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSearchUrl(value);
+                  const detected = detectSearchSource(value);
+                  if (detected) setSearchSource(detected);
+                }}
                 placeholder={
                   searchSource === "SALES_NAVIGATOR"
                     ? "https://www.linkedin.com/sales/search/people?query=..."
@@ -1132,6 +1157,17 @@ export default function CampaignDetailPage() {
                 }
                 className="field w-full font-mono text-xs"
               />
+              {searchUrl && detectSearchSource(searchUrl) && (
+                <p className="text-xs text-slate-500">
+                  Detected{" "}
+                  <span className="font-semibold text-slate-300">
+                    {detectSearchSource(searchUrl) === "SALES_NAVIGATOR"
+                      ? "Sales Navigator"
+                      : "LinkedIn people search"}
+                  </span>{" "}
+                  — source set automatically.
+                </p>
+              )}
               {searchError && (
                 <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
                   {searchError}

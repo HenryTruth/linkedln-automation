@@ -682,35 +682,8 @@ export default function AccountsPage() {
               Each LinkedIn account runs its own browser session with independent
               safety caps, warm-up state, proxy status, and checkpoint handling.
             </p>
-	                  </div>
-	                  <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
-	                    <label className="flex items-start gap-3 text-sm font-semibold text-slate-200">
-	                      <input
-	                        type="checkbox"
-	                        checked={editSalesNavigatorEnabled}
-	                        onChange={(e) => setEditSalesNavigatorEnabled(e.target.checked)}
-	                        className="mt-1"
-	                      />
-	                      <span>
-	                        Sales Navigator enabled
-	                        <span className="mt-1 block text-xs font-normal leading-5 text-slate-400">
-	                          Allows Sales Navigator search/list scraping and InMail campaigns for this account.
-	                        </span>
-	                      </span>
-	                    </label>
-	                    <label className="mt-3 block text-xs font-semibold text-slate-400">
-	                      Monthly InMail limit
-	                    </label>
-	                    <input
-	                      type="number"
-	                      min={1}
-	                      max={500}
-	                      value={editInMailMonthlyLimit}
-	                      onChange={(e) => setEditInMailMonthlyLimit(Number(e.target.value))}
-	                      className="field mt-1 w-full"
-	                    />
-	                  </div>
-	                  <button
+          </div>
+          <button
             onClick={() => setShowForm((v) => !v)}
             className={showForm ? "btn-secondary" : "btn-primary"}
           >
@@ -1025,6 +998,33 @@ export default function AccountsPage() {
                         </p>
                       ) : null;
                     })()}
+                  </div>
+                  <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+                    <label className="flex items-start gap-3 text-sm font-semibold text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={editSalesNavigatorEnabled}
+                        onChange={(e) => setEditSalesNavigatorEnabled(e.target.checked)}
+                        className="mt-1"
+                      />
+                      <span>
+                        Sales Navigator enabled
+                        <span className="mt-1 block text-xs font-normal leading-5 text-slate-400">
+                          Allows Sales Navigator search/list scraping and InMail campaigns for this account.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="mt-3 block text-xs font-semibold text-slate-400">
+                      Monthly InMail limit
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={editInMailMonthlyLimit}
+                      onChange={(e) => setEditInMailMonthlyLimit(Number(e.target.value))}
+                      className="field mt-1 w-full"
+                    />
                   </div>
                   <button
                     type="button"

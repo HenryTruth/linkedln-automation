@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
+import { Prisma } from "@linkedin-automation/db";
 import {
   DailyCapExceededError,
   WarmUpError,
@@ -36,6 +37,16 @@ export function errorMiddleware(
 
   if (err instanceof Error && err.message.includes("not found")) {
     res.status(404).json({ error: err.message });
+    return;
+  }
+
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    const target = err.meta?.target;
+    const fields = Array.isArray(target) ? target.join(", ") : String(target ?? "field");
+    const message = fields.includes("email")
+      ? "An account with this email already exists — edit the existing account instead of adding a new one."
+      : `A record with this ${fields} already exists.`;
+    res.status(409).json({ error: message });
     return;
   }
 

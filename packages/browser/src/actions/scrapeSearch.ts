@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
 import { prisma, LeadSource } from "@linkedin-automation/db";
-import { humanDelay, detectCheckpoint } from "@linkedin-automation/guards";
+import { humanDelay, detectCheckpoint, claimDailyCap } from "@linkedin-automation/guards";
 import { navigateTo } from "./navigate.js";
 import {
   collectSearchLeads,
@@ -45,7 +45,8 @@ export async function scrapeSearch(
   searchUrl: string,
   accountId: string,
   maxPages = 5,
-  source: SearchSource = "LINKEDIN"
+  source: SearchSource = "LINKEDIN",
+  timezoneOverride?: string
 ): Promise<{ urls: string[]; pagesScraped: number; lastUrl: string }> {
   const allUrls: string[] = [];
   let pagesScraped = 0;
@@ -55,6 +56,18 @@ export async function scrapeSearch(
   });
 
   for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+    // Claim cap one page at a time, right before it's actually fetched —
+    // claiming the whole maxPages budget upfront meant a session-dead
+    // account could burn its entire daily quota on a single failed
+    // navigation, with nothing to show for it. Only page 1 fails hard on a
+    // cap miss; later pages just stop the loop and return what's collected.
+    try {
+      await claimDailyCap(accountId, "searchPage", timezoneOverride);
+    } catch (err) {
+      if (pageNum === 1) throw err;
+      break;
+    }
+
     const pageUrl = buildPageUrl(searchUrl, pageNum);
     await navigateTo(page, pageUrl);
     await humanDelay(3_000, 6_000);

@@ -3,11 +3,9 @@ import { prisma, AccountStatus, CampaignStatus } from "@linkedin-automation/db";
 import {
   assertWarmUpAllowed,
   checkActionWindow,
-  claimDailyCap,
   pauseAccountForAnomaly,
   AccountPausedError,
   AnomalyError,
-  DailyCapExceededError,
 } from "@linkedin-automation/guards";
 import { BrowserWorker, scrapeSearch } from "@linkedin-automation/browser";
 import type { SearchScrapeJobData } from "../queues.js";
@@ -56,24 +54,13 @@ export async function searchScrapeProcessor(
     await worker.launch();
     const page = await worker.getPage();
 
-    let pagesToScrape = 0;
-    for (let i = 0; i < maxPages; i++) {
-      try {
-        await claimDailyCap(accountId, "searchPage", campaignTimezone);
-        pagesToScrape++;
-      } catch (err) {
-        if (i === 0) throw err;
-        break;
-      }
-    }
-    if (pagesToScrape === 0) throw new DailyCapExceededError(accountId, "searchPage");
-
     const { urls, pagesScraped, lastUrl } = await scrapeSearch(
       page,
       searchUrl,
       accountId,
-      pagesToScrape,
-      source
+      maxPages,
+      source,
+      campaignTimezone
     );
 
     // A "successful" scrape with zero results usually means LinkedIn served a

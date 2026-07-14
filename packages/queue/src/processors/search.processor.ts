@@ -1,5 +1,5 @@
 import type { Job } from "bullmq";
-import { prisma, AccountStatus, CampaignStatus } from "@linkedin-automation/db";
+import { prisma, AccountStatus, CampaignStatus, LeadSource } from "@linkedin-automation/db";
 import {
   assertWarmUpAllowed,
   checkActionWindow,
@@ -83,17 +83,19 @@ export async function searchScrapeProcessor(
     });
 
     if (campaignId && urls.length > 0) {
+      const leadSource =
+        source === "SALES_NAVIGATOR" ? LeadSource.SALES_NAVIGATOR : LeadSource.LINKEDIN_SEARCH;
       for (const linkedinUrl of urls) {
-        const lead = await prisma.lead.findUnique({
+        const lead = await prisma.lead.upsert({
           where: {
             userId_linkedinUrl: {
               userId: account.userId,
               linkedinUrl,
             },
           },
-          select: { id: true },
+          create: { userId: account.userId, linkedinUrl, source: leadSource, accountId },
+          update: {},
         });
-        if (!lead) continue;
 
         await prisma.campaignLead.upsert({
           where: { campaignId_leadId: { campaignId, leadId: lead.id } },

@@ -232,6 +232,7 @@ export default function CampaignDetailPage() {
   // Add search URL form (SCRAPE only)
   const [searchUrl, setSearchUrl] = useState("");
   const [searchSource, setSearchSource] = useState<"LINKEDIN" | "SALES_NAVIGATOR">("LINKEDIN");
+  const [searchLeadLimit, setSearchLeadLimit] = useState(10);
   const [addingSearch, setAddingSearch] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchNotice, setSearchNotice] = useState<string | null>(null);
@@ -448,9 +449,9 @@ export default function CampaignDetailPage() {
     setSearchError(null);
     setSearchNotice(null);
     try {
-      const result = await api.campaigns.addSearchUrl(id, searchUrl, searchSource);
+      const result = await api.campaigns.addSearchUrl(id, searchUrl, searchSource, searchLeadLimit);
       setSearchNotice(
-        `Search URL accepted and queued${result.jobId ? ` as job ${result.jobId}` : ""}. It starts automatically when the search worker is available and account guardrails allow it.`
+        `Search URL accepted and queued${result.jobId ? ` as job ${result.jobId}` : ""} for up to ${searchLeadLimit} leads. It starts automatically when the search worker is available and account guardrails allow it.`
       );
       setSearchUrl("");
       setShowSearchForm(false);
@@ -1157,6 +1158,27 @@ export default function CampaignDetailPage() {
                 }
                 className="field w-full font-mono text-xs"
               />
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-300">
+                  Number of leads to import
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={searchLeadLimit}
+                  onChange={(e) =>
+                    setSearchLeadLimit(
+                      Math.min(200, Math.max(1, parseInt(e.target.value, 10) || 1))
+                    )
+                  }
+                  className="field w-full"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  LinkedIn shows 10 results per page — Vectra pages through search
+                  results until it collects this many leads (up to 200).
+                </p>
+              </div>
               {searchUrl && detectSearchSource(searchUrl) && (
                 <p className="text-xs text-slate-500">
                   Detected{" "}

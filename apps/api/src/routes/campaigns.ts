@@ -372,8 +372,11 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
     const schema = z.object({
       searchUrl: z.string().url(),
       source: z.enum(["LINKEDIN", "SALES_NAVIGATOR"]).default("LINKEDIN"),
+      // LinkedIn renders 10 results per page — the worker pages through
+      // search results until it collects this many leads.
+      leadLimit: z.number().int().min(1).max(200).optional(),
     });
-    const { searchUrl, source } = schema.parse(req.body);
+    const { searchUrl, source, leadLimit } = schema.parse(req.body);
 
     if (source === "SALES_NAVIGATOR" && !isSalesNavigatorUrl(searchUrl)) {
       res.status(422).json({
@@ -420,10 +423,11 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
       accountId: campaign.accountId,
       searchUrl,
       campaignId: campaign.id,
+      leadLimit,
       source,
     });
 
-    res.status(201).json({ queued: 1, jobId: job.id, searchUrl, source });
+    res.status(201).json({ queued: 1, jobId: job.id, searchUrl, source, leadLimit });
   } catch (err) {
     next(err);
   }

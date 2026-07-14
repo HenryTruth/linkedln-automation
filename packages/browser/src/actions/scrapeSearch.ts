@@ -46,7 +46,8 @@ export async function scrapeSearch(
   accountId: string,
   maxPages = 5,
   source: SearchSource = "LINKEDIN",
-  timezoneOverride?: string
+  timezoneOverride?: string,
+  leadLimit?: number
 ): Promise<{ urls: string[]; pagesScraped: number; lastUrl: string }> {
   const allUrls: string[] = [];
   let pagesScraped = 0;
@@ -137,6 +138,11 @@ export async function scrapeSearch(
 
     // Fewer than 10 results usually means the last partial page
     if (leads.length < 10) break;
+
+    if (leadLimit && allUrls.length >= leadLimit) {
+      allUrls.length = leadLimit;
+      break;
+    }
   }
 
   return { urls: allUrls, pagesScraped, lastUrl: page.url() };

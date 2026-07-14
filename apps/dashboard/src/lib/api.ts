@@ -512,11 +512,12 @@ export const api = {
     addSearchUrl: (
       campaignId: string,
       searchUrl: string,
-      source: "LINKEDIN" | "SALES_NAVIGATOR" = "LINKEDIN"
+      source: "LINKEDIN" | "SALES_NAVIGATOR" = "LINKEDIN",
+      leadLimit?: number
     ) =>
-      apiFetch<{ queued: number; jobId?: string; searchUrl: string; source: "LINKEDIN" | "SALES_NAVIGATOR" }>(`/campaigns/${campaignId}/search-urls`, {
+      apiFetch<{ queued: number; jobId?: string; searchUrl: string; source: "LINKEDIN" | "SALES_NAVIGATOR"; leadLimit?: number }>(`/campaigns/${campaignId}/search-urls`, {
         method: "POST",
-        body: JSON.stringify({ searchUrl, source }),
+        body: JSON.stringify({ searchUrl, source, leadLimit }),
       }),
     searchJobs: (id: string) =>
       apiFetch<{ jobs: SearchScrapeCampaignJob[] }>(`/campaigns/${id}/search-jobs`),

@@ -85,6 +85,8 @@ export interface SearchScrapeJobData {
   searchUrl: string;
   campaignId?: string;
   maxPages?: number;
+  /** Stop once this many leads have been collected — LinkedIn renders 10 per page. */
+  leadLimit?: number;
   source?: "LINKEDIN" | "SALES_NAVIGATOR";
 }
 

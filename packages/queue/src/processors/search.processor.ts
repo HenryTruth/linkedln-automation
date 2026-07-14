@@ -19,7 +19,10 @@ export interface SearchScrapeResult {
 export async function searchScrapeProcessor(
   job: Job<SearchScrapeJobData>
 ): Promise<SearchScrapeResult> {
-  const { accountId, searchUrl, campaignId, maxPages = 5, source = "LINKEDIN" } = job.data;
+  const { accountId, searchUrl, campaignId, leadLimit, source = "LINKEDIN" } = job.data;
+  // LinkedIn renders 10 results per page — derive the page budget from the
+  // requested lead count instead of always stopping after the default 5.
+  const maxPages = job.data.maxPages ?? (leadLimit ? Math.ceil(leadLimit / 10) : 5);
 
   const [account, campaign] = await Promise.all([
     prisma.account.findUniqueOrThrow({
@@ -60,7 +63,8 @@ export async function searchScrapeProcessor(
       accountId,
       maxPages,
       source,
-      campaignTimezone
+      campaignTimezone,
+      leadLimit
     );
 
     // A "successful" scrape with zero results usually means LinkedIn served a

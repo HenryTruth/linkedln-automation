@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
 import { prisma, LeadSource } from "@linkedin-automation/db";
-import { humanDelay, detectCheckpoint, claimDailyCap } from "@linkedin-automation/guards";
+import { delays, detectCheckpoint, claimDailyCap } from "@linkedin-automation/guards";
 import { navigateTo } from "./navigate.js";
 import {
   collectSearchLeads,
@@ -69,9 +69,14 @@ export async function scrapeSearch(
       break;
     }
 
+    // A real person reads the current page before clicking to the next one —
+    // requesting page N+1 the instant page N's extraction finishes is the
+    // exact pattern that got this account's session killed mid-pagination.
+    if (pageNum > 1) await delays.betweenPageLoads();
+
     const pageUrl = buildPageUrl(searchUrl, pageNum);
     await navigateTo(page, pageUrl);
-    await humanDelay(3_000, 6_000);
+    await delays.betweenPageLoads();
 
     // LinkedIn redirects dead sessions to a login page instead of erroring,
     // which would otherwise look like an empty search result.

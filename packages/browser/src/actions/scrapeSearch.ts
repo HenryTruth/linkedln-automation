@@ -44,14 +44,20 @@ async function extractResultCards(
 // synthetic full navigation was the one thing we hadn't ruled out as the
 // trigger for LinkedIn killing the session mid-pagination.
 async function clickNextPage(page: Page): Promise<boolean> {
-  const nextButton = page
-    .getByRole("button", { name: /^next$/i })
-    .or(page.getByLabel(/^next$/i))
+  // Scoped to the pagination control specifically — an unscoped page-wide
+  // "Next" match can hit an unrelated element (a tour tooltip, a carousel)
+  // and click that instead, silently navigating away from the search results.
+  const pagination = page.locator(".artdeco-pagination, [class*='pagination']").first();
+  const nextButton = pagination
+    .locator("button.artdeco-pagination__button--next")
+    .or(pagination.getByRole("button", { name: /^next$/i }))
+    .or(pagination.getByLabel(/^next$/i))
     .first();
   const visible = await nextButton.isVisible().catch(() => false);
   if (!visible) return false;
   const enabled = await nextButton.isEnabled().catch(() => false);
   if (!enabled) return false;
+  await nextButton.scrollIntoViewIfNeeded().catch(() => {});
   await nextButton.click();
   return true;
 }

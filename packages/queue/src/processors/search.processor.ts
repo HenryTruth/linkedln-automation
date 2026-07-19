@@ -69,12 +69,20 @@ export async function searchScrapeProcessor(
 
     // A "successful" scrape with zero results usually means LinkedIn served a
     // layout our selectors don't recognize — keep a screenshot for diagnosis.
+    // Same idea for stopping short of a requested leadLimit before exhausting
+    // the page budget — that means the "Next" control wasn't found/clicked
+    // correctly, not that we ran out of results or cap.
     let emptyNote = "";
     if (urls.length === 0) {
       const artifact = await worker.captureFailureArtifacts(
         `search-empty-${job.id ?? "unknown"}`
       );
       emptyNote = `; landed on ${lastUrl}${artifact ? `; artifact: ${artifact}` : ""}`;
+    } else if (leadLimit && urls.length < leadLimit && pagesScraped < maxPages) {
+      const artifact = await worker.captureFailureArtifacts(
+        `search-short-${job.id ?? "unknown"}`
+      );
+      emptyNote = `; stopped short of leadLimit=${leadLimit} after ${pagesScraped} page(s), landed on ${lastUrl}${artifact ? `; artifact: ${artifact}` : ""}`;
     }
 
     await prisma.activityLog.create({

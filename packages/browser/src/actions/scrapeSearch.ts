@@ -1,6 +1,11 @@
 import type { Page } from "playwright";
 import { prisma, LeadSource } from "@linkedin-automation/db";
-import { delays, detectCheckpoint, claimDailyCap } from "@linkedin-automation/guards";
+import {
+  delays,
+  detectCheckpoint,
+  claimDailyCap,
+  pauseAccountForAnomaly,
+} from "@linkedin-automation/guards";
 import { navigateTo } from "./navigate.js";
 import {
   collectSearchLeads,
@@ -33,11 +38,22 @@ async function extractResultCards(
   return page.evaluate(collectSearchLeads, source);
 }
 
-function buildPageUrl(baseUrl: string, pageNum: number): string {
-  if (pageNum === 1) return baseUrl;
-  const url = new URL(baseUrl);
-  url.searchParams.set("page", String(pageNum));
-  return url.toString();
+// Advancing pages via a real click on LinkedIn's own "Next" control (instead
+// of constructing a &page=N URL and calling page.goto) so the transition goes
+// through the same client-side event path a human's click would — a
+// synthetic full navigation was the one thing we hadn't ruled out as the
+// trigger for LinkedIn killing the session mid-pagination.
+async function clickNextPage(page: Page): Promise<boolean> {
+  const nextButton = page
+    .getByRole("button", { name: /^next$/i })
+    .or(page.getByLabel(/^next$/i))
+    .first();
+  const visible = await nextButton.isVisible().catch(() => false);
+  if (!visible) return false;
+  const enabled = await nextButton.isEnabled().catch(() => false);
+  if (!enabled) return false;
+  await nextButton.click();
+  return true;
 }
 
 export async function scrapeSearch(
@@ -74,19 +90,33 @@ export async function scrapeSearch(
     // exact pattern that got this account's session killed mid-pagination.
     if (pageNum > 1) await delays.betweenPageLoads();
 
-    const pageUrl = buildPageUrl(searchUrl, pageNum);
-    await navigateTo(page, pageUrl);
+    if (pageNum === 1) {
+      await navigateTo(page, searchUrl);
+    } else if (!(await clickNextPage(page))) {
+      break; // no "Next" control — this was the last page
+    }
     await delays.betweenPageLoads();
 
     // LinkedIn redirects dead sessions to a login page instead of erroring,
-    // which would otherwise look like an empty search result.
+    // which would otherwise look like an empty search result. Pause the
+    // account immediately rather than just throwing — the job's automatic
+    // retry would otherwise hammer a session we already know is dead,
+    // burning cap for nothing.
     const landedUrl = page.url();
     if (/\/(login|uas\/login|authwall|checkpoint)/.test(landedUrl)) {
+      await pauseAccountForAnomaly(
+        accountId,
+        `LinkedIn redirected to ${landedUrl} during search pagination (page ${pageNum}) — session likely expired or flagged.`
+      );
       throw new Error(
         `LinkedIn redirected to ${landedUrl} instead of search results — the session cookies are likely expired or invalid. Re-import fresh cookies for this account.`
       );
     }
     if (await detectCheckpoint(page)) {
+      await pauseAccountForAnomaly(
+        accountId,
+        `LinkedIn showed a security checkpoint during search pagination (page ${pageNum}).`
+      );
       throw new Error(
         `LinkedIn showed a security checkpoint while loading search results (${landedUrl}).`
       );

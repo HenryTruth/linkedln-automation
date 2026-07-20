@@ -515,7 +515,7 @@ export const api = {
       source: "LINKEDIN" | "SALES_NAVIGATOR" = "LINKEDIN",
       leadLimit?: number
     ) =>
-      apiFetch<{ queued: number; jobId?: string; searchUrl: string; source: "LINKEDIN" | "SALES_NAVIGATOR"; leadLimit?: number }>(`/campaigns/${campaignId}/search-urls`, {
+      apiFetch<{ queued: number; jobId?: string; searchUrl: string; source: "LINKEDIN" | "SALES_NAVIGATOR"; leadLimit?: number; warning?: string }>(`/campaigns/${campaignId}/search-urls`, {
         method: "POST",
         body: JSON.stringify({ searchUrl, source, leadLimit }),
       }),

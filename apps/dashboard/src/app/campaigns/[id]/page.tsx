@@ -451,7 +451,8 @@ export default function CampaignDetailPage() {
     try {
       const result = await api.campaigns.addSearchUrl(id, searchUrl, searchSource, searchLeadLimit);
       setSearchNotice(
-        `Search URL accepted and queued${result.jobId ? ` as job ${result.jobId}` : ""} for up to ${searchLeadLimit} leads. It starts automatically when the search worker is available and account guardrails allow it.`
+        result.warning ??
+          `Search URL accepted and queued${result.jobId ? ` as job ${result.jobId}` : ""} for up to ${searchLeadLimit} leads. It starts automatically when the search worker is available and account guardrails allow it.`
       );
       setSearchUrl("");
       setShowSearchForm(false);

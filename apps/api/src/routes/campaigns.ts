@@ -418,16 +418,47 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
       return;
     }
 
+    // Multi-page pagination repeatedly proved unsafe on accounts with a
+    // recent checkpoint — sessions there died unpredictably mid-pagination
+    // during testing. Rather than let a leadLimit silently risk another
+    // checkpoint, cap it to a single page (LinkedIn's own render size) and
+    // say why, the same way PhantomBuster/Waalaxy cap and redirect users to
+    // narrower searches instead of deeper pagination.
+    const CHECKPOINT_LOOKBACK_DAYS = 30;
+    const recentCheckpoint = await prisma.checkpoint.findFirst({
+      where: {
+        accountId: campaign.accountId,
+        detectedAt: {
+          gte: new Date(Date.now() - CHECKPOINT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000),
+        },
+      },
+    });
+
+    let effectiveLeadLimit = leadLimit;
+    let leadLimitWarning: string | undefined;
+    if (recentCheckpoint && leadLimit && leadLimit > 10) {
+      effectiveLeadLimit = 10;
+      leadLimitWarning =
+        "This account had a LinkedIn security checkpoint in the last 30 days, so multi-page search pagination is disabled for now — only the first page (up to 10 leads) will be collected. Import a CSV or narrow your search for more.";
+    }
+
     // Queue a search-scrape job to crawl results pages and discover profiles
     const job = await searchScrapeQueue.add("scrape-search", {
       accountId: campaign.accountId,
       searchUrl,
       campaignId: campaign.id,
-      leadLimit,
+      leadLimit: effectiveLeadLimit,
       source,
     });
 
-    res.status(201).json({ queued: 1, jobId: job.id, searchUrl, source, leadLimit });
+    res.status(201).json({
+      queued: 1,
+      jobId: job.id,
+      searchUrl,
+      source,
+      leadLimit: effectiveLeadLimit,
+      ...(leadLimitWarning ? { warning: leadLimitWarning } : {}),
+    });
   } catch (err) {
     next(err);
   }

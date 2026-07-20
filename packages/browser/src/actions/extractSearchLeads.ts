@@ -8,6 +8,29 @@ export interface SearchLead {
 
 export type SearchSource = "LINKEDIN" | "SALES_NAVIGATOR";
 
+// Runs inside the browser via page.evaluate/page.waitForFunction — it must
+// stay fully self-contained: no imports, no closure references, browser
+// globals only.
+export function getFirstSearchResultSignature(
+  searchSource: SearchSource
+): string | null {
+  const anchorSelector =
+    searchSource === "SALES_NAVIGATOR"
+      ? "a[href*='/sales/lead/'], a[href*='/in/']"
+      : "main a[href*='/in/']";
+  const anchor = document.querySelector(anchorSelector) as HTMLAnchorElement | null;
+  if (!anchor?.href) return null;
+
+  try {
+    const url = new URL(anchor.href);
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return anchor.href.split("?")[0].replace(/\/$/, "");
+  }
+}
+
 // Runs inside the browser via page.evaluate — it must stay fully
 // self-contained: no imports, no closure references, browser globals only.
 export function collectSearchLeads(searchSource: SearchSource): SearchLead[] {

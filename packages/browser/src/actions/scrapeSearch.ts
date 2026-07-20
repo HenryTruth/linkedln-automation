@@ -9,6 +9,7 @@ import {
 import { navigateTo } from "./navigate.js";
 import {
   collectSearchLeads,
+  getFirstSearchResultSignature,
   type SearchLead,
   type SearchSource,
 } from "./extractSearchLeads.js";
@@ -36,6 +37,68 @@ async function extractResultCards(
   // lives in its own module where it can also be unit-tested against captured
   // search-page DOM fixtures.
   return page.evaluate(collectSearchLeads, source);
+}
+
+function resultLinkSelector(source: SearchSource): string {
+  return source === "SALES_NAVIGATOR"
+    ? "a[href*='/sales/lead/'], a[href*='/in/']"
+    : "main a[href*='/in/']";
+}
+
+async function getCurrentResultSignature(
+  page: Page,
+  source: SearchSource
+): Promise<string | null> {
+  return page.evaluate(getFirstSearchResultSignature, source).catch(() => null);
+}
+
+async function waitForSearchPageTransition(
+  page: Page,
+  source: SearchSource,
+  previousUrl: string,
+  previousSignature: string | null,
+  expectedPageNum: number
+): Promise<void> {
+  await page
+    .waitForFunction(
+      ({ source, previousUrl, previousSignature, expectedPageNum }) => {
+        const anchorSelector =
+          source === "SALES_NAVIGATOR"
+            ? "a[href*='/sales/lead/'], a[href*='/in/']"
+            : "main a[href*='/in/']";
+        const anchor = document.querySelector(anchorSelector) as HTMLAnchorElement | null;
+
+        if (anchor?.href && previousSignature) {
+          let signature = anchor.href;
+          try {
+            const url = new URL(anchor.href);
+            url.search = "";
+            url.hash = "";
+            signature = url.toString().replace(/\/$/, "");
+          } catch {
+            signature = anchor.href.split("?")[0].replace(/\/$/, "");
+          }
+
+          return signature !== previousSignature;
+        }
+
+        const currentUrl = window.location.href;
+        if (currentUrl !== previousUrl) return true;
+
+        const currentPage = document.querySelector(
+          '[aria-current="page"], [data-test-pagination-page-btn][aria-current="true"]'
+        );
+        const currentPageText = currentPage?.textContent?.trim();
+        return currentPageText === String(expectedPageNum);
+      },
+      { source, previousUrl, previousSignature, expectedPageNum },
+      { timeout: 20_000 }
+    )
+    .catch((err) => {
+      throw new Error(
+        `LinkedIn search pagination did not visibly advance to page ${expectedPageNum}; refusing to extract stale results. ${(err as Error).message}`
+      );
+    });
 }
 
 // Advancing pages via a real click on LinkedIn's own "Next" control (instead
@@ -110,8 +173,19 @@ export async function scrapeSearch(
 
     if (pageNum === 1) {
       await navigateTo(page, searchUrl);
-    } else if (!(await clickNextPage(page))) {
-      break; // no "Next" control — this was the last page
+    } else {
+      const previousUrl = page.url();
+      const previousSignature = await getCurrentResultSignature(page, source);
+      if (!(await clickNextPage(page))) {
+        break; // no "Next" control — this was the last page
+      }
+      await waitForSearchPageTransition(
+        page,
+        source,
+        previousUrl,
+        previousSignature,
+        pageNum
+      );
     }
     await delays.betweenPageLoads();
 
@@ -147,7 +221,9 @@ export async function scrapeSearch(
         ? "a[href*='/sales/lead/'], .artdeco-list__item a[href*='/in/']"
         : "main a[href*='/in/'], .reusable-search__result-container, div[data-chameleon-result-urn]";
     await page
-      .waitForSelector(resultsSelector, { timeout: 20_000 })
+      .waitForSelector(`${resultLinkSelector(source)}, ${resultsSelector}`, {
+        timeout: 20_000,
+      })
       .catch(() => {
         // Genuinely empty result pages exist — extractResultCards below
         // returns [] and the caller records the page with an artifact.

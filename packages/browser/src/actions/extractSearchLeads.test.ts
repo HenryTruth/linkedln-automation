@@ -10,7 +10,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, beforeAll } from "vitest";
-import { collectSearchLeads } from "./extractSearchLeads.js";
+import {
+  collectSearchLeads,
+  getFirstSearchResultSignature,
+} from "./extractSearchLeads.js";
 
 // DOM test environments can replace the global URL class, so resolve the
 // fixture path from the module URL string rather than a constructed URL.
@@ -57,5 +60,17 @@ describe("collectSearchLeads on captured 2026 LinkedIn search DOM", () => {
     }
     // Every row is a distinct person.
     expect(new Set(leads.map((l) => l.linkedinUrl)).size).toBe(10);
+  });
+
+  it("captures a stable first-result signature for pagination transition waits", () => {
+    expect(getFirstSearchResultSignature("LINKEDIN")).toBe(
+      "https://www.linkedin.com/in/monday-igwe-5909a321"
+    );
+  });
+
+  it("returns null when no result is available yet", () => {
+    document.documentElement.innerHTML = "<main><section>No results yet</section></main>";
+
+    expect(getFirstSearchResultSignature("LINKEDIN")).toBeNull();
   });
 });

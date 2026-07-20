@@ -44,14 +44,15 @@ async function extractResultCards(
 // synthetic full navigation was the one thing we hadn't ruled out as the
 // trigger for LinkedIn killing the session mid-pagination.
 async function clickNextPage(page: Page): Promise<boolean> {
-  // Scoped to the pagination control specifically — an unscoped page-wide
-  // "Next" match can hit an unrelated element (a tour tooltip, a carousel)
-  // and click that instead, silently navigating away from the search results.
-  const pagination = page.locator(".artdeco-pagination, [class*='pagination']").first();
-  const nextButton = pagination
-    .locator("button.artdeco-pagination__button--next")
-    .or(pagination.getByRole("button", { name: /^next$/i }))
-    .or(pagination.getByLabel(/^next$/i))
+  // LinkedIn's current search UI (2026) uses obfuscated hashed class names
+  // with data-testid as the stable hook — confirmed against a captured DOM
+  // snapshot: the control renders as
+  // data-testid="pagination-controls-next-button-visible" when there's a
+  // next page, and presumably swaps to a non-"-visible" suffix (or is
+  // absent) on the last page — hence the prefix match plus the
+  // visible/enabled checks below rather than hardcoding "-visible".
+  const nextButton = page
+    .locator('[data-testid^="pagination-controls-next-button"]')
     .first();
   const visible = await nextButton.isVisible().catch(() => false);
   if (!visible) return false;

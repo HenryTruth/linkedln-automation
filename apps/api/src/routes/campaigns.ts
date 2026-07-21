@@ -1074,6 +1074,26 @@ campaignsRouter.get("/:id/stats", async (req, res, next) => {
   }
 });
 
+// DELETE /campaigns/:id/leads/:leadId — remove a lead from this campaign (the saved lead record is untouched)
+campaignsRouter.delete("/:id/leads/:leadId", async (req, res, next) => {
+  try {
+    const result = await prisma.campaignLead.deleteMany({
+      where: {
+        campaignId: req.params.id,
+        leadId: req.params.leadId,
+        campaign: { account: { userId: req.user.id } },
+      },
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: "Lead not found in this campaign" });
+      return;
+    }
+    res.json({ removed: result.count });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /campaigns/:id/leads/:leadId/mark-replied — manually mark a lead as replied
 campaignsRouter.post("/:id/leads/:leadId/mark-replied", async (req, res, next) => {
   try {

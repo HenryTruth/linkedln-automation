@@ -270,6 +270,9 @@ export default function CampaignDetailPage() {
   const [attachingSavedLeads, setAttachingSavedLeads] = useState(false);
   const [savedLeadNotice, setSavedLeadNotice] = useState<string | null>(null);
   const [savedLeadError, setSavedLeadError] = useState<string | null>(null);
+  const [savedLeadCampaignFilter, setSavedLeadCampaignFilter] = useState("");
+  const [removingLeadId, setRemovingLeadId] = useState<string | null>(null);
+  const [confirmRemoveLead, setConfirmRemoveLead] = useState<{ leadId: string; name: string } | null>(null);
 
   // Add search URL form (SCRAPE only)
   const [searchUrl, setSearchUrl] = useState("");
@@ -501,16 +504,30 @@ export default function CampaignDetailPage() {
     }
   }
 
-  async function loadSavedLeads() {
+  async function loadSavedLeads(campaignId = savedLeadCampaignFilter) {
     setSavedLeadsLoading(true);
     setSavedLeadError(null);
     try {
-      const result = await api.leads.list({ limit: 100 });
+      const result = await api.leads.list({ limit: 100, campaignId: campaignId || undefined });
       setSavedLeads(result.leads);
     } catch (e) {
       setSavedLeadError((e as Error).message);
     } finally {
       setSavedLeadsLoading(false);
+    }
+  }
+
+  async function handleRemoveLead(leadId: string) {
+    setConfirmRemoveLead(null);
+    setRemovingLeadId(leadId);
+    try {
+      await api.campaigns.removeLead(id, leadId);
+      toast.success("Lead removed from campaign");
+      await reload();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRemovingLeadId(null);
     }
   }
 
@@ -1166,10 +1183,28 @@ export default function CampaignDetailPage() {
                   Add existing lead records to this sequence. They will enter the graph from the entry step when you start the campaign.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={savedLeadCampaignFilter}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSavedLeadCampaignFilter(value);
+                    setSavedLeadIds([]);
+                    void loadSavedLeads(value);
+                  }}
+                  className="field text-xs"
+                  title="Segment saved leads by the campaign they're already attached to"
+                >
+                  <option value="">All saved leads</option>
+                  {reusableCampaigns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      From: {c.name}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
-                  onClick={loadSavedLeads}
+                  onClick={() => loadSavedLeads()}
                   disabled={savedLeadsLoading}
                   className="btn-secondary px-3 py-1.5 text-xs"
                 >
@@ -1210,7 +1245,9 @@ export default function CampaignDetailPage() {
                 <p className="p-4 text-sm text-slate-400">Loading saved leads...</p>
               ) : savedLeadCandidates.length === 0 ? (
                 <p className="p-4 text-sm text-slate-400">
-                  No unattached saved leads found in the first 100 saved records.
+                  {savedLeadCampaignFilter
+                    ? "No leads from that campaign are available to add (they may all already be in this campaign)."
+                    : "No unattached saved leads found in the first 100 saved records."}
                 </p>
               ) : (
                 <div className="divide-y divide-white/[0.06]">
@@ -1600,8 +1637,8 @@ export default function CampaignDetailPage() {
             <thead className="table-head">
               <tr>
                 {(isScrape
-                  ? ["Profile URL", "Name", "Company", "Title", "Status"]
-                  : ["Name", "Company", "Connection", "Stage", "Replied", "Last Action", "Status"]
+                  ? ["Profile URL", "Name", "Company", "Title", "Status", "Actions"]
+                  : ["Name", "Company", "Connection", "Stage", "Replied", "Last Action", "Status", "Actions"]
                 ).map((h) => (
                   <th
                     key={h}
@@ -1616,7 +1653,7 @@ export default function CampaignDetailPage() {
               {leadTotal === 0 && (
                 <tr>
                   <td
-                    colSpan={isScrape ? 5 : 7}
+                    colSpan={isScrape ? 6 : 8}
                     className="px-6 py-10 text-center text-sm text-slate-400"
                   >
                     {isScrape
@@ -1731,13 +1768,25 @@ export default function CampaignDetailPage() {
                       </td>
                     </>
                   )}
+                  <td className="table-cell">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setConfirmRemoveLead({ leadId: cl.leadId, name: leadDisplayName(cl.lead) })
+                      }
+                      disabled={removingLeadId === cl.leadId}
+                      className="text-xs font-semibold text-red-400 hover:text-red-300 disabled:opacity-40"
+                    >
+                      {removingLeadId === cl.leadId ? "Removing..." : "Remove"}
+                    </button>
+                  </td>
                 </tr>
               ))}
               {/* Post signal excerpts in dedicated rows to keep the table valid */}
               {isContentSignal && campaign.leads.map((cl) =>
                 cl.postSignal ? (
                   <tr key={`${cl.id}-signal`} className="bg-teal-500/[0.04]">
-                    <td colSpan={7} className="px-6 py-2">
+                    <td colSpan={8} className="px-6 py-2">
                       <div className="flex items-start gap-2 rounded-2xl border border-teal-500/20 bg-teal-500/5 p-3 text-xs text-teal-300">
                         <span className="shrink-0 font-medium">Post:</span>
                         <span className="italic line-clamp-2">&quot;{cl.postSignal.excerpt}&quot;</span>
@@ -1811,6 +1860,16 @@ export default function CampaignDetailPage() {
           />
         </section>
       )}
+
+      <ConfirmDialog
+        open={confirmRemoveLead !== null}
+        title="Remove lead from campaign"
+        description={`Remove ${confirmRemoveLead?.name ?? "this lead"} from "${campaign.name}"? The saved lead record itself is not deleted and can be re-added later.`}
+        confirmLabel="Remove"
+        busy={removingLeadId === confirmRemoveLead?.leadId}
+        onConfirm={() => confirmRemoveLead && handleRemoveLead(confirmRemoveLead.leadId)}
+        onCancel={() => setConfirmRemoveLead(null)}
+      />
 
       <ConfirmDialog
         open={confirmDeleteOpen}

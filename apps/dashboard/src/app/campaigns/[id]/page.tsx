@@ -1279,6 +1279,14 @@ export default function CampaignDetailPage() {
                     )}
                   </div>
                 )}
+                <div className="mt-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs leading-5 text-sky-300">
+                  <p className="font-semibold">This LinkedIn account is reserved while scraping.</p>
+                  <p className="mt-1">
+                    The user can stay logged in elsewhere, but should avoid
+                    manual LinkedIn searches, profile browsing, messages, and
+                    connection actions until the scrape job finishes.
+                  </p>
+                </div>
               </div>
               {searchUrl && detectSearchSource(searchUrl) && (
                 <p className="text-xs text-slate-500">

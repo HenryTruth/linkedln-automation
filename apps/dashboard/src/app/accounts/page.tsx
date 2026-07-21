@@ -1335,6 +1335,13 @@ export default function AccountsPage() {
                   </div>
                 </div>
 
+                <div className="mt-3 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs leading-5 text-sky-300">
+                  <span className="font-semibold">Automation reserves this account.</span>{" "}
+                  Users can stay logged into LinkedIn elsewhere, but should avoid
+                  manual searching, profile browsing, messaging, or connection
+                  actions while jobs are running.
+                </div>
+
                 {!account.proxy && (
                   <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
                     Assign a residential proxy before opening the hosted browser.

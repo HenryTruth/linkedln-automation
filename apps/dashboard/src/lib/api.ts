@@ -28,7 +28,15 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`API ${res.status}: ${body}`);
+    let message = body || res.statusText;
+    try {
+      const parsed = JSON.parse(body) as { error?: unknown; message?: unknown };
+      if (typeof parsed.error === "string") message = parsed.error;
+      else if (typeof parsed.message === "string") message = parsed.message;
+    } catch {
+      // Keep the raw response text for non-JSON errors.
+    }
+    throw new Error(message);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -112,6 +120,15 @@ export interface Account {
   inMailMonthlyLimit: number;
   hasSession: boolean;
   sessionStatus: "ACTIVE" | "MISSING";
+  browserProfileStatus: "UNKNOWN" | "AUTHENTICATED" | "LOGIN_REQUIRED" | "CHECKPOINT" | string;
+  browserProfileLastCheckedAt?: string | null;
+  browserProfileLastCheckError?: string | null;
+  lastSearchQualifiedAt?: string | null;
+  lastSearchQualifiedUrl?: string | null;
+  lastSearchQualifiedSource?: "LINKEDIN" | "SALES_NAVIGATOR" | string | null;
+  lastSearchQualifiedProfileLinks?: number | null;
+  lastSearchQualifiedNextButtons?: number | null;
+  lastSearchQualificationError?: string | null;
   cookiesConsentAt?: string | null;
   timezone: string;
   proxy?: Proxy | null;
@@ -127,6 +144,11 @@ export interface BrowserSessionStatus {
   nextButtons: number;
   authenticated: boolean;
   searchQualified: boolean;
+}
+
+export interface SearchQualificationStatus extends BrowserSessionStatus {
+  normalizedSearchUrl: string;
+  source: "LINKEDIN" | "SALES_NAVIGATOR";
 }
 
 export interface Campaign {
@@ -229,6 +251,16 @@ export interface CampaignDetail extends Campaign {
   contentSignalConfig?: ContentSignalConfig | null;
   steps?: SequenceStep[];
   edges?: SequenceEdge[];
+  account?: Pick<
+    Account,
+    | "browserProfileStatus"
+    | "lastSearchQualifiedAt"
+    | "lastSearchQualifiedUrl"
+    | "lastSearchQualifiedSource"
+    | "lastSearchQualifiedProfileLinks"
+    | "lastSearchQualifiedNextButtons"
+    | "lastSearchQualificationError"
+  >;
 }
 
 export interface Checkpoint {
@@ -620,6 +652,11 @@ export const api = {
       apiFetch<BrowserSessionStatus>(`/accounts/${accountId}/browser-session/press`, {
         method: "POST",
         body: JSON.stringify({ key }),
+      }),
+    qualifySearch: (accountId: string, searchUrl: string) =>
+      apiFetch<SearchQualificationStatus>(`/accounts/${accountId}/browser-session/qualify-search`, {
+        method: "POST",
+        body: JSON.stringify({ searchUrl }),
       }),
     screenshotUrl: (accountId: string) => {
       const token = getAuthToken();

@@ -135,12 +135,10 @@ export async function scrapeSearch(
   timezoneOverride?: string,
   leadLimit?: number
 ): Promise<{ urls: string[]; pagesScraped: number; lastUrl: string }> {
-  // LinkedIn's own frontend fires this background messaging-inbox call on
-  // every page load. Confirmed via a captured network trace: it 401s for
-  // this account's session, and LinkedIn's client code responds to that by
-  // force-navigating the whole page to the homepage — killing pagination as
-  // collateral damage, unrelated to anything we click. We don't need
-  // affiliated-mailbox data for scraping, so stub it out before it can fire.
+  // Some LinkedIn background requests are unrelated to search extraction but
+  // can still trigger client-side redirects when they fail. Keep the scraper
+  // focused on visible search results instead of letting optional page chrome
+  // abort pagination.
   await page.route(
     (url) => url.pathname.includes("voyagerMessagingDashAffiliatedMailboxes"),
     (route) => route.fulfill({ status: 200, contentType: "application/json", body: "{}" })

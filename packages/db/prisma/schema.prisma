@@ -126,6 +126,15 @@ model Account {
   timezone          String        @default("America/New_York")
   warmUpPhase       WarmUpPhase   @default(MANUAL)
   status            AccountStatus @default(ACTIVE)
+  browserProfileStatus String      @default("UNKNOWN")
+  browserProfileLastCheckedAt DateTime?
+  browserProfileLastCheckError String? @db.Text
+  lastSearchQualifiedAt DateTime?
+  lastSearchQualifiedUrl String?   @db.Text
+  lastSearchQualifiedSource String?
+  lastSearchQualifiedProfileLinks Int?
+  lastSearchQualifiedNextButtons Int?
+  lastSearchQualificationError String? @db.Text
   dailyCaps         Json          @default("{}")
   monthlyCaps       Json          @default("{}")
   maxDailyCaps      Json          @default("{}")

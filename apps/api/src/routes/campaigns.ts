@@ -15,6 +15,9 @@ import { renderTemplate, validateTemplate } from "@linkedin-automation/guards";
 export const campaignsRouter: IRouter = Router();
 
 const NOTE_MAX = 300;
+const SEARCH_QUALIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const REQUIRE_SEARCH_QUALIFICATION =
+  process.env.LINKEDIN_REQUIRE_SEARCH_QUALIFICATION !== "false";
 
 function isSalesNavigatorUrl(value: string): boolean {
   const url = new URL(value);
@@ -30,6 +33,7 @@ type CampaignReadyAccount = {
   id: string;
   status: string;
   cookiesEncrypted: string | null;
+  browserProfileStatus?: string | null;
   proxyId: string | null;
   salesNavigatorEnabled?: boolean;
 };
@@ -41,10 +45,18 @@ function assertCampaignAccountReady(account: CampaignReadyAccount): string | nul
   if (!account.proxyId) {
     return "Proxy required. Assign a matching residential proxy to this account before starting a campaign.";
   }
-  if (!account.cookiesEncrypted) {
-    return "LinkedIn session required. Connect or refresh this account's LinkedIn session before starting a campaign.";
+  if (!account.cookiesEncrypted && account.browserProfileStatus !== "AUTHENTICATED") {
+    return "LinkedIn session required. Connect the hosted browser profile or refresh this account's LinkedIn session before starting a campaign.";
   }
   return null;
+}
+
+function normalizeSearchUrlForQualification(value: string): string {
+  const url = new URL(value);
+  url.hash = "";
+  url.searchParams.delete("page");
+  url.searchParams.sort();
+  return url.toString();
 }
 
 function isSalesNavigatorLeadUrl(value: string): boolean {
@@ -178,6 +190,17 @@ campaignsRouter.get("/:id", async (req, res, next) => {
         contentSignalConfig: true,
         steps: true,
         edges: true,
+        account: {
+          select: {
+            browserProfileStatus: true,
+            lastSearchQualifiedAt: true,
+            lastSearchQualifiedUrl: true,
+            lastSearchQualifiedSource: true,
+            lastSearchQualifiedProfileLinks: true,
+            lastSearchQualifiedNextButtons: true,
+            lastSearchQualificationError: true,
+          },
+        },
       },
     });
     res.json(campaign);
@@ -399,6 +422,12 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
             id: true,
             status: true,
             cookiesEncrypted: true,
+            browserProfileStatus: true,
+            lastSearchQualifiedAt: true,
+            lastSearchQualifiedUrl: true,
+            lastSearchQualifiedSource: true,
+            lastSearchQualifiedProfileLinks: true,
+            lastSearchQualifiedNextButtons: true,
             proxyId: true,
             salesNavigatorEnabled: true,
           },
@@ -433,13 +462,54 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
         },
       },
     });
+    const openCheckpoint = await prisma.checkpoint.findFirst({
+      where: {
+        accountId: campaign.accountId,
+        resolvedAt: null,
+      },
+      select: { id: true },
+    });
 
     let effectiveLeadLimit = leadLimit;
     let leadLimitWarning: string | undefined;
+    if (openCheckpoint && leadLimit && leadLimit > 10) {
+      res.status(422).json({
+        error:
+          "This account has an unresolved LinkedIn checkpoint. Resolve it in the hosted browser before running multi-page search scraping.",
+      });
+      return;
+    }
     if (recentCheckpoint && leadLimit && leadLimit > 10) {
       effectiveLeadLimit = 10;
       leadLimitWarning =
         "This account had a LinkedIn security checkpoint in the last 30 days, so multi-page search pagination is disabled for now — only the first page (up to 10 leads) will be collected. Import a CSV or narrow your search for more.";
+    }
+    if (
+      REQUIRE_SEARCH_QUALIFICATION &&
+      effectiveLeadLimit &&
+      effectiveLeadLimit > 10
+    ) {
+      const qualifiedAt = campaign.account.lastSearchQualifiedAt?.getTime() ?? 0;
+      const qualificationFresh = Date.now() - qualifiedAt <= SEARCH_QUALIFICATION_TTL_MS;
+      const qualifiedUrl = campaign.account.lastSearchQualifiedUrl;
+      const requestedUrl = normalizeSearchUrlForQualification(searchUrl);
+      const sourceMatches = campaign.account.lastSearchQualifiedSource === source;
+      const urlMatches = qualifiedUrl === requestedUrl;
+      const hasNextPage = (campaign.account.lastSearchQualifiedNextButtons ?? 0) > 0;
+
+      if (!qualificationFresh || !urlMatches || !sourceMatches || !hasNextPage) {
+        const reason = !qualificationFresh
+          ? "No recent hosted-browser qualification exists for this account."
+          : !urlMatches
+          ? "The last qualified search URL does not match this URL."
+          : !sourceMatches
+          ? "The last qualified search source does not match this source."
+          : "The last qualified search did not expose a next-page control.";
+        res.status(422).json({
+          error: `${reason} Open the account's hosted browser, load this exact search URL while logged in, click Qualify search, then add the URL again for more than 10 leads.`,
+        });
+        return;
+      }
     }
 
     // Queue a search-scrape job to crawl results pages and discover profiles

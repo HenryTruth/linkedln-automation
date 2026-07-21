@@ -1179,6 +1179,20 @@ export default function CampaignDetailPage() {
                   LinkedIn shows 10 results per page — Vectra pages through search
                   results until it collects this many leads (up to 200).
                 </p>
+                {searchLeadLimit > 10 && (
+                  <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-300">
+                    <p className="font-semibold">Multi-page search needs a recent qualification.</p>
+                    {campaign.account?.lastSearchQualifiedAt ? (
+                      <p className="mt-1">
+                        Last qualified {new Date(campaign.account.lastSearchQualifiedAt).toLocaleString()} for {campaign.account.lastSearchQualifiedSource ?? "LINKEDIN"} with {campaign.account.lastSearchQualifiedProfileLinks ?? 0} links and {campaign.account.lastSearchQualifiedNextButtons ?? 0} next controls.
+                      </p>
+                    ) : (
+                      <p className="mt-1">
+                        Open this account on the Accounts page, load the exact search URL in the hosted browser, then click Qualify search before queuing more than 10 leads.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               {searchUrl && detectSearchSource(searchUrl) && (
                 <p className="text-xs text-slate-500">

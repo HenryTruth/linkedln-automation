@@ -762,6 +762,31 @@ export default function AccountsPage() {
     }
   }
 
+  async function handleQualifySearch(accountId: string) {
+    const url = browserPanels[accountId]?.url?.trim();
+    if (!url) return;
+    setBrowserBusy(accountId);
+    clearAccountNotice(accountId);
+    try {
+      const status = await api.browserSessions.qualifySearch(accountId, url);
+      setBrowserPanel(accountId, {
+        status,
+        url: status.url,
+        refreshKey: Date.now(),
+      });
+      await reload();
+      setAccountNotice(
+        accountId,
+        "success",
+        `Search qualified for ${status.source === "SALES_NAVIGATOR" ? "Sales Navigator" : "LinkedIn"}: ${status.profileLinks} profile links visible, next page ${status.nextButtons > 0 ? "available" : "not available"}.`
+      );
+    } catch (e) {
+      setAccountNotice(accountId, "error", (e as Error).message);
+    } finally {
+      setBrowserBusy(null);
+    }
+  }
+
   async function handleBrowserClick(accountId: string, event: React.MouseEvent<HTMLImageElement>) {
     const img = browserImageRefs.current[accountId];
     if (!img) return;
@@ -1159,7 +1184,7 @@ export default function AccountsPage() {
 
                 {browserPanels[account.id]?.open && (
                   <div className="mt-4 space-y-3">
-                    <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                    <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
                       <input
                         type="url"
                         value={browserPanels[account.id]?.url ?? ""}
@@ -1175,6 +1200,14 @@ export default function AccountsPage() {
                         className="btn-secondary text-xs"
                       >
                         Go
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQualifySearch(account.id)}
+                        disabled={browserBusy === account.id}
+                        className="btn-secondary text-xs text-emerald-300"
+                      >
+                        Qualify search
                       </button>
                       <button
                         type="button"
@@ -1218,6 +1251,45 @@ export default function AccountsPage() {
                         </div>
                       </div>
                     )}
+
+                    <div className="grid gap-2 text-xs sm:grid-cols-2">
+                      <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
+                        <p className="font-semibold text-slate-300">Browser profile</p>
+                        <p className="mt-1 text-slate-400">
+                          {account.browserProfileStatus}
+                          {account.browserProfileLastCheckedAt
+                            ? ` - checked ${new Date(account.browserProfileLastCheckedAt).toLocaleString()}`
+                            : ""}
+                        </p>
+                        {account.browserProfileLastCheckError && (
+                          <p className="mt-1 text-amber-300">
+                            {account.browserProfileLastCheckError}
+                          </p>
+                        )}
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
+                        <p className="font-semibold text-slate-300">Search qualification</p>
+                        {account.lastSearchQualifiedAt ? (
+                          <>
+                            <p className="mt-1 text-slate-400">
+                              {account.lastSearchQualifiedSource ?? "LINKEDIN"} - {account.lastSearchQualifiedProfileLinks ?? 0} links, next {account.lastSearchQualifiedNextButtons ?? 0}
+                            </p>
+                            <p className="mt-1 break-all font-mono text-[11px] text-slate-500">
+                              {account.lastSearchQualifiedUrl}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="mt-1 text-slate-400">
+                            No qualified multi-page search yet.
+                          </p>
+                        )}
+                        {account.lastSearchQualificationError && (
+                          <p className="mt-1 text-amber-300">
+                            {account.lastSearchQualificationError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
 
                     <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
                       <img

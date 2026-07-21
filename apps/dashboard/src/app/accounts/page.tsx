@@ -770,6 +770,7 @@ export default function AccountsPage() {
     try {
       const status = await api.browserSessions.qualifySearch(accountId, url);
       setBrowserPanel(accountId, {
+        open: false,
         status,
         url: status.url,
         refreshKey: Date.now(),
@@ -778,7 +779,7 @@ export default function AccountsPage() {
       setAccountNotice(
         accountId,
         "success",
-        `Search qualified for ${status.source === "SALES_NAVIGATOR" ? "Sales Navigator" : "LinkedIn"}: ${status.profileLinks} profile links visible, next page ${status.nextButtons > 0 ? "available" : "not available"}.`
+        `Search qualified for ${status.source === "SALES_NAVIGATOR" ? "Sales Navigator" : "LinkedIn"}: ${status.profileLinks} profile links visible, next page ${status.nextButtons > 0 ? "available" : "not available"}. Hosted browser closed so campaign jobs can use the profile.`
       );
     } catch (e) {
       setAccountNotice(accountId, "error", (e as Error).message);

@@ -11,6 +11,7 @@ import {
   maybeCompleteCampaign,
 } from "@linkedin-automation/queue";
 import { renderTemplate, validateTemplate } from "@linkedin-automation/guards";
+import { hasActiveBrowserSession } from "./browserSessions.js";
 
 export const campaignsRouter: IRouter = Router();
 
@@ -510,6 +511,13 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
         });
         return;
       }
+    }
+    if (await hasActiveBrowserSession(req.user.id, campaign.accountId)) {
+      res.status(409).json({
+        error:
+          "Hosted browser is still open for this account. Close it from Accounts, then queue the search again so the worker can use the persistent profile.",
+      });
+      return;
     }
 
     // Queue a search-scrape job to crawl results pages and discover profiles

@@ -149,6 +149,7 @@ export interface BrowserSessionStatus {
 export interface SearchQualificationStatus extends BrowserSessionStatus {
   normalizedSearchUrl: string;
   source: "LINKEDIN" | "SALES_NAVIGATOR";
+  sessionClosed: boolean;
 }
 
 export interface Campaign {

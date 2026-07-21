@@ -20,6 +20,15 @@ type BrowserPage = RemoteBrowserSession["page"];
 type BrowserSummary = Awaited<ReturnType<typeof summarize>>;
 
 const sessions = new Map<string, RemoteBrowserSession>();
+const cleanupTimer = setInterval(() => {
+  const cutoff = Date.now() - SESSION_TTL_MS;
+  for (const [sessionKey, session] of sessions.entries()) {
+    if (session.lastUsedAt < cutoff) {
+      closeSession(sessionKey).catch(() => {});
+    }
+  }
+}, 60_000);
+cleanupTimer.unref?.();
 
 function key(userId: string, accountId: string): string {
   return `${userId}:${accountId}`;
@@ -126,6 +135,13 @@ async function getSession(userId: string, accountId: string) {
   }
   session.lastUsedAt = Date.now();
   return session;
+}
+
+export async function hasActiveBrowserSession(
+  userId: string,
+  accountId: string
+): Promise<boolean> {
+  return Boolean(await getSession(userId, accountId));
 }
 
 browserSessionsRouter.post("/:id/browser-session/start", async (req, res, next) => {
@@ -364,11 +380,15 @@ browserSessionsRouter.post("/:id/browser-session/qualify-search", async (req, re
       },
     });
 
-    res.json({
+    const response = {
       ...summary,
       normalizedSearchUrl: normalizeSearchUrlForQualification(searchUrl),
       source: detectSearchSource(searchUrl),
-    });
+      sessionClosed: true,
+    };
+
+    await closeSession(key(req.user.id, req.params.id));
+    res.json(response);
   } catch (err) {
     next(err);
   }

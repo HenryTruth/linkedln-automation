@@ -34,6 +34,15 @@ const DEFAULT_PROFILE_ROOT =
   process.env.BROWSER_PROFILE_ROOT ??
   "/tmp/linkedin-automation-browser-profiles";
 
+export class BrowserProfileInUseError extends Error {
+  constructor(accountId: string) {
+    super(
+      `Browser profile for account ${accountId} is already open. Close the hosted browser session for this account, then retry the job.`
+    );
+    this.name = "BrowserProfileInUseError";
+  }
+}
+
 function safeName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 120);
 }
@@ -146,10 +155,20 @@ export class BrowserWorker {
       const root = this.options.profileRoot ?? DEFAULT_PROFILE_ROOT;
       const userDataDir = path.join(root, safeName(this.accountId));
       await mkdir(userDataDir, { recursive: true });
-      this.context = await chromium.launchPersistentContext(
-        userDataDir,
-        launchOptions
-      );
+      try {
+        this.context = await chromium.launchPersistentContext(
+          userDataDir,
+          launchOptions
+        );
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          /Opening in existing browser session|profile is already in use/i.test(err.message)
+        ) {
+          throw new BrowserProfileInUseError(this.accountId);
+        }
+        throw err;
+      }
       this.browser = this.context.browser();
     } else {
       this.browser = await chromium.launch({

@@ -232,8 +232,26 @@ type BrowserPanelState = {
   open: boolean;
   url: string;
   typeText: string;
+  typeMode: "text" | "secret";
   refreshKey: number;
 };
+
+const LINKEDIN_LOGIN_URL = "https://www.linkedin.com/login";
+const LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/";
+
+function profileStatusLabel(status: Account["browserProfileStatus"]) {
+  if (status === "AUTHENTICATED") return "Logged in";
+  if (status === "LOGIN_REQUIRED") return "Login needed";
+  if (status === "CHECKPOINT") return "Checkpoint";
+  return "Unchecked";
+}
+
+function profileStatusClass(status: Account["browserProfileStatus"]) {
+  if (status === "AUTHENTICATED") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+  if (status === "CHECKPOINT") return "border-red-500/30 bg-red-500/10 text-red-300";
+  if (status === "LOGIN_REQUIRED") return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+  return "border-white/10 bg-slate-900 text-slate-300";
+}
 
 function sessionBadge(account: Account, openCheckpoints: number) {
   if (openCheckpoints > 0 || account.status === "RESTRICTED") {
@@ -684,8 +702,9 @@ export default function AccountsPage() {
       ...prev,
       [accountId]: {
         open: prev[accountId]?.open ?? false,
-        url: prev[accountId]?.url ?? "https://www.linkedin.com/feed/",
+        url: prev[accountId]?.url ?? LINKEDIN_FEED_URL,
         typeText: prev[accountId]?.typeText ?? "",
+        typeMode: prev[accountId]?.typeMode ?? "text",
         refreshKey: prev[accountId]?.refreshKey ?? 0,
         status: prev[accountId]?.status,
         ...patch,
@@ -693,10 +712,8 @@ export default function AccountsPage() {
     }));
   }
 
-  async function handleStartBrowser(account: Account) {
-    const url =
-      browserPanels[account.id]?.url ||
-      "https://www.linkedin.com/feed/";
+  async function handleStartBrowser(account: Account, requestedUrl?: string) {
+    const url = requestedUrl || browserPanels[account.id]?.url || LINKEDIN_FEED_URL;
     setBrowserBusy(account.id);
     clearAccountNotice(account.id);
     try {
@@ -708,6 +725,28 @@ export default function AccountsPage() {
         refreshKey: Date.now(),
       });
       setAccountNotice(account.id, "success", "Hosted browser session started.");
+    } catch (e) {
+      setAccountNotice(account.id, "error", (e as Error).message);
+    } finally {
+      setBrowserBusy(null);
+    }
+  }
+
+  async function handleQuickNavigate(account: Account, url: string) {
+    if (!browserPanels[account.id]?.open) {
+      await handleStartBrowser(account, url);
+      return;
+    }
+    setBrowserPanel(account.id, { url });
+    setBrowserBusy(account.id);
+    clearAccountNotice(account.id);
+    try {
+      const status = await api.browserSessions.navigate(account.id, url);
+      setBrowserPanel(account.id, {
+        status,
+        url: status.url,
+        refreshKey: Date.now(),
+      });
     } catch (e) {
       setAccountNotice(account.id, "error", (e as Error).message);
     } finally {
@@ -1146,23 +1185,62 @@ export default function AccountsPage() {
               )}
 
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                      Hosted browser
+                      LinkedIn profile connection
                     </p>
                     <p className="mt-1 text-sm font-semibold text-white">
-                      Persistent LinkedIn profile
+                      Persistent hosted browser
                     </p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                      <span className={`rounded-full border px-3 py-1 ${profileStatusClass(account.browserProfileStatus)}`}>
+                        {profileStatusLabel(account.browserProfileStatus)}
+                      </span>
+                      <span className={`rounded-full border px-3 py-1 ${
+                        browserPanels[account.id]?.open
+                          ? "border-sky-500/30 bg-sky-500/10 text-sky-300"
+                          : "border-white/10 bg-slate-900 text-slate-400"
+                      }`}>
+                        Browser {browserPanels[account.id]?.open ? "open" : "closed"}
+                      </span>
+                      <span className={`rounded-full border px-3 py-1 ${
+                        account.lastSearchQualifiedAt
+                          ? "border-teal-500/30 bg-teal-500/10 text-teal-300"
+                          : "border-white/10 bg-slate-900 text-slate-400"
+                      }`}>
+                        Search {account.lastSearchQualifiedAt ? "qualified" : "unqualified"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
                     <button
                       type="button"
-                      onClick={() => handleStartBrowser(account)}
+                      onClick={() => handleQuickNavigate(account, LINKEDIN_LOGIN_URL)}
+                      disabled={browserBusy === account.id || !account.proxy}
+                      className="btn-primary text-xs"
+                    >
+                      Connect / Login
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickNavigate(account, LINKEDIN_FEED_URL)}
                       disabled={browserBusy === account.id || !account.proxy}
                       className="btn-secondary text-xs"
                     >
-                      {browserPanels[account.id]?.open ? "Restart" : "Open"}
+                      Open LinkedIn
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        browserPanels[account.id]?.open
+                          ? refreshBrowser(account.id)
+                          : handleStartBrowser(account)
+                      }
+                      disabled={browserBusy === account.id || !account.proxy}
+                      className="btn-secondary text-xs"
+                    >
+                      {browserPanels[account.id]?.open ? "Refresh" : "Open saved"}
                     </button>
                     {browserPanels[account.id]?.open && (
                       <button
@@ -1184,8 +1262,24 @@ export default function AccountsPage() {
                 )}
 
                 {browserPanels[account.id]?.open && (
-                  <div className="mt-4 space-y-3">
-                    <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-2 lg:grid-cols-[auto_auto_1fr_auto_auto]">
+                      <button
+                        type="button"
+                        onClick={() => handleQuickNavigate(account, LINKEDIN_LOGIN_URL)}
+                        disabled={browserBusy === account.id}
+                        className="btn-secondary text-xs"
+                      >
+                        Login
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickNavigate(account, LINKEDIN_FEED_URL)}
+                        disabled={browserBusy === account.id}
+                        className="btn-secondary text-xs"
+                      >
+                        Feed
+                      </button>
                       <input
                         type="url"
                         value={browserPanels[account.id]?.url ?? ""}
@@ -1210,19 +1304,11 @@ export default function AccountsPage() {
                       >
                         Qualify search
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => refreshBrowser(account.id)}
-                        disabled={browserBusy === account.id}
-                        className="btn-secondary text-xs"
-                      >
-                        Refresh
-                      </button>
                     </div>
 
                     {browserPanels[account.id]?.status && (
                       <div className="grid gap-2 text-xs sm:grid-cols-4">
-                        <div className="rounded-xl border border-white/10 bg-slate-900 p-2">
+                        <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
                           <p className="text-slate-500">Auth</p>
                           <p className="mt-1 font-semibold text-slate-200">
                             {browserPanels[account.id]?.status?.authenticated
@@ -1230,7 +1316,7 @@ export default function AccountsPage() {
                               : "Needs login"}
                           </p>
                         </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-900 p-2">
+                        <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
                           <p className="text-slate-500">Search</p>
                           <p className="mt-1 font-semibold text-slate-200">
                             {browserPanels[account.id]?.status?.searchQualified
@@ -1238,13 +1324,13 @@ export default function AccountsPage() {
                               : "Not ready"}
                           </p>
                         </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-900 p-2">
+                        <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
                           <p className="text-slate-500">Links</p>
                           <p className="mt-1 font-semibold text-slate-200">
                             {browserPanels[account.id]?.status?.profileLinks ?? 0}
                           </p>
                         </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-900 p-2">
+                        <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
                           <p className="text-slate-500">Next</p>
                           <p className="mt-1 font-semibold text-slate-200">
                             {browserPanels[account.id]?.status?.nextButtons ?? 0}
@@ -1292,7 +1378,7 @@ export default function AccountsPage() {
                       </div>
                     </div>
 
-                    <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
+                    <div className="overflow-hidden rounded-xl border border-white/10 bg-black shadow-2xl shadow-black/30">
                       <img
                         ref={(el) => {
                           browserImageRefs.current[account.id] = el;
@@ -1308,14 +1394,30 @@ export default function AccountsPage() {
                       />
                     </div>
 
-                    <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto]">
+                    <div className="grid gap-2 lg:grid-cols-[auto_1fr_auto_auto_auto_auto]">
+                      <div className="flex rounded-xl border border-white/10 bg-slate-900 p-1">
+                        {(["text", "secret"] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setBrowserPanel(account.id, { typeMode: mode })}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                              (browserPanels[account.id]?.typeMode ?? "text") === mode
+                                ? "bg-slate-700 text-white"
+                                : "text-slate-400 hover:text-slate-200"
+                            }`}
+                          >
+                            {mode === "secret" ? "Password" : "Text"}
+                          </button>
+                        ))}
+                      </div>
                       <input
-                        type="text"
+                        type={(browserPanels[account.id]?.typeMode ?? "text") === "secret" ? "password" : "text"}
                         value={browserPanels[account.id]?.typeText ?? ""}
                         onChange={(e) =>
                           setBrowserPanel(account.id, { typeText: e.target.value })
                         }
-                        placeholder="Type into focused field"
+                        placeholder={(browserPanels[account.id]?.typeMode ?? "text") === "secret" ? "Enter password or code" : "Type into focused field"}
                         className="field w-full text-xs"
                       />
                       <button

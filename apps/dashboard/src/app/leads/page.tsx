@@ -7,6 +7,7 @@ import { Badge } from "@/components/Badge";
 import { SkeletonTableRows } from "@/components/Skeleton";
 
 const STATUS_OPTIONS = ["", "NONE", "PENDING", "CONNECTED", "WITHDRAWN"];
+const LIMIT_OPTIONS = [25, 50, 100];
 
 interface ParsedLead {
   linkedinUrl: string;
@@ -61,6 +62,7 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(false);
   const [tableError, setTableError] = useState<string | null>(null);
@@ -93,8 +95,6 @@ export default function LeadsPage() {
     Array<{ row: number; error: string }>
   >([]);
 
-  const LIMIT = 50;
-
   const fetchLeads = useCallback(() => {
     setLoading(true);
     setTableError(null);
@@ -105,7 +105,7 @@ export default function LeadsPage() {
         campaignId: campaignId || undefined,
         keyword: keyword || undefined,
         page,
-        limit: LIMIT,
+        limit,
       })
       .then((r) => {
         setLeads(r.leads);
@@ -113,7 +113,7 @@ export default function LeadsPage() {
       })
       .catch((e: Error) => setTableError(e.message))
       .finally(() => setLoading(false));
-  }, [status, company, campaignId, keyword, page]);
+  }, [status, company, campaignId, keyword, page, limit]);
 
   useEffect(() => {
     api.campaigns.list().then(setCampaigns).catch(() => {});
@@ -191,7 +191,75 @@ export default function LeadsPage() {
     }
   }
 
-  const totalPages = Math.ceil(total / LIMIT);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const rangeStart = total === 0 ? 0 : (page - 1) * limit + 1;
+  const rangeEnd = Math.min(total, page * limit);
+
+  useEffect(() => {
+    if (!loading && total > 0 && page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [loading, page, total, totalPages]);
+
+  const pagination = (
+    <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.06] bg-slate-950/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm font-semibold text-slate-300">
+        Showing {rangeStart}-{rangeEnd} of {total} lead{total === 1 ? "" : "s"}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={limit}
+          onChange={(e) => {
+            setLimit(Number(e.target.value));
+            setPage(1);
+          }}
+          className="field py-1.5 text-xs"
+          aria-label="Leads per page"
+        >
+          {LIMIT_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option} / page
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => setPage(1)}
+          disabled={page === 1}
+          className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+        >
+          First
+        </button>
+        <button
+          type="button"
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          disabled={page === 1}
+          className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+        >
+          Previous
+        </button>
+        <span className="min-w-24 text-center text-sm font-semibold text-slate-400">
+          Page {page} of {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          disabled={page >= totalPages}
+          className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+        >
+          Next
+        </button>
+        <button
+          type="button"
+          onClick={() => setPage(totalPages)}
+          disabled={page >= totalPages}
+          className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+        >
+          Last
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -469,6 +537,8 @@ export default function LeadsPage() {
 
       {tableError && <p className="text-sm text-red-400">{tableError}</p>}
 
+      {pagination}
+
       {/* Leads table */}
       <div className="table-shell">
         <table className="min-w-full divide-y divide-white/[0.06]">
@@ -529,28 +599,7 @@ export default function LeadsPage() {
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="btn-secondary px-3 py-1.5"
-          >
-            Previous
-          </button>
-          <span className="text-sm font-semibold text-slate-400">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="btn-secondary px-3 py-1.5"
-          >
-            Next
-          </button>
-        </div>
-      )}
+      {pagination}
     </div>
   );
 }

@@ -118,6 +118,17 @@ export interface Account {
   createdAt: string;
 }
 
+export interface BrowserSessionStatus {
+  url: string;
+  title: string;
+  loginInputs: number;
+  checkpointForms: number;
+  profileLinks: number;
+  nextButtons: number;
+  authenticated: boolean;
+  searchQualified: boolean;
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -575,6 +586,45 @@ export const api = {
           method: "PUT",
           body: JSON.stringify(data),
         }),
+    },
+  },
+
+  browserSessions: {
+    start: (accountId: string, url?: string) =>
+      apiFetch<BrowserSessionStatus>(`/accounts/${accountId}/browser-session/start`, {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      }),
+    stop: (accountId: string) =>
+      apiFetch<{ ok: boolean }>(`/accounts/${accountId}/browser-session/stop`, {
+        method: "POST",
+      }),
+    status: (accountId: string) =>
+      apiFetch<BrowserSessionStatus>(`/accounts/${accountId}/browser-session/status`),
+    navigate: (accountId: string, url: string) =>
+      apiFetch<BrowserSessionStatus>(`/accounts/${accountId}/browser-session/navigate`, {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      }),
+    click: (accountId: string, x: number, y: number) =>
+      apiFetch<BrowserSessionStatus>(`/accounts/${accountId}/browser-session/click`, {
+        method: "POST",
+        body: JSON.stringify({ x, y }),
+      }),
+    type: (accountId: string, text: string) =>
+      apiFetch<BrowserSessionStatus>(`/accounts/${accountId}/browser-session/type`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      }),
+    press: (accountId: string, key: string) =>
+      apiFetch<BrowserSessionStatus>(`/accounts/${accountId}/browser-session/press`, {
+        method: "POST",
+        body: JSON.stringify({ key }),
+      }),
+    screenshotUrl: (accountId: string) => {
+      const token = getAuthToken();
+      const q = token ? `?token=${encodeURIComponent(token)}` : "";
+      return `${API_BASE}/accounts/${accountId}/browser-session/screenshot${q}`;
     },
   },
 

@@ -13,7 +13,10 @@ export async function requireAuth(
 ) {
   try {
     const auth = req.headers.authorization;
-    const token = auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length) : null;
+    const queryToken = typeof req.query.token === "string" ? req.query.token : null;
+    const token = auth?.startsWith("Bearer ")
+      ? auth.slice("Bearer ".length)
+      : queryToken;
     if (!token) {
       res.status(401).json({ error: "Missing bearer token" });
       return;

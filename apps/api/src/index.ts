@@ -12,6 +12,7 @@ import { contentSignalRouter } from "./routes/contentSignal.js";
 import { settingsRouter } from "./routes/settings.js";
 import { authRouter } from "./routes/auth.js";
 import { jobsRouter } from "./routes/jobs.js";
+import { browserSessionsRouter } from "./routes/browserSessions.js";
 import { errorMiddleware } from "./middleware/error.js";
 import { requireAuth } from "./middleware/auth.js";
 import { apiRateLimit } from "./middleware/rateLimit.js";
@@ -66,6 +67,7 @@ app.use("/auth", authRouter);
 app.use(requireAuth);
 
 app.use("/accounts", accountsRouter);
+app.use("/accounts", browserSessionsRouter);
 app.use("/campaigns", campaignsRouter);
 app.use("/campaigns", sequencesRouter);
 app.use("/leads", leadsRouter);

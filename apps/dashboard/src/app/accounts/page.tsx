@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Skeleton, SkeletonPageHeader } from "@/components/Skeleton";
 import {
   api,
@@ -8,6 +8,7 @@ import {
   type Checkpoint,
   type Proxy,
   type CapKey,
+  type BrowserSessionStatus,
   SYSTEM_CAPS,
   HARD_CEILING,
   CAP_LABELS,
@@ -226,6 +227,14 @@ function CapBar({ label, used, cap }: { label: string; used: number; cap: number
 
 type AccountNoticeType = "success" | "error" | "info";
 
+type BrowserPanelState = {
+  status?: BrowserSessionStatus;
+  open: boolean;
+  url: string;
+  typeText: string;
+  refreshKey: number;
+};
+
 function sessionBadge(account: Account, openCheckpoints: number) {
   if (openCheckpoints > 0 || account.status === "RESTRICTED") {
     return {
@@ -335,6 +344,11 @@ export default function AccountsPage() {
   const [cookieConsent, setCookieConsent] = useState<Record<string, boolean>>({});
   const [showCookieFor, setShowCookieFor] = useState<string | null>(null);
   const [uploadingCookies, setUploadingCookies] = useState(false);
+
+  // Hosted persistent browser session state
+  const [browserPanels, setBrowserPanels] = useState<Record<string, BrowserPanelState>>({});
+  const [browserBusy, setBrowserBusy] = useState<string | null>(null);
+  const browserImageRefs = useRef<Record<string, HTMLImageElement | null>>({});
 
   // per-account cap editor state
   const [showCapsFor, setShowCapsFor] = useState<string | null>(null);
@@ -665,6 +679,147 @@ export default function AccountsPage() {
     }
   }
 
+  function setBrowserPanel(accountId: string, patch: Partial<BrowserPanelState>) {
+    setBrowserPanels((prev) => ({
+      ...prev,
+      [accountId]: {
+        open: prev[accountId]?.open ?? false,
+        url: prev[accountId]?.url ?? "https://www.linkedin.com/feed/",
+        typeText: prev[accountId]?.typeText ?? "",
+        refreshKey: prev[accountId]?.refreshKey ?? 0,
+        status: prev[accountId]?.status,
+        ...patch,
+      },
+    }));
+  }
+
+  async function handleStartBrowser(account: Account) {
+    const url =
+      browserPanels[account.id]?.url ||
+      "https://www.linkedin.com/feed/";
+    setBrowserBusy(account.id);
+    clearAccountNotice(account.id);
+    try {
+      const status = await api.browserSessions.start(account.id, url);
+      setBrowserPanel(account.id, {
+        open: true,
+        status,
+        url: status.url || url,
+        refreshKey: Date.now(),
+      });
+      setAccountNotice(account.id, "success", "Hosted browser session started.");
+    } catch (e) {
+      setAccountNotice(account.id, "error", (e as Error).message);
+    } finally {
+      setBrowserBusy(null);
+    }
+  }
+
+  async function handleStopBrowser(accountId: string) {
+    setBrowserBusy(accountId);
+    try {
+      await api.browserSessions.stop(accountId);
+      setBrowserPanel(accountId, { open: false, status: undefined });
+      setAccountNotice(accountId, "success", "Hosted browser session stopped.");
+    } catch (e) {
+      setAccountNotice(accountId, "error", (e as Error).message);
+    } finally {
+      setBrowserBusy(null);
+    }
+  }
+
+  async function refreshBrowser(accountId: string) {
+    setBrowserBusy(accountId);
+    try {
+      const status = await api.browserSessions.status(accountId);
+      setBrowserPanel(accountId, {
+        status,
+        url: status.url,
+        refreshKey: Date.now(),
+      });
+    } catch (e) {
+      setAccountNotice(accountId, "error", (e as Error).message);
+    } finally {
+      setBrowserBusy(null);
+    }
+  }
+
+  async function handleBrowserNavigate(accountId: string) {
+    const url = browserPanels[accountId]?.url?.trim();
+    if (!url) return;
+    setBrowserBusy(accountId);
+    try {
+      const status = await api.browserSessions.navigate(accountId, url);
+      setBrowserPanel(accountId, {
+        status,
+        url: status.url,
+        refreshKey: Date.now(),
+      });
+    } catch (e) {
+      setAccountNotice(accountId, "error", (e as Error).message);
+    } finally {
+      setBrowserBusy(null);
+    }
+  }
+
+  async function handleBrowserClick(accountId: string, event: React.MouseEvent<HTMLImageElement>) {
+    const img = browserImageRefs.current[accountId];
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    const scaleX = img.naturalWidth / rect.width;
+    const scaleY = img.naturalHeight / rect.height;
+    const x = Math.round((event.clientX - rect.left) * scaleX);
+    const y = Math.round((event.clientY - rect.top) * scaleY);
+    setBrowserBusy(accountId);
+    try {
+      const status = await api.browserSessions.click(accountId, x, y);
+      setBrowserPanel(accountId, {
+        status,
+        url: status.url,
+        refreshKey: Date.now(),
+      });
+    } catch (e) {
+      setAccountNotice(accountId, "error", (e as Error).message);
+    } finally {
+      setBrowserBusy(null);
+    }
+  }
+
+  async function handleBrowserType(accountId: string) {
+    const text = browserPanels[accountId]?.typeText ?? "";
+    if (!text) return;
+    setBrowserBusy(accountId);
+    try {
+      const status = await api.browserSessions.type(accountId, text);
+      setBrowserPanel(accountId, {
+        status,
+        typeText: "",
+        url: status.url,
+        refreshKey: Date.now(),
+      });
+    } catch (e) {
+      setAccountNotice(accountId, "error", (e as Error).message);
+    } finally {
+      setBrowserBusy(null);
+    }
+  }
+
+  async function handleBrowserPress(accountId: string, key: string) {
+    setBrowserBusy(accountId);
+    try {
+      const status = await api.browserSessions.press(accountId, key);
+      setBrowserPanel(accountId, {
+        status,
+        url: status.url,
+        refreshKey: Date.now(),
+      });
+    } catch (e) {
+      setAccountNotice(accountId, "error", (e as Error).message);
+    } finally {
+      setBrowserBusy(null);
+    }
+  }
+
   if (loading)
     return (
       <div className="space-y-6">
@@ -963,6 +1118,169 @@ export default function AccountsPage() {
                   </div>
                 </div>
               )}
+
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Hosted browser
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-white">
+                      Persistent LinkedIn profile
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleStartBrowser(account)}
+                      disabled={browserBusy === account.id || !account.proxy}
+                      className="btn-secondary text-xs"
+                    >
+                      {browserPanels[account.id]?.open ? "Restart" : "Open"}
+                    </button>
+                    {browserPanels[account.id]?.open && (
+                      <button
+                        type="button"
+                        onClick={() => handleStopBrowser(account.id)}
+                        disabled={browserBusy === account.id}
+                        className="rounded-xl border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                      >
+                        Stop
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {!account.proxy && (
+                  <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                    Assign a residential proxy before opening the hosted browser.
+                  </p>
+                )}
+
+                {browserPanels[account.id]?.open && (
+                  <div className="mt-4 space-y-3">
+                    <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                      <input
+                        type="url"
+                        value={browserPanels[account.id]?.url ?? ""}
+                        onChange={(e) =>
+                          setBrowserPanel(account.id, { url: e.target.value })
+                        }
+                        className="field w-full text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleBrowserNavigate(account.id)}
+                        disabled={browserBusy === account.id}
+                        className="btn-secondary text-xs"
+                      >
+                        Go
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => refreshBrowser(account.id)}
+                        disabled={browserBusy === account.id}
+                        className="btn-secondary text-xs"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+
+                    {browserPanels[account.id]?.status && (
+                      <div className="grid gap-2 text-xs sm:grid-cols-4">
+                        <div className="rounded-xl border border-white/10 bg-slate-900 p-2">
+                          <p className="text-slate-500">Auth</p>
+                          <p className="mt-1 font-semibold text-slate-200">
+                            {browserPanels[account.id]?.status?.authenticated
+                              ? "OK"
+                              : "Needs login"}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-slate-900 p-2">
+                          <p className="text-slate-500">Search</p>
+                          <p className="mt-1 font-semibold text-slate-200">
+                            {browserPanels[account.id]?.status?.searchQualified
+                              ? "Qualified"
+                              : "Not ready"}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-slate-900 p-2">
+                          <p className="text-slate-500">Links</p>
+                          <p className="mt-1 font-semibold text-slate-200">
+                            {browserPanels[account.id]?.status?.profileLinks ?? 0}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-slate-900 p-2">
+                          <p className="text-slate-500">Next</p>
+                          <p className="mt-1 font-semibold text-slate-200">
+                            {browserPanels[account.id]?.status?.nextButtons ?? 0}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
+                      <img
+                        ref={(el) => {
+                          browserImageRefs.current[account.id] = el;
+                        }}
+                        src={`${api.browserSessions.screenshotUrl(account.id)}${
+                          api.browserSessions.screenshotUrl(account.id).includes("?")
+                            ? "&"
+                            : "?"
+                        }t=${browserPanels[account.id]?.refreshKey ?? 0}`}
+                        alt="Hosted LinkedIn browser"
+                        onClick={(e) => handleBrowserClick(account.id, e)}
+                        className="block w-full cursor-crosshair"
+                      />
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto]">
+                      <input
+                        type="text"
+                        value={browserPanels[account.id]?.typeText ?? ""}
+                        onChange={(e) =>
+                          setBrowserPanel(account.id, { typeText: e.target.value })
+                        }
+                        placeholder="Type into focused field"
+                        className="field w-full text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleBrowserType(account.id)}
+                        disabled={browserBusy === account.id}
+                        className="btn-secondary text-xs"
+                      >
+                        Type
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBrowserPress(account.id, "Enter")}
+                        disabled={browserBusy === account.id}
+                        className="btn-secondary text-xs"
+                      >
+                        Enter
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBrowserPress(account.id, "Tab")}
+                        disabled={browserBusy === account.id}
+                        className="btn-secondary text-xs"
+                      >
+                        Tab
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBrowserPress(account.id, "Backspace")}
+                        disabled={browserBusy === account.id}
+                        className="btn-secondary text-xs"
+                      >
+                        Backspace
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {showEditFor === account.id && (
                 <div className="space-y-3 rounded-2xl border border-slate-500/30 bg-slate-500/5 p-4">

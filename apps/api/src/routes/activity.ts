@@ -11,6 +11,34 @@ const ActivityFilterSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+function userFacingActivityResult(actionType: string, result?: string | null): string | null {
+  if (!result) return result ?? null;
+
+  if (actionType === "sessionHealthCheck") {
+    if (
+      /launchPersistentContext|profile appears to be in use|profile is already in use|Opening in existing browser session|process_singleton|Browser logs|--user-data-dir/i.test(
+        result
+      )
+    ) {
+      return "skipped: browser profile is busy; Vectra will retry automatically";
+    }
+
+    if (/checkpoint|authwall/i.test(result)) {
+      return "failed: LinkedIn needs account verification";
+    }
+
+    if (/login|session/i.test(result)) {
+      return "failed: LinkedIn session needs attention";
+    }
+
+    if (result.startsWith("failed:") && result.length > 120) {
+      return "failed: session check could not complete; Vectra will retry automatically";
+    }
+  }
+
+  return result.length > 500 ? `${result.slice(0, 500)}...` : result;
+}
+
 // GET /activity/export — CSV download of all matching logs (hard cap: 10k rows)
 activityRouter.get("/export", async (req, res, next) => {
   try {
@@ -41,7 +69,7 @@ activityRouter.get("/export", async (req, res, next) => {
           l.accountId,
           l.actionType,
           `"${(l.targetUrl ?? "").replace(/"/g, '""')}"`,
-          `"${(l.result ?? "").replace(/"/g, '""')}"`,
+          `"${(userFacingActivityResult(l.actionType, l.result) ?? "").replace(/"/g, '""')}"`,
           l.createdAt.toISOString(),
         ].join(",")
       ),
@@ -80,7 +108,15 @@ activityRouter.get("/", async (req, res, next) => {
       prisma.activityLog.count({ where }),
     ]);
 
-    res.json({ logs, total, page, limit });
+    res.json({
+      logs: logs.map((log) => ({
+        ...log,
+        result: userFacingActivityResult(log.actionType, log.result),
+      })),
+      total,
+      page,
+      limit,
+    });
   } catch (err) {
     next(err);
   }

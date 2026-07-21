@@ -5,8 +5,37 @@ import {
   assertWarmUpAllowed,
   checkActionWindow,
 } from "@linkedin-automation/guards";
-import { BrowserWorker, navigateTo } from "@linkedin-automation/browser";
+import {
+  BrowserProfileInUseError,
+  BrowserWorker,
+  navigateTo,
+} from "@linkedin-automation/browser";
 import type { SessionHealthCheckJobData } from "../queues.js";
+
+function userFacingHealthCheckResult(err: unknown): string {
+  if (err instanceof BrowserProfileInUseError) {
+    return "skipped: browser profile is busy; Vectra will retry automatically";
+  }
+
+  const message = err instanceof Error ? err.message : String(err);
+  if (
+    /launchPersistentContext|profile appears to be in use|profile is already in use|Opening in existing browser session|process_singleton/i.test(
+      message
+    )
+  ) {
+    return "skipped: browser profile is busy; Vectra will retry automatically";
+  }
+
+  if (/checkpoint|authwall/i.test(message)) {
+    return "failed: LinkedIn needs account verification";
+  }
+
+  if (/login|session/i.test(message)) {
+    return "failed: LinkedIn session needs attention";
+  }
+
+  return "failed: session check could not complete; Vectra will retry automatically";
+}
 
 /**
  * Proactively visits LinkedIn for every ACTIVE account with a session, once
@@ -49,12 +78,16 @@ export async function sessionHealthCheckProcessor(
         data: { accountId, actionType: "sessionHealthCheck", result: "success" },
       });
     } catch (err) {
+      console.warn("Session health check failed", {
+        accountId,
+        error: err instanceof Error ? err.message : err,
+      });
       await prisma.activityLog
         .create({
           data: {
             accountId,
             actionType: "sessionHealthCheck",
-            result: `failed: ${(err as Error).message}`,
+            result: userFacingHealthCheckResult(err),
           },
         })
         .catch(() => {});

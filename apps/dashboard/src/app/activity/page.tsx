@@ -15,6 +15,7 @@ const ACTION_TYPES = [
   "content_signal",
   "withdraw",
   "checkpoint_detected",
+  "sessionHealthCheck",
 ];
 
 const PAGE_SIZE = 50;
@@ -87,6 +88,11 @@ export default function ActivityLogPage() {
   const accountEmail = (id: string) =>
     accounts.find((a) => a.id === id)?.email ?? id.slice(0, 8) + "…";
 
+  const actionLabel = (value: string) => {
+    if (value === "sessionHealthCheck") return "Session check";
+    return value;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -140,7 +146,7 @@ export default function ActivityLogPage() {
           >
             {ACTION_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t || "All types"}
+                {t ? actionLabel(t) : "All types"}
               </option>
             ))}
           </select>
@@ -180,7 +186,7 @@ export default function ActivityLogPage() {
               page?.logs.map((log) => (
                 <tr key={log.id} className="hover:bg-white/[0.03]">
                   <td className="table-cell">
-                    <Badge value={log.actionType} />
+                    <Badge value={actionLabel(log.actionType)} />
                   </td>
                   <td className="table-cell max-w-xs truncate font-mono text-xs text-slate-400">
                     {log.targetUrl ?? "—"}

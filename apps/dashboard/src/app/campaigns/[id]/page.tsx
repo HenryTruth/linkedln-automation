@@ -273,6 +273,9 @@ export default function CampaignDetailPage() {
   const [savedLeadCampaignFilter, setSavedLeadCampaignFilter] = useState("");
   const [removingLeadId, setRemovingLeadId] = useState<string | null>(null);
   const [confirmRemoveLead, setConfirmRemoveLead] = useState<{ leadId: string; name: string } | null>(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [removingBulk, setRemovingBulk] = useState(false);
+  const [confirmBulkRemove, setConfirmBulkRemove] = useState(false);
 
   // Add search URL form (SCRAPE only)
   const [searchUrl, setSearchUrl] = useState("");
@@ -362,6 +365,7 @@ export default function CampaignDetailPage() {
     reload()
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
+    setSelectedLeadIds([]);
   }, [id, leadPage]);
 
   useEffect(() => {
@@ -523,11 +527,39 @@ export default function CampaignDetailPage() {
     try {
       await api.campaigns.removeLead(id, leadId);
       toast.success("Lead removed from campaign");
+      setSelectedLeadIds((ids) => ids.filter((x) => x !== leadId));
       await reload();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setRemovingLeadId(null);
+    }
+  }
+
+  function toggleLeadSelection(leadId: string) {
+    setSelectedLeadIds((ids) =>
+      ids.includes(leadId) ? ids.filter((x) => x !== leadId) : [...ids, leadId]
+    );
+  }
+
+  function toggleSelectAllLeads() {
+    const visibleIds = campaign!.leads.map((cl) => cl.leadId);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((leadId) => selectedLeadIds.includes(leadId));
+    setSelectedLeadIds(allSelected ? [] : visibleIds);
+  }
+
+  async function handleBulkRemoveLeads() {
+    setConfirmBulkRemove(false);
+    setRemovingBulk(true);
+    try {
+      const result = await api.campaigns.removeLeads(id, { leadIds: selectedLeadIds });
+      toast.success(`Removed ${result.removed} lead${result.removed === 1 ? "" : "s"} from this campaign`);
+      setSelectedLeadIds([]);
+      await reload();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRemovingBulk(false);
     }
   }
 
@@ -1632,10 +1664,46 @@ export default function CampaignDetailPage() {
           </div>
         )}
 
+        {selectedLeadIds.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-3">
+            <span className="text-sm font-medium text-red-300">
+              {selectedLeadIds.length} lead{selectedLeadIds.length === 1 ? "" : "s"} selected
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedLeadIds([])}
+                className="btn-secondary px-3 py-1.5 text-xs"
+              >
+                Clear selection
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmBulkRemove(true)}
+                disabled={removingBulk}
+                className="btn-danger px-3 py-1.5 text-xs"
+              >
+                {removingBulk ? "Removing..." : "Remove selected"}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="table-shell">
           <table className="min-w-full divide-y divide-white/[0.06]">
             <thead className="table-head">
               <tr>
+                <th className="w-10 px-6 py-3">
+                  <input
+                    type="checkbox"
+                    checked={
+                      campaign.leads.length > 0 &&
+                      campaign.leads.every((cl) => selectedLeadIds.includes(cl.leadId))
+                    }
+                    onChange={toggleSelectAllLeads}
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500"
+                  />
+                </th>
                 {(isScrape
                   ? ["Profile URL", "Name", "Company", "Title", "Status", "Actions"]
                   : ["Name", "Company", "Connection", "Stage", "Replied", "Last Action", "Status", "Actions"]
@@ -1653,7 +1721,7 @@ export default function CampaignDetailPage() {
               {leadTotal === 0 && (
                 <tr>
                   <td
-                    colSpan={isScrape ? 6 : 8}
+                    colSpan={isScrape ? 7 : 9}
                     className="px-6 py-10 text-center text-sm text-slate-400"
                   >
                     {isScrape
@@ -1668,6 +1736,14 @@ export default function CampaignDetailPage() {
               )}
               {campaign.leads.map((cl) => (
                 <tr key={cl.id} className="hover:bg-white/[0.03]">
+                  <td className="table-cell">
+                    <input
+                      type="checkbox"
+                      checked={selectedLeadIds.includes(cl.leadId)}
+                      onChange={() => toggleLeadSelection(cl.leadId)}
+                      className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500"
+                    />
+                  </td>
                   {isScrape ? (
                     <>
                       <td className="table-cell">
@@ -1786,7 +1862,7 @@ export default function CampaignDetailPage() {
               {isContentSignal && campaign.leads.map((cl) =>
                 cl.postSignal ? (
                   <tr key={`${cl.id}-signal`} className="bg-teal-500/[0.04]">
-                    <td colSpan={8} className="px-6 py-2">
+                    <td colSpan={9} className="px-6 py-2">
                       <div className="flex items-start gap-2 rounded-2xl border border-teal-500/20 bg-teal-500/5 p-3 text-xs text-teal-300">
                         <span className="shrink-0 font-medium">Post:</span>
                         <span className="italic line-clamp-2">&quot;{cl.postSignal.excerpt}&quot;</span>
@@ -1860,6 +1936,16 @@ export default function CampaignDetailPage() {
           />
         </section>
       )}
+
+      <ConfirmDialog
+        open={confirmBulkRemove}
+        title="Remove selected leads"
+        description={`Remove ${selectedLeadIds.length} lead${selectedLeadIds.length === 1 ? "" : "s"} from "${campaign.name}"? Saved lead records are not deleted and can be re-added later.`}
+        confirmLabel="Remove"
+        busy={removingBulk}
+        onConfirm={handleBulkRemoveLeads}
+        onCancel={() => setConfirmBulkRemove(false)}
+      />
 
       <ConfirmDialog
         open={confirmRemoveLead !== null}

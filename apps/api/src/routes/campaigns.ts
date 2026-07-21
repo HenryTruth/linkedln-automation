@@ -1074,6 +1074,27 @@ campaignsRouter.get("/:id/stats", async (req, res, next) => {
   }
 });
 
+const RemoveLeadsSchema = z.object({
+  leadIds: z.array(z.string().min(1)).min(1).max(500),
+});
+
+// DELETE /campaigns/:id/leads — bulk-remove leads from this campaign (the saved lead records are untouched)
+campaignsRouter.delete("/:id/leads", async (req, res, next) => {
+  try {
+    const { leadIds } = RemoveLeadsSchema.parse(req.body);
+    const result = await prisma.campaignLead.deleteMany({
+      where: {
+        campaignId: req.params.id,
+        leadId: { in: leadIds },
+        campaign: { account: { userId: req.user.id } },
+      },
+    });
+    res.json({ removed: result.count });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /campaigns/:id/leads/:leadId — remove a lead from this campaign (the saved lead record is untouched)
 campaignsRouter.delete("/:id/leads/:leadId", async (req, res, next) => {
   try {

@@ -611,6 +611,11 @@ export const api = {
       apiFetch<{ removed: number }>(`/campaigns/${campaignId}/leads/${leadId}`, {
         method: "DELETE",
       }),
+    removeLeads: (campaignId: string, data: { leadIds: string[] }) =>
+      apiFetch<{ removed: number }>(`/campaigns/${campaignId}/leads`, {
+        method: "DELETE",
+        body: JSON.stringify(data),
+      }),
     markReplied: (campaignId: string, leadId: string) =>
       apiFetch<{ ok: boolean }>(`/campaigns/${campaignId}/leads/${leadId}/mark-replied`, {
         method: "POST",

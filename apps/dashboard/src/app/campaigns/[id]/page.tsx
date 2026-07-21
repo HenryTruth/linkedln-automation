@@ -176,6 +176,12 @@ function fmtJobTime(value: number | null | undefined) {
   return new Date(value).toLocaleString();
 }
 
+function leadDisplayName(lead: Lead) {
+  return lead.firstName || lead.lastName
+    ? `${lead.firstName ?? ""} ${lead.lastName ?? ""}`.trim()
+    : "Unknown";
+}
+
 function JobStatusBadge({ status, error }: { status: CampaignLeadJobStatus; error?: string | null }) {
   return (
     <div>
@@ -257,6 +263,13 @@ export default function CampaignDetailPage() {
   const [leadError, setLeadError] = useState<string | null>(null);
   const [leadWarning, setLeadWarning] = useState<string | null>(null);
   const [showLeadForm, setShowLeadForm] = useState(false);
+  const [showSavedLeads, setShowSavedLeads] = useState(false);
+  const [savedLeads, setSavedLeads] = useState<Lead[]>([]);
+  const [savedLeadsLoading, setSavedLeadsLoading] = useState(false);
+  const [savedLeadIds, setSavedLeadIds] = useState<string[]>([]);
+  const [attachingSavedLeads, setAttachingSavedLeads] = useState(false);
+  const [savedLeadNotice, setSavedLeadNotice] = useState<string | null>(null);
+  const [savedLeadError, setSavedLeadError] = useState<string | null>(null);
 
   // Add search URL form (SCRAPE only)
   const [searchUrl, setSearchUrl] = useState("");
@@ -488,6 +501,44 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function loadSavedLeads() {
+    setSavedLeadsLoading(true);
+    setSavedLeadError(null);
+    try {
+      const result = await api.leads.list({ limit: 100 });
+      setSavedLeads(result.leads);
+    } catch (e) {
+      setSavedLeadError((e as Error).message);
+    } finally {
+      setSavedLeadsLoading(false);
+    }
+  }
+
+  function toggleSavedLead(leadId: string) {
+    setSavedLeadIds((ids) =>
+      ids.includes(leadId) ? ids.filter((id) => id !== leadId) : [...ids, leadId]
+    );
+  }
+
+  async function handleAttachSavedLeads() {
+    if (savedLeadIds.length === 0) return;
+    setAttachingSavedLeads(true);
+    setSavedLeadNotice(null);
+    setSavedLeadError(null);
+    try {
+      const result = await api.campaigns.attachSavedLeads(id, { leadIds: savedLeadIds });
+      setSavedLeadNotice(
+        `Added ${result.attached} saved lead${result.attached === 1 ? "" : "s"} to this campaign${result.skipped ? `; ${result.skipped} already existed or could not be attached.` : "."}`
+      );
+      setSavedLeadIds([]);
+      await Promise.all([reload(), loadSavedLeads()]);
+    } catch (e) {
+      setSavedLeadError((e as Error).message);
+    } finally {
+      setAttachingSavedLeads(false);
+    }
+  }
+
   async function handleAddSearchUrl(e: React.FormEvent) {
     e.preventDefault();
     setAddingSearch(true);
@@ -585,6 +636,8 @@ export default function CampaignDetailPage() {
   const leadTotal = campaign.leadTotal ?? campaign.leads.length;
   const leadTotalPages = Math.max(1, Math.ceil(leadTotal / CAMPAIGN_LEAD_LIMIT));
   const reusableCampaigns = campaigns.filter((candidate) => candidate.id !== campaign.id);
+  const attachedLeadIds = new Set(campaign.leads.map((cl) => cl.leadId));
+  const savedLeadCandidates = savedLeads.filter((lead) => !attachedLeadIds.has(lead.id));
 
   return (
     <div className="space-y-8">
@@ -934,11 +987,29 @@ export default function CampaignDetailPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            {isSequence && (
+              <button
+                onClick={() => {
+                  const next = !showSavedLeads;
+                  setShowSavedLeads(next);
+                  setShowSearchForm(false);
+                  setShowLeadForm(false);
+                  setShowCsvImport(false);
+                  setSavedLeadNotice(null);
+                  setSavedLeadError(null);
+                  if (next && savedLeads.length === 0) void loadSavedLeads();
+                }}
+                className="btn-secondary px-3 py-1.5 text-cyan-400"
+              >
+                {showSavedLeads ? "Cancel" : "Saved Leads"}
+              </button>
+            )}
             <button
               onClick={() => {
                 setShowSearchForm((v) => !v);
                 setShowLeadForm(false);
                 setShowCsvImport(false);
+                setShowSavedLeads(false);
               }}
               className="btn-secondary px-3 py-1.5 text-violet-400"
             >
@@ -949,6 +1020,7 @@ export default function CampaignDetailPage() {
                 setShowCsvImport((v) => !v);
                 setShowLeadForm(false);
                 setShowSearchForm(false);
+                setShowSavedLeads(false);
                 setCsvResult(null);
               }}
               className="btn-secondary px-3 py-1.5 text-indigo-400"
@@ -960,6 +1032,7 @@ export default function CampaignDetailPage() {
                 setShowLeadForm((v) => !v);
                 setShowSearchForm(false);
                 setShowCsvImport(false);
+                setShowSavedLeads(false);
               }}
               className="btn-secondary px-3 py-1.5 text-teal-400"
             >
@@ -1077,6 +1150,97 @@ export default function CampaignDetailPage() {
                     </div>
                   );
                 })
+              )}
+            </div>
+          </div>
+        )}
+
+        {showSavedLeads && (
+          <div className="mb-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">
+                  Saved leads
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-400">
+                  Add existing lead records to this sequence. They will enter the graph from the entry step when you start the campaign.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={loadSavedLeads}
+                  disabled={savedLeadsLoading}
+                  className="btn-secondary px-3 py-1.5 text-xs"
+                >
+                  {savedLeadsLoading ? "Refreshing..." : "Refresh"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSavedLeadIds(savedLeadCandidates.map((lead) => lead.id))}
+                  disabled={savedLeadCandidates.length === 0}
+                  className="btn-secondary px-3 py-1.5 text-xs"
+                >
+                  Select visible
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAttachSavedLeads}
+                  disabled={attachingSavedLeads || savedLeadIds.length === 0}
+                  className="btn-primary px-3 py-1.5 text-xs"
+                >
+                  {attachingSavedLeads ? "Adding..." : `Add selected${savedLeadIds.length ? ` (${savedLeadIds.length})` : ""}`}
+                </button>
+              </div>
+            </div>
+
+            {savedLeadError && (
+              <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+                {savedLeadError}
+              </p>
+            )}
+            {savedLeadNotice && (
+              <p className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+                {savedLeadNotice}
+              </p>
+            )}
+
+            <div className="mt-3 max-h-80 overflow-auto rounded-xl border border-white/[0.06] bg-slate-950/40">
+              {savedLeadsLoading ? (
+                <p className="p-4 text-sm text-slate-400">Loading saved leads...</p>
+              ) : savedLeadCandidates.length === 0 ? (
+                <p className="p-4 text-sm text-slate-400">
+                  No unattached saved leads found in the first 100 saved records.
+                </p>
+              ) : (
+                <div className="divide-y divide-white/[0.06]">
+                  {savedLeadCandidates.map((lead) => (
+                    <label
+                      key={lead.id}
+                      className="flex cursor-pointer items-start gap-3 p-3 hover:bg-white/[0.03]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={savedLeadIds.includes(lead.id)}
+                        onChange={() => toggleSavedLead(lead.id)}
+                        className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-slate-200">{leadDisplayName(lead)}</p>
+                          <Badge value={lead.connectionStatus} />
+                          {lead.blacklisted && <Badge value="BLACKLISTED" />}
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {[lead.title, lead.company].filter(Boolean).join(" at ") || "No title/company saved"}
+                        </p>
+                        <p className="mt-1 truncate font-mono text-[11px] text-cyan-300">
+                          {lead.linkedinUrl}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
               )}
             </div>
           </div>

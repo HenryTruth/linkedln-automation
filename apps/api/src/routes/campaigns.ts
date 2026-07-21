@@ -373,6 +373,10 @@ const AddLeadSchema = z.object({
   title: z.string().optional(),
 });
 
+const AttachSavedLeadsSchema = z.object({
+  leadIds: z.array(z.string().min(1)).min(1).max(500),
+});
+
 campaignsRouter.post("/:id/leads", async (req, res, next) => {
   try {
     const data = AddLeadSchema.parse(req.body);
@@ -401,6 +405,45 @@ campaignsRouter.post("/:id/leads", async (req, res, next) => {
     });
 
     res.status(201).json({ lead, campaignLeadId: campaignLead.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+campaignsRouter.post("/:id/leads/attach-saved", async (req, res, next) => {
+  try {
+    const { leadIds } = AttachSavedLeadsSchema.parse(req.body);
+    const campaign = await prisma.campaign.findFirstOrThrow({
+      where: { id: req.params.id, account: { userId: req.user.id } },
+      select: { id: true },
+    });
+
+    const uniqueLeadIds = Array.from(new Set(leadIds));
+    const savedLeads = await prisma.lead.findMany({
+      where: { id: { in: uniqueLeadIds }, userId: req.user.id },
+      select: { id: true },
+    });
+    const savedLeadIds = savedLeads.map((lead) => lead.id);
+
+    const existing = await prisma.campaignLead.findMany({
+      where: { campaignId: campaign.id, leadId: { in: savedLeadIds } },
+      select: { leadId: true },
+    });
+    const existingIds = new Set(existing.map((lead) => lead.leadId));
+    const newLeadIds = savedLeadIds.filter((leadId) => !existingIds.has(leadId));
+
+    const created =
+      newLeadIds.length > 0
+        ? await prisma.campaignLead.createMany({
+            data: newLeadIds.map((leadId) => ({ campaignId: campaign.id, leadId })),
+          })
+        : { count: 0 };
+
+    res.status(201).json({
+      attached: created.count,
+      skipped: uniqueLeadIds.length - created.count,
+      total: uniqueLeadIds.length,
+    });
   } catch (err) {
     next(err);
   }

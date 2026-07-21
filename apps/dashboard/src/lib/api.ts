@@ -571,6 +571,14 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    attachSavedLeads: (campaignId: string, data: { leadIds: string[] }) =>
+      apiFetch<{ attached: number; skipped: number; total: number }>(
+        `/campaigns/${campaignId}/leads/attach-saved`,
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      ),
     copyLeadsToCampaign: (
       campaignId: string,
       data: { targetCampaignId: string; leadIds?: string[] }

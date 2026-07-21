@@ -163,7 +163,9 @@ export class BrowserWorker {
       } catch (err) {
         if (
           err instanceof Error &&
-          /Opening in existing browser session|profile is already in use/i.test(err.message)
+          /Opening in existing browser session|profile is already in use|profile appears to be in use|process_singleton/i.test(
+            `${err.message}\n${JSON.stringify((err as { log?: unknown }).log ?? "")}`
+          )
         ) {
           throw new BrowserProfileInUseError(this.accountId);
         }

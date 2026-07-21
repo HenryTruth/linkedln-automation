@@ -7,6 +7,7 @@ import {
   AnomalyError,
   AccountPausedError,
 } from "@linkedin-automation/guards";
+import { BrowserProfileInUseError } from "@linkedin-automation/browser";
 
 export function errorMiddleware(
   err: unknown,
@@ -29,7 +30,8 @@ export function errorMiddleware(
     err instanceof DailyCapExceededError ||
     err instanceof WarmUpError ||
     err instanceof AnomalyError ||
-    err instanceof AccountPausedError
+    err instanceof AccountPausedError ||
+    err instanceof BrowserProfileInUseError
   ) {
     res.status(409).json({ error: (err as Error).message });
     return;

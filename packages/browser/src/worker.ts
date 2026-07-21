@@ -29,9 +29,19 @@ const IP_CHECK_INTERVAL = 10;
 const ARTIFACT_DIR =
   process.env.BROWSER_ARTIFACT_DIR ?? "/tmp/linkedin-automation-artifacts";
 const REQUIRE_PROXY = process.env.REQUIRE_PROXY !== "false";
+const DEFAULT_PROFILE_ROOT =
+  process.env.LINKEDIN_BROWSER_PROFILE_ROOT ??
+  process.env.BROWSER_PROFILE_ROOT ??
+  "/tmp/linkedin-automation-browser-profiles";
 
 function safeName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 120);
+}
+
+export interface BrowserWorkerOptions {
+  allowPaused?: boolean;
+  profileRoot?: string;
+  usePersistentProfile?: boolean;
 }
 
 export class BrowserWorker {
@@ -39,6 +49,8 @@ export class BrowserWorker {
   private context: BrowserContext | null = null;
   private page: Page | null = null;
   private accountId: string;
+  private options: BrowserWorkerOptions;
+  private persistentContext = false;
   private sessionStart: number = 0;
   private sessionMaxMs: number = randomSessionMaxMs();
   private proxy: Proxy | null = null;
@@ -46,8 +58,9 @@ export class BrowserWorker {
   private proxySessionId: string | null = null;
   private ipCheckCounter = 0;
 
-  constructor(accountId: string) {
+  constructor(accountId: string, options: BrowserWorkerOptions = {}) {
     this.accountId = accountId;
+    this.options = options;
   }
 
   async launch(): Promise<void> {
@@ -70,7 +83,7 @@ export class BrowserWorker {
       },
     });
 
-    if (account.status === AccountStatus.PAUSED) {
+    if (account.status === AccountStatus.PAUSED && !this.options.allowPaused) {
       throw new Error(`Account ${this.accountId} is paused`);
     }
 
@@ -103,16 +116,13 @@ export class BrowserWorker {
       });
     }
 
-    this.browser = await chromium.launch({
+    const launchOptions = {
       headless: process.env.HEADLESS === "true",
       args: [
         "--disable-blink-features=AutomationControlled",
         "--no-sandbox",
         "--disable-setuid-sandbox",
       ],
-    });
-
-    this.context = await this.browser.newContext({
       proxy: proxy
         ? buildPlaywrightProxy(proxy, this.proxySessionId ?? undefined)
         : undefined,
@@ -126,15 +136,48 @@ export class BrowserWorker {
       locale: "en-US",
       timezoneId: account.timezone,
       extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
-    });
+    };
+
+    this.persistentContext =
+      this.options.usePersistentProfile ??
+      process.env.LINKEDIN_PERSISTENT_PROFILE === "true";
+
+    if (this.persistentContext) {
+      const root = this.options.profileRoot ?? DEFAULT_PROFILE_ROOT;
+      const userDataDir = path.join(root, safeName(this.accountId));
+      await mkdir(userDataDir, { recursive: true });
+      this.context = await chromium.launchPersistentContext(
+        userDataDir,
+        launchOptions
+      );
+      this.browser = this.context.browser();
+    } else {
+      this.browser = await chromium.launch({
+        headless: launchOptions.headless,
+        args: launchOptions.args,
+      });
+
+      this.context = await this.browser.newContext({
+        proxy: launchOptions.proxy,
+        userAgent: launchOptions.userAgent,
+        viewport: launchOptions.viewport,
+        locale: launchOptions.locale,
+        timezoneId: launchOptions.timezoneId,
+        extraHTTPHeaders: launchOptions.extraHTTPHeaders,
+      });
+    }
     await this.context.tracing.start({ screenshots: true, snapshots: true });
 
-    const cookies = await loadCookies(this.accountId);
-    if (cookies?.length) {
-      await this.context.addCookies(cookies);
+    const shouldLoadStoredCookies =
+      !this.persistentContext || process.env.LINKEDIN_SEED_PROFILE_COOKIES === "true";
+    if (shouldLoadStoredCookies) {
+      const cookies = await loadCookies(this.accountId);
+      if (cookies?.length) {
+        await this.context.addCookies(cookies);
+      }
     }
 
-    this.page = await this.context.newPage();
+    this.page = this.context.pages()[0] ?? (await this.context.newPage());
     this.sessionStart = Date.now();
   }
 
@@ -253,7 +296,12 @@ export class BrowserWorker {
         // Don't throw on cookie save failure during close
       }
     }
-    await this.browser?.close();
+    if (this.context) {
+      await this.context.close().catch(() => {});
+    }
+    if (!this.persistentContext) {
+      await this.browser?.close().catch(() => {});
+    }
     this.browser = null;
     this.context = null;
     this.page = null;

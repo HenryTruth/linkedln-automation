@@ -14,7 +14,7 @@ vi.mock("@linkedin-automation/db", () => ({
 }));
 
 import { prisma } from "@linkedin-automation/db";
-import { checkDailyCap, dayKeyForTimezone } from "./caps.js";
+import { checkDailyCap, dayKeyForTimezone, remainingDailyCap } from "./caps.js";
 
 const mockFindAccount = vi.mocked(prisma.account.findUniqueOrThrow);
 const mockCheckpointCount = vi.mocked(prisma.checkpoint.count);
@@ -66,5 +66,36 @@ describe("daily cap timezone handling", () => {
     await expect(
       checkDailyCap("acct_1", "connection", "Asia/Tokyo")
     ).rejects.toThrow("Daily cap exceeded");
+  });
+
+  it("lets full warm-up accounts use the configured search-page cap", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T10:00:00.000Z"));
+    mockFindAccount.mockResolvedValue({
+      dailyCaps: {
+        "2026-07-21": { searchPage: 5 },
+      },
+      maxDailyCaps: { searchPage: 40 },
+      warmUpPhase: "FULL",
+      timezone: "UTC",
+    } as any);
+
+    await expect(remainingDailyCap("acct_1", "searchPage", "UTC")).resolves.toBe(35);
+  });
+
+  it("still halves search-page capacity for accounts with repeated checkpoints", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T10:00:00.000Z"));
+    mockCheckpointCount.mockResolvedValue(2);
+    mockFindAccount.mockResolvedValue({
+      dailyCaps: {
+        "2026-07-21": { searchPage: 5 },
+      },
+      maxDailyCaps: { searchPage: 40 },
+      warmUpPhase: "FULL",
+      timezone: "UTC",
+    } as any);
+
+    await expect(remainingDailyCap("acct_1", "searchPage", "UTC")).resolves.toBe(15);
   });
 });

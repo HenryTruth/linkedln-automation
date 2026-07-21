@@ -3,6 +3,7 @@ import { prisma, AccountStatus, CampaignStatus, LeadSource } from "@linkedin-aut
 import {
   assertWarmUpAllowed,
   checkActionWindow,
+  remainingDailyCap,
   pauseAccountForAnomaly,
   AccountPausedError,
   AnomalyError,
@@ -52,6 +53,16 @@ export async function searchScrapeProcessor(
   try {
     assertWarmUpAllowed(accountId, account.warmUpPhase, "searchPage");
     await checkActionWindow(accountId);
+    const remainingSearchPages = await remainingDailyCap(
+      accountId,
+      "searchPage",
+      campaignTimezone
+    );
+    if (remainingSearchPages < maxPages) {
+      throw new Error(
+        `Not enough search-page capacity for this scrape. Requested ${leadLimit ?? "default"} leads needs ${maxPages} search page${maxPages === 1 ? "" : "s"}, but this account has ${remainingSearchPages} search page${remainingSearchPages === 1 ? "" : "s"} remaining today. Lower the lead count, raise the account's Search Pages cap, or try again tomorrow.`
+      );
+    }
   } catch (err) {
     if (err instanceof AnomalyError) {
       await pauseAccountForAnomaly(accountId, (err as Error).message);

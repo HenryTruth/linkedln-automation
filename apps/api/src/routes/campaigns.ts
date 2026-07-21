@@ -10,7 +10,7 @@ import {
   contentSignalQueue,
   maybeCompleteCampaign,
 } from "@linkedin-automation/queue";
-import { renderTemplate, validateTemplate } from "@linkedin-automation/guards";
+import { remainingDailyCap, renderTemplate, validateTemplate } from "@linkedin-automation/guards";
 import { hasActiveBrowserSession } from "./browserSessions.js";
 
 export const campaignsRouter: IRouter = Router();
@@ -515,6 +515,18 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
       res.status(409).json({
         error:
           "Hosted browser is still open for this account. Close it from Accounts, then queue the search again so the worker can use the persistent profile.",
+      });
+      return;
+    }
+    const requiredSearchPages = effectiveLeadLimit ? Math.ceil(effectiveLeadLimit / 10) : 5;
+    const remainingSearchPages = await remainingDailyCap(
+      campaign.accountId,
+      "searchPage",
+      campaign.targetTimezone ?? undefined
+    );
+    if (remainingSearchPages < requiredSearchPages) {
+      res.status(422).json({
+        error: `Not enough search-page capacity for this scrape. Requested ${effectiveLeadLimit ?? "default"} leads needs ${requiredSearchPages} search page${requiredSearchPages === 1 ? "" : "s"}, but this account has ${remainingSearchPages} search page${remainingSearchPages === 1 ? "" : "s"} remaining today. Lower the lead count, raise the account's Search Pages cap, or try again tomorrow.`,
       });
       return;
     }

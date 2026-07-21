@@ -123,6 +123,32 @@ function searchJobDetail(job: SearchScrapeCampaignJob) {
   return "Search scrape job recorded.";
 }
 
+function searchJobProgress(job: SearchScrapeCampaignJob) {
+  if (typeof job.progress !== "object" || job.progress === null) {
+    const target = job.data.leadLimit ?? (job.data.maxPages ? job.data.maxPages * 10 : null);
+    return {
+      pct: typeof job.progress === "number" ? Math.min(100, Math.max(0, job.progress)) : 0,
+      label: target ? `Queued for up to ${target} leads` : "Waiting for progress",
+      collected: 0,
+    };
+  }
+
+  const page = job.progress.page ?? 0;
+  const maxPages = job.progress.maxPages ?? job.data.maxPages ?? 1;
+  const collected = job.progress.collected ?? 0;
+  const leadLimit = job.progress.leadLimit ?? job.data.leadLimit;
+  const phase = job.progress.phase?.replace(/_/g, " ") ?? "working";
+  const pagePct = maxPages > 0 ? (page / maxPages) * 100 : 0;
+  const leadPct = leadLimit ? (collected / leadLimit) * 100 : pagePct;
+  const pct = Math.min(100, Math.max(0, Math.round(Math.max(pagePct, leadPct))));
+
+  return {
+    pct,
+    collected,
+    label: `${phase} · page ${Math.max(1, page)} of ${maxPages} · ${collected}${leadLimit ? ` / ${leadLimit}` : ""} leads`,
+  };
+}
+
 // Mirrors isSalesNavigatorUrl in apps/api/src/routes/campaigns.ts so the
 // source dropdown can auto-sync with whatever URL gets pasted in, instead of
 // silently defaulting to the wrong source and tripping the backend's guard.
@@ -294,6 +320,13 @@ export default function CampaignDetailPage() {
     try {
       const result = await api.campaigns.searchJobs(id);
       setSearchJobs(result.jobs);
+      if (
+        result.jobs.some(
+          (job) => job.state === "completed" && (job.returnvalue?.scraped ?? 0) > 0
+        )
+      ) {
+        await reload();
+      }
     } catch {
       // Job status is helpful context, but the campaign page should still work without it.
     } finally {
@@ -967,30 +1000,47 @@ export default function CampaignDetailPage() {
                   No search URL jobs have been queued for this campaign yet.
                 </div>
               ) : (
-                searchJobs.slice(0, 5).map((job) => (
-                  <div
-                    key={job.id ?? `${job.timestamp}-${job.data.searchUrl}`}
-                    className={`rounded-xl border p-3 ${
-                      SEARCH_JOB_STYLES[job.state] ?? "border-slate-700 bg-slate-800/50 text-slate-300"
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold">
-                        {searchJobLabel(job.state)}
-                        {job.id ? ` · Job ${job.id}` : ""}
+                searchJobs.slice(0, 5).map((job) => {
+                  const progress = searchJobProgress(job);
+                  return (
+                    <div
+                      key={job.id ?? `${job.timestamp}-${job.data.searchUrl}`}
+                      className={`rounded-xl border p-3 ${
+                        SEARCH_JOB_STYLES[job.state] ?? "border-slate-700 bg-slate-800/50 text-slate-300"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">
+                          {searchJobLabel(job.state)}
+                          {job.id ? ` · Job ${job.id}` : ""}
+                        </p>
+                        <p className="text-xs opacity-80">
+                          Updated {fmtJobTime(job.finishedOn ?? job.processedOn ?? job.timestamp)}
+                        </p>
+                      </div>
+                      <p className="mt-1 break-all font-mono text-[11px] opacity-80">
+                        {job.data.source ?? "LINKEDIN"} · {job.data.searchUrl ?? "Search URL unavailable"}
                       </p>
-                      <p className="text-xs opacity-80">
-                        Updated {fmtJobTime(job.finishedOn ?? job.processedOn ?? job.timestamp)}
+                      {(job.state === "active" || job.state === "waiting" || job.state === "delayed") && (
+                        <div className="mt-3">
+                          <div className="mb-1 flex items-center justify-between gap-3 text-[11px] font-semibold opacity-90">
+                            <span>{progress.label}</span>
+                            <span>{progress.pct}%</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-950/50">
+                            <div
+                              className="h-full rounded-full bg-emerald-400 transition-all"
+                              style={{ width: `${progress.pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <p className="mt-2 text-xs leading-5 opacity-90">
+                        {searchJobDetail(job)}
                       </p>
                     </div>
-                    <p className="mt-1 break-all font-mono text-[11px] opacity-80">
-                      {job.data.source ?? "LINKEDIN"} · {job.data.searchUrl ?? "Search URL unavailable"}
-                    </p>
-                    <p className="mt-2 text-xs leading-5 opacity-90">
-                      {searchJobDetail(job)}
-                    </p>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

@@ -322,6 +322,15 @@ export interface SearchScrapeCampaignJob {
     searchUrl?: string;
     source?: "LINKEDIN" | "SALES_NAVIGATOR";
     maxPages?: number;
+    leadLimit?: number;
+  };
+  progress?: number | {
+    phase?: string;
+    page?: number;
+    maxPages?: number;
+    collected?: number;
+    leadLimit?: number;
+    lastUrl?: string;
   };
   returnvalue?: {
     scraped?: number;

@@ -481,9 +481,8 @@ campaignsRouter.post("/:id/search-urls", async (req, res, next) => {
       return;
     }
     if (recentCheckpoint && leadLimit && leadLimit > 10) {
-      effectiveLeadLimit = 10;
       leadLimitWarning =
-        "This account had a LinkedIn security checkpoint in the last 30 days, so multi-page search pagination is disabled for now — only the first page (up to 10 leads) will be collected. Import a CSV or narrow your search for more.";
+        "This account had a LinkedIn security checkpoint in the last 30 days. Multi-page search will still run with the requested lead count, but watch the job progress and pause if LinkedIn shows another checkpoint.";
     }
     if (
       REQUIRE_SEARCH_QUALIFICATION &&
@@ -571,6 +570,7 @@ campaignsRouter.get("/:id/search-jobs", async (req, res, next) => {
           timestamp: job.timestamp,
           processedOn: job.processedOn ?? null,
           finishedOn: job.finishedOn ?? null,
+          progress: job.progress,
           data: job.data,
           returnvalue: job.returnvalue ?? null,
         }))

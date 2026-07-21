@@ -16,6 +16,19 @@ import {
 
 export type { SearchSource } from "./extractSearchLeads.js";
 
+export interface SearchScrapeProgress {
+  phase: "starting" | "loading_page" | "extracting" | "page_complete" | "complete";
+  page: number;
+  maxPages: number;
+  collected: number;
+  leadLimit?: number;
+  lastUrl?: string;
+}
+
+export interface ScrapeSearchOptions {
+  onProgress?: (progress: SearchScrapeProgress) => Promise<void> | void;
+}
+
 function canonicalLinkedInUrl(href: string, source: SearchSource): string {
   try {
     const url = new URL(href);
@@ -133,7 +146,8 @@ export async function scrapeSearch(
   maxPages = 5,
   source: SearchSource = "LINKEDIN",
   timezoneOverride?: string,
-  leadLimit?: number
+  leadLimit?: number,
+  options: ScrapeSearchOptions = {}
 ): Promise<{ urls: string[]; pagesScraped: number; lastUrl: string }> {
   // Some LinkedIn background requests are unrelated to search extraction but
   // can still trigger client-side redirects when they fail. Keep the scraper
@@ -152,6 +166,15 @@ export async function scrapeSearch(
   });
 
   for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+    await options.onProgress?.({
+      phase: "loading_page",
+      page: pageNum,
+      maxPages,
+      collected: allUrls.length,
+      leadLimit,
+      lastUrl: page.url(),
+    });
+
     // Claim cap one page at a time, right before it's actually fetched —
     // claiming the whole maxPages budget upfront meant a session-dead
     // account could burn its entire daily quota on a single failed
@@ -227,6 +250,15 @@ export async function scrapeSearch(
         // returns [] and the caller records the page with an artifact.
       });
 
+    await options.onProgress?.({
+      phase: "extracting",
+      page: pageNum,
+      maxPages,
+      collected: allUrls.length,
+      leadLimit,
+      lastUrl: page.url(),
+    });
+
     const leads = await extractResultCards(page, source);
 
     if (leads.length === 0) break; // No results — past the last page
@@ -262,6 +294,14 @@ export async function scrapeSearch(
     }
 
     pagesScraped++;
+    await options.onProgress?.({
+      phase: "page_complete",
+      page: pageNum,
+      maxPages,
+      collected: allUrls.length,
+      leadLimit,
+      lastUrl: page.url(),
+    });
 
     // Fewer than 10 results usually means the last partial page
     if (leads.length < 10) break;
@@ -271,6 +311,15 @@ export async function scrapeSearch(
       break;
     }
   }
+
+  await options.onProgress?.({
+    phase: "complete",
+    page: pagesScraped,
+    maxPages,
+    collected: allUrls.length,
+    leadLimit,
+    lastUrl: page.url(),
+  });
 
   return { urls: allUrls, pagesScraped, lastUrl: page.url() };
 }

@@ -231,8 +231,6 @@ type BrowserPanelState = {
   status?: BrowserSessionStatus;
   open: boolean;
   url: string;
-  typeText: string;
-  typeMode: "text" | "secret";
   refreshKey: number;
 };
 
@@ -366,7 +364,12 @@ export default function AccountsPage() {
   // Hosted persistent browser session state
   const [browserPanels, setBrowserPanels] = useState<Record<string, BrowserPanelState>>({});
   const [browserBusy, setBrowserBusy] = useState<string | null>(null);
+  const [largeBrowserFor, setLargeBrowserFor] = useState<string | null>(null);
   const browserImageRefs = useRef<Record<string, HTMLImageElement | null>>({});
+  const largeBrowserRef = useRef<HTMLDivElement | null>(null);
+  const browserTypeBuffers = useRef<Record<string, string>>({});
+  const browserTypeTimers = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
+  const browserKeyboardQueues = useRef<Record<string, Promise<void>>>({});
 
   // per-account cap editor state
   const [showCapsFor, setShowCapsFor] = useState<string | null>(null);
@@ -450,6 +453,14 @@ export default function AccountsPage() {
     }, 30_000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!largeBrowserFor) return;
+    const id = window.setTimeout(() => {
+      largeBrowserRef.current?.focus();
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [largeBrowserFor]);
 
   function openCapsEditor(account: Account) {
     const overrides = account.maxDailyCaps ?? {};
@@ -703,13 +714,97 @@ export default function AccountsPage() {
       [accountId]: {
         open: prev[accountId]?.open ?? false,
         url: prev[accountId]?.url ?? LINKEDIN_FEED_URL,
-        typeText: prev[accountId]?.typeText ?? "",
-        typeMode: prev[accountId]?.typeMode ?? "text",
         refreshKey: prev[accountId]?.refreshKey ?? 0,
         status: prev[accountId]?.status,
         ...patch,
       },
     }));
+  }
+
+  function browserScreenshotSrc(accountId: string) {
+    const base = api.browserSessions.screenshotUrl(accountId);
+    return `${base}${base.includes("?") ? "&" : "?"}t=${
+      browserPanels[accountId]?.refreshKey ?? 0
+    }`;
+  }
+
+  function enqueueBrowserKeyboard(
+    accountId: string,
+    action: () => Promise<BrowserSessionStatus>
+  ) {
+    const previous = browserKeyboardQueues.current[accountId] ?? Promise.resolve();
+    browserKeyboardQueues.current[accountId] = previous
+      .catch(() => {})
+      .then(async () => {
+        const status = await action();
+        setBrowserPanel(accountId, {
+          status,
+          url: status.url,
+          refreshKey: Date.now(),
+        });
+      })
+      .catch((e) => {
+        setAccountNotice(accountId, "error", (e as Error).message);
+      });
+  }
+
+  function flushBrowserText(accountId: string) {
+    const text = browserTypeBuffers.current[accountId];
+    if (!text) return;
+    browserTypeBuffers.current[accountId] = "";
+    enqueueBrowserKeyboard(accountId, () => api.browserSessions.type(accountId, text));
+  }
+
+  function queueBrowserText(accountId: string, text: string) {
+    browserTypeBuffers.current[accountId] =
+      (browserTypeBuffers.current[accountId] ?? "") + text;
+    const existingTimer = browserTypeTimers.current[accountId];
+    if (existingTimer) clearTimeout(existingTimer);
+    browserTypeTimers.current[accountId] = setTimeout(() => {
+      flushBrowserText(accountId);
+    }, 180);
+  }
+
+  function handleLiveBrowserKeyDown(
+    accountId: string,
+    event: React.KeyboardEvent<HTMLDivElement>
+  ) {
+    if (!browserPanels[accountId]?.open) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    if (event.key.length === 1) {
+      event.preventDefault();
+      queueBrowserText(accountId, event.key);
+      return;
+    }
+
+    const supportedKeys = new Set([
+      "Enter",
+      "Tab",
+      "Backspace",
+      "Delete",
+      "ArrowLeft",
+      "ArrowRight",
+      "ArrowUp",
+      "ArrowDown",
+    ]);
+    if (!supportedKeys.has(event.key)) return;
+
+    event.preventDefault();
+    flushBrowserText(accountId);
+    enqueueBrowserKeyboard(accountId, () =>
+      api.browserSessions.press(accountId, event.key)
+    );
+  }
+
+  function handleLiveBrowserPaste(
+    accountId: string,
+    event: React.ClipboardEvent<HTMLDivElement>
+  ) {
+    const text = event.clipboardData.getData("text");
+    if (!text) return;
+    event.preventDefault();
+    queueBrowserText(accountId, text);
   }
 
   async function handleStartBrowser(account: Account, requestedUrl?: string) {
@@ -850,25 +945,6 @@ export default function AccountsPage() {
     }
   }
 
-  async function handleBrowserType(accountId: string) {
-    const text = browserPanels[accountId]?.typeText ?? "";
-    if (!text) return;
-    setBrowserBusy(accountId);
-    try {
-      const status = await api.browserSessions.type(accountId, text);
-      setBrowserPanel(accountId, {
-        status,
-        typeText: "",
-        url: status.url,
-        refreshKey: Date.now(),
-      });
-    } catch (e) {
-      setAccountNotice(accountId, "error", (e as Error).message);
-    } finally {
-      setBrowserBusy(null);
-    }
-  }
-
   async function handleBrowserPress(accountId: string, key: string) {
     setBrowserBusy(accountId);
     try {
@@ -910,6 +986,10 @@ export default function AccountsPage() {
         ))}
       </div>
     );
+
+  const largeBrowserAccount = largeBrowserFor
+    ? accounts.find((account) => account.id === largeBrowserFor)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -1378,80 +1458,30 @@ export default function AccountsPage() {
                       </div>
                     </div>
 
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Remote browser
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setLargeBrowserFor(account.id)}
+                        disabled={browserBusy === account.id}
+                        className="btn-primary px-3 py-1.5 text-xs"
+                      >
+                        Open large browser
+                      </button>
+                    </div>
+
                     <div className="overflow-hidden rounded-xl border border-white/10 bg-black shadow-2xl shadow-black/30">
                       <img
                         ref={(el) => {
                           browserImageRefs.current[account.id] = el;
                         }}
-                        src={`${api.browserSessions.screenshotUrl(account.id)}${
-                          api.browserSessions.screenshotUrl(account.id).includes("?")
-                            ? "&"
-                            : "?"
-                        }t=${browserPanels[account.id]?.refreshKey ?? 0}`}
+                        src={browserScreenshotSrc(account.id)}
                         alt="Hosted LinkedIn browser"
                         onClick={(e) => handleBrowserClick(account.id, e)}
                         className="block w-full cursor-crosshair"
                       />
-                    </div>
-
-                    <div className="grid gap-2 lg:grid-cols-[auto_1fr_auto_auto_auto_auto]">
-                      <div className="flex rounded-xl border border-white/10 bg-slate-900 p-1">
-                        {(["text", "secret"] as const).map((mode) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => setBrowserPanel(account.id, { typeMode: mode })}
-                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                              (browserPanels[account.id]?.typeMode ?? "text") === mode
-                                ? "bg-slate-700 text-white"
-                                : "text-slate-400 hover:text-slate-200"
-                            }`}
-                          >
-                            {mode === "secret" ? "Password" : "Text"}
-                          </button>
-                        ))}
-                      </div>
-                      <input
-                        type={(browserPanels[account.id]?.typeMode ?? "text") === "secret" ? "password" : "text"}
-                        value={browserPanels[account.id]?.typeText ?? ""}
-                        onChange={(e) =>
-                          setBrowserPanel(account.id, { typeText: e.target.value })
-                        }
-                        placeholder={(browserPanels[account.id]?.typeMode ?? "text") === "secret" ? "Enter password or code" : "Type into focused field"}
-                        className="field w-full text-xs"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleBrowserType(account.id)}
-                        disabled={browserBusy === account.id}
-                        className="btn-secondary text-xs"
-                      >
-                        Type
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleBrowserPress(account.id, "Enter")}
-                        disabled={browserBusy === account.id}
-                        className="btn-secondary text-xs"
-                      >
-                        Enter
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleBrowserPress(account.id, "Tab")}
-                        disabled={browserBusy === account.id}
-                        className="btn-secondary text-xs"
-                      >
-                        Tab
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleBrowserPress(account.id, "Backspace")}
-                        disabled={browserBusy === account.id}
-                        className="btn-secondary text-xs"
-                      >
-                        Backspace
-                      </button>
                     </div>
                   </div>
                 )}
@@ -2005,6 +2035,124 @@ export default function AccountsPage() {
           );
         })}
       </div>
+
+      {largeBrowserAccount && browserPanels[largeBrowserAccount.id]?.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm sm:p-6">
+          <div
+            ref={largeBrowserRef}
+            tabIndex={0}
+            onKeyDown={(event) =>
+              handleLiveBrowserKeyDown(largeBrowserAccount.id, event)
+            }
+            onPaste={(event) =>
+              handleLiveBrowserPaste(largeBrowserAccount.id, event)
+            }
+            className="flex h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl outline-none ring-2 ring-teal-500/30"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">
+                  {largeBrowserAccount.email}
+                </p>
+                <p className="mt-1 truncate text-xs text-slate-400">
+                  {browserPanels[largeBrowserAccount.id]?.status?.title ||
+                    browserPanels[largeBrowserAccount.id]?.url}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => refreshBrowser(largeBrowserAccount.id)}
+                  disabled={browserBusy === largeBrowserAccount.id}
+                  className="btn-secondary px-3 py-1.5 text-xs"
+                >
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    flushBrowserText(largeBrowserAccount.id);
+                    setLargeBrowserFor(null);
+                  }}
+                  className="btn-primary px-3 py-1.5 text-xs"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-2 border-b border-white/10 bg-slate-950 p-3 lg:grid-cols-[auto_auto_1fr_auto]">
+              <button
+                type="button"
+                onClick={() =>
+                  handleQuickNavigate(largeBrowserAccount, LINKEDIN_LOGIN_URL)
+                }
+                disabled={browserBusy === largeBrowserAccount.id}
+                className="btn-secondary text-xs"
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleQuickNavigate(largeBrowserAccount, LINKEDIN_FEED_URL)
+                }
+                disabled={browserBusy === largeBrowserAccount.id}
+                className="btn-secondary text-xs"
+              >
+                Feed
+              </button>
+              <input
+                type="url"
+                value={browserPanels[largeBrowserAccount.id]?.url ?? ""}
+                onChange={(e) =>
+                  setBrowserPanel(largeBrowserAccount.id, { url: e.target.value })
+                }
+                onKeyDown={(e) => e.stopPropagation()}
+                onPaste={(e) => e.stopPropagation()}
+                className="field w-full text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => handleBrowserNavigate(largeBrowserAccount.id)}
+                disabled={browserBusy === largeBrowserAccount.id}
+                className="btn-secondary text-xs"
+              >
+                Go
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto bg-black">
+              <img
+                ref={(el) => {
+                  browserImageRefs.current[largeBrowserAccount.id] = el;
+                }}
+                src={browserScreenshotSrc(largeBrowserAccount.id)}
+                alt="Large hosted LinkedIn browser"
+                onClick={(event) => {
+                  handleBrowserClick(largeBrowserAccount.id, event);
+                  window.setTimeout(() => largeBrowserRef.current?.focus(), 0);
+                }}
+                className="mx-auto block min-h-full w-full cursor-crosshair object-contain"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-slate-900 px-4 py-3">
+              <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-300">
+                <span className="rounded-full border border-white/10 bg-slate-800 px-3 py-1">
+                  Keyboard live
+                </span>
+                <span className="rounded-full border border-white/10 bg-slate-800 px-3 py-1">
+                  Paste supported
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Click inside LinkedIn, then use your keyboard normally.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

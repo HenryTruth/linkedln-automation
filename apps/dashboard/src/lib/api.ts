@@ -248,6 +248,9 @@ export interface Message {
 
 export interface CampaignDetail extends Campaign {
   leads: CampaignLead[];
+  leadPage: number;
+  leadLimit: number;
+  leadTotal: number;
   messages: Message[];
   contentSignalConfig?: ContentSignalConfig | null;
   steps?: SequenceStep[];
@@ -519,7 +522,13 @@ export const api = {
 
   campaigns: {
     list: () => apiFetch<Campaign[]>("/campaigns"),
-    get: (id: string) => apiFetch<CampaignDetail>(`/campaigns/${id}`),
+    get: (id: string, params?: { leadPage?: number; leadLimit?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.leadPage) q.set("leadPage", String(params.leadPage));
+      if (params?.leadLimit) q.set("leadLimit", String(params.leadLimit));
+      const suffix = q.toString() ? `?${q}` : "";
+      return apiFetch<CampaignDetail>(`/campaigns/${id}${suffix}`);
+    },
     create: (data: {
       name: string;
       accountId: string;
@@ -562,6 +571,17 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    copyLeadsToCampaign: (
+      campaignId: string,
+      data: { targetCampaignId: string; leadIds?: string[] }
+    ) =>
+      apiFetch<{ attached: number; skipped: number; total: number }>(
+        `/campaigns/${campaignId}/leads/copy-to`,
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      ),
     addSearchUrl: (
       campaignId: string,
       searchUrl: string,

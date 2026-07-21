@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, type CampaignDetail, type CampaignLeadJobStatus, type CampaignStats, type Lead, type SearchScrapeCampaignJob } from "@/lib/api";
+import { api, type Campaign, type CampaignDetail, type CampaignLeadJobStatus, type CampaignStats, type Lead, type SearchScrapeCampaignJob } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { SequenceBuilder } from "@/components/SequenceBuilder";
 import { SequenceGraphBuilder, STEP_TYPE_LABELS } from "@/components/SequenceGraphBuilder";
@@ -87,6 +87,8 @@ const SEARCH_JOB_STYLES: Record<string, string> = {
   completed: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   failed: "border-red-500/30 bg-red-500/10 text-red-300",
 };
+
+const CAMPAIGN_LEAD_LIMIT = 25;
 
 function searchJobLabel(state: string) {
   if (state === "waiting") return "Queued";
@@ -215,6 +217,7 @@ export default function CampaignDetailPage() {
   const router = useRouter();
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [stats, setStats] = useState<CampaignStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -266,6 +269,11 @@ export default function CampaignDetailPage() {
   const [searchJobsLoading, setSearchJobsLoading] = useState(false);
   const [clearingSearchJobs, setClearingSearchJobs] = useState(false);
   const [showSearchForm, setShowSearchForm] = useState(false);
+  const [leadPage, setLeadPage] = useState(1);
+  const [copyTargetCampaignId, setCopyTargetCampaignId] = useState("");
+  const [copyingLeads, setCopyingLeads] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   // LinkedIn search URL builder
   const [showUrlBuilder, setShowUrlBuilder] = useState(false);
@@ -297,7 +305,7 @@ export default function CampaignDetailPage() {
 
   function reload() {
     return Promise.all([
-      api.campaigns.get(id).then(setCampaign),
+      api.campaigns.get(id, { leadPage, leadLimit: CAMPAIGN_LEAD_LIMIT }).then(setCampaign),
       api.campaigns.stats(id).then(setStats).catch(() => {}),
     ]);
   }
@@ -338,7 +346,11 @@ export default function CampaignDetailPage() {
     reload()
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, leadPage]);
+
+  useEffect(() => {
+    api.campaigns.list().then(setCampaigns).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (campaign?.type !== "SCRAPE") return;
@@ -497,6 +509,27 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handleCopyScrapedLeads(scope: "visible" | "all") {
+    if (!copyTargetCampaignId || !campaign) return;
+    setCopyingLeads(true);
+    setCopyNotice(null);
+    setCopyError(null);
+    try {
+      const result = await api.campaigns.copyLeadsToCampaign(id, {
+        targetCampaignId: copyTargetCampaignId,
+        leadIds: scope === "visible" ? campaign.leads.map((cl) => cl.leadId) : undefined,
+      });
+      const target = campaigns.find((c) => c.id === copyTargetCampaignId);
+      setCopyNotice(
+        `Added ${result.attached} lead${result.attached === 1 ? "" : "s"} to ${target?.name ?? "the selected campaign"}${result.skipped ? `; ${result.skipped} already existed there.` : "."}`
+      );
+    } catch (e) {
+      setCopyError((e as Error).message);
+    } finally {
+      setCopyingLeads(false);
+    }
+  }
+
   async function handleImportCsv(e: React.FormEvent) {
     e.preventDefault();
     setImportingCsv(true);
@@ -549,6 +582,9 @@ export default function CampaignDetailPage() {
   const isConnect = campaign.type === "CONNECT";
   const isSequence = campaign.type === "SEQUENCE";
   const stepById = new Map((campaign.steps ?? []).map((s) => [s.id, s]));
+  const leadTotal = campaign.leadTotal ?? campaign.leads.length;
+  const leadTotalPages = Math.max(1, Math.ceil(leadTotal / CAMPAIGN_LEAD_LIMIT));
+  const reusableCampaigns = campaigns.filter((candidate) => candidate.id !== campaign.id);
 
   return (
     <div className="space-y-8">
@@ -626,8 +662,8 @@ export default function CampaignDetailPage() {
                   <Badge value={campaign.type} />
                   <Badge value={campaign.status} />
                   <span className="text-sm font-medium text-slate-400">
-                    {campaign.leads.length} lead
-                    {campaign.leads.length !== 1 ? "s" : ""} -{" "}
+                    {leadTotal} lead
+                    {leadTotal !== 1 ? "s" : ""} -{" "}
                     {campaign.dailyLimit}/day limit
                   </span>
                   {!isContentSignal && campaign.targetTimezone && (
@@ -1328,6 +1364,65 @@ export default function CampaignDetailPage() {
           </form>
         )}
 
+        {isScrape && leadTotal > 0 && (
+          <div className="mb-4 rounded-2xl border border-teal-500/20 bg-teal-500/5 p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-300">
+                  Reuse scraped leads
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-400">
+                  Scraped profiles are saved in the lead database. Add them to another campaign when you are ready to start outreach.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={copyTargetCampaignId}
+                  onChange={(e) => {
+                    setCopyTargetCampaignId(e.target.value);
+                    setCopyNotice(null);
+                    setCopyError(null);
+                  }}
+                  className="field min-w-56 text-xs"
+                >
+                  <option value="">Choose campaign</option>
+                  {reusableCampaigns.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name} [{candidate.type}]
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => handleCopyScrapedLeads("visible")}
+                  disabled={copyingLeads || !copyTargetCampaignId || campaign.leads.length === 0}
+                  className="btn-secondary px-3 py-1.5 text-xs"
+                >
+                  Visible page
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCopyScrapedLeads("all")}
+                  disabled={copyingLeads || !copyTargetCampaignId}
+                  className="btn-primary px-3 py-1.5 text-xs"
+                >
+                  {copyingLeads ? "Adding..." : "All scraped"}
+                </button>
+              </div>
+            </div>
+            {copyNotice && (
+              <p className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+                {copyNotice}
+              </p>
+            )}
+            {copyError && (
+              <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+                {copyError}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="table-shell">
           <table className="min-w-full divide-y divide-white/[0.06]">
             <thead className="table-head">
@@ -1346,7 +1441,7 @@ export default function CampaignDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.06]">
-              {campaign.leads.length === 0 && (
+              {leadTotal === 0 && (
                 <tr>
                   <td
                     colSpan={isScrape ? 5 : 7}
@@ -1490,6 +1585,36 @@ export default function CampaignDetailPage() {
             </tbody>
           </table>
         </div>
+
+        {leadTotal > CAMPAIGN_LEAD_LIMIT && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-slate-900/60 p-3 text-sm text-slate-300">
+            <span>
+              Showing {(leadPage - 1) * CAMPAIGN_LEAD_LIMIT + 1}-
+              {Math.min(leadPage * CAMPAIGN_LEAD_LIMIT, leadTotal)} of {leadTotal}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setLeadPage((page) => Math.max(1, page - 1))}
+                disabled={leadPage <= 1}
+                className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-slate-400">
+                Page {leadPage} of {leadTotalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setLeadPage((page) => Math.min(leadTotalPages, page + 1))}
+                disabled={leadPage >= leadTotalPages}
+                className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Sequence graph builder */}

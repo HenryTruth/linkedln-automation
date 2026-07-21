@@ -101,6 +101,11 @@ const UpdateMessageSchema = z.object({
   delayDays: z.number().int().min(0).optional(),
 });
 
+const CampaignDetailQuerySchema = z.object({
+  leadPage: z.coerce.number().int().min(1).default(1),
+  leadLimit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
 campaignsRouter.get("/", async (req, res, next) => {
   try {
     const campaigns = await prisma.campaign.findMany({
@@ -183,10 +188,17 @@ campaignsRouter.post("/:id/duplicate", async (req, res, next) => {
 
 campaignsRouter.get("/:id", async (req, res, next) => {
   try {
+    const { leadPage, leadLimit } = CampaignDetailQuerySchema.parse(req.query);
     const campaign = await prisma.campaign.findFirstOrThrow({
       where: { id: req.params.id, account: { userId: req.user.id } },
       include: {
-        leads: { include: { lead: true, postSignal: true } },
+        leads: {
+          include: { lead: true, postSignal: true },
+          orderBy: { createdAt: "desc" },
+          skip: (leadPage - 1) * leadLimit,
+          take: leadLimit,
+        },
+        _count: { select: { leads: true } },
         messages: { orderBy: { sequenceOrder: "asc" } },
         contentSignalConfig: true,
         steps: true,
@@ -204,7 +216,12 @@ campaignsRouter.get("/:id", async (req, res, next) => {
         },
       },
     });
-    res.json(campaign);
+    res.json({
+      ...campaign,
+      leadPage,
+      leadLimit,
+      leadTotal: campaign._count.leads,
+    });
   } catch (err) {
     next(err);
   }
@@ -384,6 +401,62 @@ campaignsRouter.post("/:id/leads", async (req, res, next) => {
     });
 
     res.status(201).json({ lead, campaignLeadId: campaignLead.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+campaignsRouter.post("/:id/leads/copy-to", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      targetCampaignId: z.string().min(1),
+      leadIds: z.array(z.string().min(1)).optional(),
+    });
+    const { targetCampaignId, leadIds } = schema.parse(req.body);
+
+    const [sourceCampaign, targetCampaign] = await Promise.all([
+      prisma.campaign.findFirstOrThrow({
+        where: { id: req.params.id, account: { userId: req.user.id } },
+        select: { id: true },
+      }),
+      prisma.campaign.findFirstOrThrow({
+        where: { id: targetCampaignId, account: { userId: req.user.id } },
+        select: { id: true },
+      }),
+    ]);
+
+    if (sourceCampaign.id === targetCampaign.id) {
+      res.status(422).json({ error: "Choose a different campaign to reuse these leads." });
+      return;
+    }
+
+    const sourceLeads = await prisma.campaignLead.findMany({
+      where: {
+        campaignId: sourceCampaign.id,
+        ...(leadIds ? { leadId: { in: leadIds } } : {}),
+      },
+      select: { leadId: true },
+    });
+
+    const uniqueLeadIds = Array.from(new Set(sourceLeads.map((lead) => lead.leadId)));
+    let attached = 0;
+    for (const leadId of uniqueLeadIds) {
+      const existing = await prisma.campaignLead.findUnique({
+        where: { campaignId_leadId: { campaignId: targetCampaign.id, leadId } },
+        select: { id: true },
+      });
+      if (existing) continue;
+      await prisma.campaignLead.create({
+        data: { campaignId: targetCampaign.id, leadId },
+      });
+      attached++;
+    }
+
+    res.json({
+      attached,
+      skipped: uniqueLeadIds.length - attached,
+      total: uniqueLeadIds.length,
+    });
   } catch (err) {
     next(err);
   }

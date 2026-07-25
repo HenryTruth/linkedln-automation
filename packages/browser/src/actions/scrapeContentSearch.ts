@@ -74,8 +74,15 @@ export async function extractPostCards(
       const authorAnchors = Array.from(
         card.querySelectorAll("a[href*='/in/']"),
       ) as HTMLAnchorElement[];
+      const authorNameFromAnchor = (anchor: HTMLAnchorElement | null) =>
+        cleanText(
+          anchor
+            ? directText(anchor) ||
+                (anchor.textContent?.replace(/\s*•.*$/, "") ?? null)
+            : null,
+        ).replace(/\s*•.*$/, "");
       const authorAnchor =
-        authorAnchors.find((a) => directText(a).trim()) ??
+        authorAnchors.find((a) => authorNameFromAnchor(a)) ??
         authorAnchors[0] ??
         null;
       const authorUrl = authorAnchor?.href
@@ -91,12 +98,7 @@ export async function extractPostCards(
           ?.textContent?.trim() ??
         card.querySelector(".feed-shared-actor__name")?.textContent?.trim() ??
         null;
-      const currentFullName = cleanText(
-        authorAnchor
-          ? directText(authorAnchor) ||
-              (authorAnchor.textContent?.replace(/\s*•.*$/, "") ?? null)
-          : null,
-      ).replace(/\s*•.*$/, "");
+      const currentFullName = authorNameFromAnchor(authorAnchor);
       const fullName = legacyFullName ?? (currentFullName || null);
       const [firstName = null, ...rest] = fullName?.split(" ") ?? [];
       const lastName = rest.join(" ") || null;
@@ -137,6 +139,7 @@ export async function extractPostCards(
         .replace(/^Feed post\s*/i, "")
         .replace(fullName ?? "", "")
         .replace(description, "")
+        .replace(/^\s*•\s*(?:1st|2nd|3rd\+?)\s*/i, "")
         .replace(
           /\d+\s*(?:s|m|h|d|w|mo)\b\s*(?:•\s*Edited\s*)?•?\s*Follow\s*/i,
           "",

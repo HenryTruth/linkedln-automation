@@ -20,7 +20,9 @@ describe("extractPostCards", () => {
         <div role="listitem" componentkey="expandedabcFeedType_FLAGSHIP_SEARCH">
           <h2><span>Feed post</span></h2>
           <a href="https://www.linkedin.com/in/guha-suman/"></a>
-          <a href="https://www.linkedin.com/in/guha-suman/">Suman Guha • 3rd+</a>
+          <a href="https://www.linkedin.com/in/guha-suman/">
+            <span><span>Suman Guha • 3rd+</span></span>
+          </a>
           <span>Chief Digital Officer Tata(Croma), 2x CPTO</span>
           <span>1h • Edited • Follow</span>
           <p>

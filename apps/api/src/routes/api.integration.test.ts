@@ -40,8 +40,6 @@ const makePrismaMock = () => ({
   },
 });
 
-const prisma = makePrismaMock();
-
 const emptyJobCounts = {
   active: 0,
   waiting: 0,
@@ -56,19 +54,70 @@ const makeQueueMock = () => ({
   getJobCounts: vi.fn().mockResolvedValue(emptyJobCounts),
 });
 
-const queues = {
-  connectQueue: makeQueueMock(),
-  messageQueue: makeQueueMock(),
-  scrapeQueue: makeQueueMock(),
-  searchScrapeQueue: makeQueueMock(),
-  withdrawQueue: makeQueueMock(),
-  sequenceDispatchQueue: makeQueueMock(),
-  contentSignalQueue: makeQueueMock(),
-  anomalyCheckQueue: makeQueueMock(),
-  syncStatusQueue: makeQueueMock(),
-  scheduleWithdrawalForAccount: vi.fn(),
-  maybeCompleteCampaign: vi.fn().mockResolvedValue(false),
-};
+const { prisma, queues } = vi.hoisted(() => {
+  const counts = {
+    active: 0,
+    waiting: 0,
+    delayed: 0,
+    completed: 0,
+    failed: 0,
+  };
+  const queue = () => ({
+    add: vi.fn(),
+    getJobs: vi.fn(),
+    getJobCounts: vi.fn().mockResolvedValue(counts),
+  });
+  return {
+    prisma: {
+      user: {
+        findUnique: vi.fn(),
+        create: vi.fn(),
+      },
+      authSession: {
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+      account: {
+        findMany: vi.fn(),
+        findFirstOrThrow: vi.fn(),
+        create: vi.fn(),
+        updateMany: vi.fn(),
+        findFirst: vi.fn(),
+      },
+      campaign: {
+        findMany: vi.fn(),
+        findFirstOrThrow: vi.fn(),
+        create: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      campaignLead: {
+        upsert: vi.fn(),
+        count: vi.fn(),
+      },
+      lead: {
+        findMany: vi.fn(),
+        count: vi.fn(),
+        upsert: vi.fn(),
+        findFirstOrThrow: vi.fn(),
+        updateMany: vi.fn(),
+      },
+    },
+    queues: {
+      connectQueue: queue(),
+      messageQueue: queue(),
+      scrapeQueue: queue(),
+      searchScrapeQueue: queue(),
+      withdrawQueue: queue(),
+      sequenceDispatchQueue: queue(),
+      contentSignalQueue: queue(),
+      anomalyCheckQueue: queue(),
+      syncStatusQueue: queue(),
+      scheduleWithdrawalForAccount: vi.fn(),
+      maybeCompleteCampaign: vi.fn().mockResolvedValue(false),
+    },
+  };
+});
 
 vi.mock("@linkedin-automation/db", () => ({
   prisma,

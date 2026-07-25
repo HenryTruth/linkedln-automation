@@ -9,6 +9,7 @@ import { checkpointsRouter } from "./routes/checkpoints.js";
 import { statsRouter } from "./routes/stats.js";
 import { proxiesRouter } from "./routes/proxies.js";
 import { contentSignalRouter } from "./routes/contentSignal.js";
+import { postsRouter } from "./routes/posts.js";
 import { settingsRouter } from "./routes/settings.js";
 import { authRouter } from "./routes/auth.js";
 import { jobsRouter } from "./routes/jobs.js";
@@ -76,6 +77,7 @@ app.use("/checkpoints", checkpointsRouter);
 app.use("/stats", statsRouter);
 app.use("/proxies", proxiesRouter);
 app.use("/content-signal", contentSignalRouter);
+app.use("/posts", postsRouter);
 app.use("/settings", settingsRouter);
 app.use("/jobs", jobsRouter);
 

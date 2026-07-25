@@ -88,6 +88,22 @@ enum LeadSource {
   CONTENT_SIGNAL
 }
 
+enum LinkedInPostStatus {
+  DRAFT
+  APPROVED
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+enum PostMediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  ARTICLE
+}
+
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
@@ -97,6 +113,7 @@ model User {
   accounts     Account[]
   proxies      Proxy[]
   leads        Lead[]
+  linkedinPosts LinkedInPost[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -146,6 +163,7 @@ model Account {
   leads             Lead[]
   activityLogs      ActivityLog[]
   checkpoints       Checkpoint[]
+  linkedinPosts     LinkedInPost[]
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -343,6 +361,8 @@ model ContentSignalConfig {
   companyFilter          String?
   locationFilter         String?
   connectionNoteTemplate String?   @db.Text
+  maxPagesPerRun         Int       @default(3)
+  nextPageToScrape       Int       @default(1)
   lastScrapedAt          DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
@@ -371,4 +391,43 @@ model PostSignal {
   @@index([leadId])
   @@index([campaignId])
   @@index([keyword])
+}
+
+model LinkedInPost {
+  id              String             @id @default(cuid())
+  userId          String
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId       String
+  account         Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  title           String
+  body            String             @db.Text
+  prompt          String?            @db.Text
+  tone            String?
+  audience        String?
+  callToAction    String?
+  status          LinkedInPostStatus @default(DRAFT)
+  scheduledFor    DateTime?
+  publishedAt     DateTime?
+  linkedinPostUrn String?
+  lastError       String?            @db.Text
+  media           PostMedia[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([userId, status])
+  @@index([accountId, scheduledFor])
+  @@index([scheduledFor])
+}
+
+model PostMedia {
+  id          String        @id @default(cuid())
+  postId      String
+  post        LinkedInPost  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  type        PostMediaType
+  url         String        @db.Text
+  title       String?
+  description String?       @db.Text
+  createdAt   DateTime      @default(now())
+
+  @@index([postId])
 }

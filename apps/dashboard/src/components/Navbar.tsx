@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/auth";
 const links = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/campaigns", label: "Campaigns" },
+  { href: "/posts", label: "Posts" },
   { href: "/leads", label: "Leads" },
   { href: "/accounts", label: "Accounts" },
   { href: "/proxies", label: "Proxies" },

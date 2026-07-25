@@ -291,6 +291,8 @@ export interface ContentSignalConfig {
   keyword: string;
   dateRangeDays: number;
   maxLeads: number;
+  maxPagesPerRun: number;
+  nextPageToScrape: number;
   titleFilter?: string | null;
   companyFilter?: string | null;
   locationFilter?: string | null;
@@ -308,6 +310,91 @@ export interface PostSignal {
   publishedAt: string;
   scrapedAt: string;
   lead: Lead;
+}
+
+export interface ContentSignalJob {
+  id?: string;
+  name: string;
+  state: "waiting" | "active" | "delayed" | "completed" | "failed" | string;
+  attemptsMade: number;
+  failedReason?: string | null;
+  timestamp: number;
+  processedOn?: number | null;
+  finishedOn?: number | null;
+  progress?: number | {
+    phase?: string;
+    page?: number;
+    maxPages?: number;
+    startPage?: number;
+    endPage?: number;
+    collected?: number;
+    skipped?: number;
+    scanned?: number;
+    leadLimit?: number;
+  };
+  data: {
+    accountId?: string;
+    campaignId?: string;
+    keyword?: string;
+    dateRangeDays?: number;
+    maxLeads?: number;
+    startPage?: number;
+    maxPagesPerRun?: number;
+    titleFilter?: string | null;
+    companyFilter?: string | null;
+    locationFilter?: string | null;
+  };
+  returnvalue?: unknown;
+}
+
+export type LinkedInPostStatus =
+  | "DRAFT"
+  | "APPROVED"
+  | "SCHEDULED"
+  | "PUBLISHING"
+  | "PUBLISHED"
+  | "FAILED";
+
+export type PostMediaType = "IMAGE" | "VIDEO" | "DOCUMENT" | "ARTICLE";
+
+export interface PostMedia {
+  id: string;
+  postId: string;
+  type: PostMediaType;
+  url: string;
+  title?: string | null;
+  description?: string | null;
+  createdAt: string;
+}
+
+export interface LinkedInPost {
+  id: string;
+  userId: string;
+  accountId: string;
+  account?: Pick<Account, "id" | "email" | "status" | "timezone">;
+  title: string;
+  body: string;
+  prompt?: string | null;
+  tone?: string | null;
+  audience?: string | null;
+  callToAction?: string | null;
+  status: LinkedInPostStatus;
+  scheduledFor?: string | null;
+  publishedAt?: string | null;
+  linkedinPostUrn?: string | null;
+  lastError?: string | null;
+  media: PostMedia[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GeneratedPostDraft {
+  title: string;
+  body: string;
+  prompt: string;
+  tone: string;
+  audience: string;
+  callToAction?: string | null;
 }
 
 export interface SearchScrapeCampaignJob {
@@ -786,17 +873,96 @@ export const api = {
   contentSignal: {
     getConfig: (campaignId: string) =>
       apiFetch<ContentSignalConfig>(`/content-signal/${campaignId}`),
-    saveConfig: (campaignId: string, data: Omit<ContentSignalConfig, "id" | "campaignId" | "lastScrapedAt" | "connectionNoteTemplate"> & { connectionNoteTemplate?: string | null }) =>
+    saveConfig: (campaignId: string, data: Omit<ContentSignalConfig, "id" | "campaignId" | "lastScrapedAt" | "nextPageToScrape" | "connectionNoteTemplate"> & { connectionNoteTemplate?: string | null }) =>
       apiFetch<ContentSignalConfig>(`/content-signal/${campaignId}`, {
         method: "POST",
         body: JSON.stringify(data),
       }),
     run: (campaignId: string) =>
-      apiFetch<{ queued: boolean; keyword: string }>(`/content-signal/${campaignId}/run`, {
+      apiFetch<{ queued: boolean; keyword: string; jobId?: string; startPage: number; maxPagesPerRun: number; pageCount: number }>(`/content-signal/${campaignId}/run`, {
         method: "POST",
       }),
-    getSignals: (campaignId: string) =>
-      apiFetch<PostSignal[]>(`/content-signal/${campaignId}/signals`),
+    resetCursor: (campaignId: string) =>
+      apiFetch<ContentSignalConfig>(`/content-signal/${campaignId}/reset-cursor`, {
+        method: "POST",
+      }),
+    jobs: (campaignId: string) =>
+      apiFetch<{ jobs: ContentSignalJob[] }>(`/content-signal/${campaignId}/jobs`),
+    getSignals: (campaignId: string, params?: { page?: number; limit?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.page) q.set("page", String(params.page));
+      if (params?.limit) q.set("limit", String(params.limit));
+      const suffix = q.toString() ? `?${q}` : "";
+      return apiFetch<{ signals: PostSignal[]; total: number; page: number; limit: number }>(
+        `/content-signal/${campaignId}/signals${suffix}`
+      );
+    },
+  },
+
+  posts: {
+    list: (params?: { status?: LinkedInPostStatus }) => {
+      const q = new URLSearchParams();
+      if (params?.status) q.set("status", params.status);
+      const suffix = q.toString() ? `?${q}` : "";
+      return apiFetch<LinkedInPost[]>(`/posts${suffix}`);
+    },
+    generate: (data: {
+      accountId: string;
+      topic: string;
+      tone?: string;
+      audience?: string;
+      callToAction?: string | null;
+    }) =>
+      apiFetch<GeneratedPostDraft>("/posts/generate", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    create: (data: {
+      accountId: string;
+      title: string;
+      body: string;
+      prompt?: string | null;
+      tone?: string | null;
+      audience?: string | null;
+      callToAction?: string | null;
+      scheduledFor?: string | null;
+      media?: Array<{
+        type: PostMediaType;
+        url: string;
+        title?: string | null;
+        description?: string | null;
+      }>;
+    }) =>
+      apiFetch<LinkedInPost>("/posts", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (
+      id: string,
+      data: Partial<Pick<LinkedInPost, "title" | "body" | "prompt" | "tone" | "audience" | "callToAction" | "scheduledFor" | "status">> & {
+        media?: Array<{
+          type: PostMediaType;
+          url: string;
+          title?: string | null;
+          description?: string | null;
+        }>;
+      }
+    ) =>
+      apiFetch<LinkedInPost>(`/posts/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    schedule: (id: string, scheduledFor: string) =>
+      apiFetch<LinkedInPost>(`/posts/${id}/schedule`, {
+        method: "POST",
+        body: JSON.stringify({ scheduledFor }),
+      }),
+    publish: (id: string, linkedinPostUrn?: string | null) =>
+      apiFetch<LinkedInPost>(`/posts/${id}/publish`, {
+        method: "POST",
+        body: JSON.stringify({ linkedinPostUrn }),
+      }),
+    delete: (id: string) => apiFetch<void>(`/posts/${id}`, { method: "DELETE" }),
   },
 
   activity: {

@@ -1,0 +1,3 @@
+ALTER TABLE "ContentSignalConfig"
+  ADD COLUMN "maxPagesPerRun" INTEGER NOT NULL DEFAULT 3,
+  ADD COLUMN "nextPageToScrape" INTEGER NOT NULL DEFAULT 1;

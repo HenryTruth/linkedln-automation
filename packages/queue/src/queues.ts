@@ -96,6 +96,8 @@ export interface ContentSignalJobData {
   keyword: string;
   dateRangeDays: number;
   maxLeads: number;
+  startPage?: number;
+  maxPagesPerRun?: number;
   titleFilter?: string | null;
   companyFilter?: string | null;
   locationFilter?: string | null;

@@ -9,8 +9,8 @@ import {
 } from "@linkedin-automation/guards";
 import { navigateTo } from "./navigate.js";
 
-// Guard A: max 3 content search pages per session
-const MAX_PAGES_PER_SESSION = 3;
+const DEFAULT_MAX_PAGES_PER_RUN = 3;
+const HARD_MAX_PAGES_PER_RUN = 10;
 
 interface PostCard {
   authorUrl: string;
@@ -21,6 +21,17 @@ interface PostCard {
   postUrl: string;
   excerpt: string;
   publishedAt: Date;
+}
+
+async function loadContentSearchResults(page: Page): Promise<void> {
+  // LinkedIn content search lazy-renders results as the viewport moves. Without
+  // a short scroll pass, the DOM can contain only the first visible post.
+  for (let i = 0; i < 5; i++) {
+    await page.mouse.wheel(0, 900);
+    await humanDelay(700, 1_300);
+  }
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await humanDelay(500, 900);
 }
 
 export async function extractPostCards(
@@ -269,36 +280,91 @@ export async function scrapeContentSearch(
   titleFilter?: string | null,
   companyFilter?: string | null,
   locationFilter?: string | null,
-): Promise<{ collected: number; skipped: number; newLeads: CollectedLead[] }> {
+  startPage = 1,
+  maxPagesPerRun = DEFAULT_MAX_PAGES_PER_RUN,
+  onProgress?: (progress: {
+    phase: string;
+    page: number;
+    maxPages: number;
+    startPage: number;
+    endPage: number;
+    collected: number;
+    skipped: number;
+    scanned: number;
+    leadLimit: number;
+  }) => void | Promise<void>,
+): Promise<{ collected: number; skipped: number; scanned: number; pagesScraped: number; nextPage: number; newLeads: CollectedLead[] }> {
   let collected = 0;
   let skipped = 0;
+  let scanned = 0;
   const newLeads: CollectedLead[] = [];
   const seenPostUrls = new Set<string>();
+  const seenAuthorUrls = new Set<string>();
   const account = await prisma.account.findUniqueOrThrow({
     where: { id: accountId },
     select: { userId: true },
   });
 
-  // Guard A: max 3 pages per session
+  const safeStartPage = Math.max(1, startPage);
   const pagesToScrape = Math.min(
-    MAX_PAGES_PER_SESSION,
+    HARD_MAX_PAGES_PER_RUN,
+    Math.max(1, maxPagesPerRun),
     Math.ceil(maxLeads / 10),
   );
+  const endPage = safeStartPage + pagesToScrape - 1;
+  let lastAttemptedPage = safeStartPage - 1;
+
+  await onProgress?.({
+    phase: "starting",
+    page: safeStartPage,
+    maxPages: endPage,
+    startPage: safeStartPage,
+    endPage,
+    collected,
+    skipped,
+    scanned,
+    leadLimit: maxLeads,
+  });
 
   for (
-    let pageNum = 1;
-    pageNum <= pagesToScrape && collected < maxLeads;
+    let pageNum = safeStartPage;
+    pageNum <= endPage && collected < maxLeads;
     pageNum++
   ) {
+    lastAttemptedPage = pageNum;
+    await onProgress?.({
+      phase: "opening_search_page",
+      page: pageNum,
+      maxPages: endPage,
+      startPage: safeStartPage,
+      endPage,
+      collected,
+      skipped,
+      scanned,
+      leadLimit: maxLeads,
+    });
     const url = buildContentSearchUrl(keyword, pageNum, locationFilter);
     await navigateTo(page, url);
     await humanDelay(4_000, 8_000);
+    await loadContentSearchResults(page);
 
+    await onProgress?.({
+      phase: "reading_posts",
+      page: pageNum,
+      maxPages: endPage,
+      startPage: safeStartPage,
+      endPage,
+      collected,
+      skipped,
+      scanned,
+      leadLimit: maxLeads,
+    });
     const cards = await extractPostCards(page, keyword);
     if (cards.length === 0) break;
 
     for (const card of cards) {
       if (collected >= maxLeads) break;
+      scanned++;
 
       // Guard F — post URL unique key
       if (seenPostUrls.has(card.postUrl)) {
@@ -306,6 +372,11 @@ export async function scrapeContentSearch(
         continue;
       }
       seenPostUrls.add(card.postUrl);
+      if (seenAuthorUrls.has(card.authorUrl)) {
+        skipped++;
+        continue;
+      }
+      seenAuthorUrls.add(card.authorUrl);
 
       // Check if post_url already stored
       const existingSignal = await prisma.postSignal.findUnique({
@@ -418,11 +489,22 @@ export async function scrapeContentSearch(
       });
 
       collected++;
+      await onProgress?.({
+        phase: "collecting_authors",
+        page: pageNum,
+        maxPages: endPage,
+        startPage: safeStartPage,
+        endPage,
+        collected,
+        skipped,
+        scanned,
+        leadLimit: maxLeads,
+      });
       await humanDelay(500, 1_500);
     }
 
     // Guard A: mandatory delay between pages
-    if (pageNum < pagesToScrape) {
+    if (pageNum < endPage) {
       await humanDelay(8_000, 15_000);
     }
   }
@@ -433,5 +515,25 @@ export async function scrapeContentSearch(
     data: { lastScrapedAt: new Date() },
   });
 
-  return { collected, skipped, newLeads };
+  await onProgress?.({
+    phase: "completed",
+    page: Math.max(safeStartPage, lastAttemptedPage),
+    maxPages: endPage,
+    startPage: safeStartPage,
+    endPage,
+    collected,
+    skipped,
+    scanned,
+    leadLimit: maxLeads,
+  });
+
+  const pagesScraped = Math.max(0, lastAttemptedPage - safeStartPage + 1);
+  return {
+    collected,
+    skipped,
+    scanned,
+    pagesScraped,
+    nextPage: safeStartPage + pagesScraped,
+    newLeads,
+  };
 }

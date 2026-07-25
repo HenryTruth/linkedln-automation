@@ -2,6 +2,7 @@ import type { Job } from "bullmq";
 import { prisma, AccountStatus } from "@linkedin-automation/db";
 import {
   claimDailyCap,
+  remainingDailyCap,
   assertWarmUpAllowed,
   checkActionWindow,
   checkSessionErrorRate,
@@ -17,13 +18,15 @@ import type { ContentSignalJobData } from "../queues.js";
 
 export async function contentSignalProcessor(
   job: Job<ContentSignalJobData>
-): Promise<void> {
+): Promise<{ collected: number; skipped: number; scanned: number; pagesScraped: number; nextPage: number }> {
   const {
     accountId,
     campaignId,
     keyword,
     dateRangeDays,
     maxLeads,
+    startPage = 1,
+    maxPagesPerRun = 3,
     titleFilter,
     companyFilter,
     locationFilter,
@@ -41,15 +44,37 @@ export async function contentSignalProcessor(
     }),
   ]);
   const campaignTimezone = campaign?.targetTimezone ?? undefined;
+  const safeMaxPages = Math.min(10, Math.max(1, maxPagesPerRun));
+  const endPage = startPage + Math.min(safeMaxPages, Math.ceil(maxLeads / 10)) - 1;
 
   if (account.status === AccountStatus.PAUSED) {
     throw new AccountPausedError(accountId);
   }
 
+  await job.updateProgress({
+    phase: "checking_safety",
+    page: startPage,
+    maxPages: endPage,
+    startPage,
+    endPage,
+    collected: 0,
+    skipped: 0,
+    scanned: 0,
+    leadLimit: maxLeads,
+  });
+
   try {
-    // Guard A: search counts as searchPage cap usage
+    // Guard A: content search consumes one searchPage cap per result page requested.
     assertWarmUpAllowed(accountId, account.warmUpPhase, "searchPage");
-    await claimDailyCap(accountId, "searchPage", campaignTimezone);
+    const remainingSearchPages = await remainingDailyCap(accountId, "searchPage", campaignTimezone);
+    if (remainingSearchPages < safeMaxPages) {
+      throw new Error(
+        `Not enough search-page capacity for this content scrape. Requested ${safeMaxPages} page${safeMaxPages === 1 ? "" : "s"}, but this account has ${remainingSearchPages} search page${remainingSearchPages === 1 ? "" : "s"} remaining today. Lower pages per run, raise the account's Search Pages cap, or try again tomorrow.`
+      );
+    }
+    for (let i = 0; i < safeMaxPages; i++) {
+      await claimDailyCap(accountId, "searchPage", campaignTimezone);
+    }
     await checkActionWindow(accountId);
     await checkSessionErrorRate(accountId);
     // Guard E: keyword uniqueness across active campaigns
@@ -63,10 +88,21 @@ export async function contentSignalProcessor(
 
   const worker = new BrowserWorker(accountId);
   try {
+    await job.updateProgress({
+      phase: "opening_browser",
+      page: startPage,
+      maxPages: endPage,
+      startPage,
+      endPage,
+      collected: 0,
+      skipped: 0,
+      scanned: 0,
+      leadLimit: maxLeads,
+    });
     await worker.launch();
     const page = await worker.getPage();
 
-    const { collected, skipped, newLeads } = await scrapeContentSearch(
+    const { collected, skipped, scanned, pagesScraped, nextPage, newLeads } = await scrapeContentSearch(
       page,
       accountId,
       campaignId,
@@ -75,20 +111,35 @@ export async function contentSignalProcessor(
       maxLeads,
       titleFilter,
       companyFilter,
-      locationFilter
+      locationFilter,
+      startPage,
+      safeMaxPages,
+      (progress) => job.updateProgress(progress)
     );
+
+    await job.updateProgress({
+      phase: "saving_results",
+      page: Math.max(startPage, nextPage - 1),
+      maxPages: endPage,
+      startPage,
+      endPage,
+      collected,
+      skipped,
+      scanned,
+      leadLimit: maxLeads,
+    });
 
     await Promise.all([
       prisma.contentSignalConfig.update({
         where: { campaignId },
-        data: { lastScrapedAt: new Date() },
+        data: { lastScrapedAt: new Date(), nextPageToScrape: nextPage },
       }),
       prisma.activityLog.create({
         data: {
           accountId,
           actionType: "scrape",
           targetUrl: `linkedin.com/search/content?keywords=${encodeURIComponent(keyword)}`,
-          result: `collected:${collected} skipped:${skipped}`,
+          result: `collected:${collected} skipped:${skipped} scanned:${scanned} requested:${maxLeads} pages:${startPage}-${Math.max(startPage, nextPage - 1)} nextPage:${nextPage}`,
         },
       }),
     ]);
@@ -96,6 +147,17 @@ export async function contentSignalProcessor(
     // Auto-queue connection requests for new leads if a note template is configured (Guard D).
     // Guard A: connect jobs must fire at least 15–30 min after the scrape session ends.
     if (connectionNoteTemplate && newLeads.length > 0) {
+      await job.updateProgress({
+        phase: "queueing_connections",
+        page: Math.max(startPage, nextPage - 1),
+        maxPages: endPage,
+        startPage,
+        endPage,
+        collected,
+        skipped,
+        scanned,
+        leadLimit: maxLeads,
+      });
       const BASE_DELAY_MS = 15 * 60 * 1000;
       const JITTER_MS = 15 * 60 * 1000;
 
@@ -123,7 +185,31 @@ export async function contentSignalProcessor(
         );
       }
     }
+
+    await job.updateProgress({
+      phase: "completed",
+      page: Math.max(startPage, nextPage - 1),
+      maxPages: endPage,
+      startPage,
+      endPage,
+      collected,
+      skipped,
+      scanned,
+      leadLimit: maxLeads,
+    });
+    return { collected, skipped, scanned, pagesScraped, nextPage };
   } catch (err) {
+    await job.updateProgress({
+      phase: "failed",
+      page: startPage,
+      maxPages: endPage,
+      startPage,
+      endPage,
+      collected: 0,
+      skipped: 0,
+      scanned: 0,
+      leadLimit: maxLeads,
+    }).catch(() => {});
     const artifact = await worker.captureFailureArtifacts(`content-signal-${job.id ?? "unknown"}`);
     if (artifact) {
       await prisma.activityLog.create({

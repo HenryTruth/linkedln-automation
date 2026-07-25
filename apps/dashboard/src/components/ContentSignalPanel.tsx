@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type ContentSignalConfig, type PostSignal } from "@/lib/api";
+import { api, type ContentSignalConfig, type ContentSignalJob, type PostSignal } from "@/lib/api";
 
 const LOCATIONS: { label: string; geoUrn: string }[] = [
   { label: "United States",        geoUrn: "103644278" },
@@ -29,6 +29,8 @@ const LOCATIONS: { label: string; geoUrn: string }[] = [
   { label: "South Korea",          geoUrn: "105149562" },
 ];
 
+const SIGNALS_LIMIT = 20;
+
 function relativeDate(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const d = Math.floor(diff / 86_400_000);
@@ -37,6 +39,84 @@ function relativeDate(iso: string): string {
   if (d < 7) return `${d} days ago`;
   if (d < 14) return "last week";
   return `${Math.floor(d / 7)} weeks ago`;
+}
+
+const JOB_STYLES: Record<string, string> = {
+  waiting: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  active: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+  delayed: "border-violet-500/30 bg-violet-500/10 text-violet-300",
+  completed: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  failed: "border-red-500/30 bg-red-500/10 text-red-300",
+};
+
+function jobLabel(state: string) {
+  if (state === "waiting") return "Queued";
+  if (state === "active") return "Scraping now";
+  if (state === "delayed") return "Waiting to retry";
+  if (state === "completed") return "Completed";
+  if (state === "failed") return "Failed";
+  return state;
+}
+
+function jobTime(value: number | null | undefined) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString();
+}
+
+function jobProgress(job: ContentSignalJob) {
+  if (typeof job.progress !== "object" || job.progress === null) {
+    const target = job.data.maxLeads ?? 0;
+    return {
+      pct: typeof job.progress === "number" ? Math.min(100, Math.max(0, job.progress)) : 0,
+      label: target ? `Queued for up to ${target} leads` : "Waiting for worker",
+      collected: 0,
+      skipped: 0,
+    };
+  }
+
+  const page = job.progress.page ?? 0;
+  const maxPages = job.progress.maxPages ?? 1;
+  const startPage = job.progress.startPage ?? job.data.startPage ?? 1;
+  const endPage = job.progress.endPage ?? maxPages;
+  const collected = job.progress.collected ?? 0;
+  const skipped = job.progress.skipped ?? 0;
+  const scanned = job.progress.scanned ?? collected + skipped;
+  const leadLimit = job.progress.leadLimit ?? job.data.maxLeads;
+  const phase = job.progress.phase?.replace(/_/g, " ") ?? "working";
+  const batchSize = Math.max(1, endPage - startPage + 1);
+  const pagePct = ((Math.max(startPage, page) - startPage + 1) / batchSize) * 100;
+  const leadPct = leadLimit ? (collected / leadLimit) * 100 : pagePct;
+  const pct = job.state === "completed"
+    ? 100
+    : Math.min(100, Math.max(0, Math.round(Math.max(pagePct, leadPct))));
+
+  return {
+    pct,
+    collected,
+    skipped,
+    scanned,
+    label: `${phase} · page ${page} of ${endPage} · ${collected}${leadLimit ? ` / ${leadLimit}` : ""} leads · ${scanned} scanned`,
+  };
+}
+
+function jobDetail(job: ContentSignalJob) {
+  if (job.state === "waiting") {
+    return "Accepted. The content scraper will start as soon as a worker is available.";
+  }
+  if (job.state === "active") {
+    return "Browser automation is searching LinkedIn posts and collecting matching authors.";
+  }
+  if (job.state === "delayed") {
+    return "The job is delayed, usually while BullMQ waits before retrying.";
+  }
+  if (job.state === "completed") {
+    const progress = jobProgress(job);
+    return `Scrape finished with ${progress.collected} collected, ${progress.skipped} skipped, and ${progress.scanned} scanned. Refresh if new leads are not visible yet.`;
+  }
+  if (job.state === "failed") {
+    return job.failedReason ?? "The content scrape failed. Open Jobs for the full payload and error.";
+  }
+  return "Content scrape job recorded.";
 }
 
 interface ContentSignalPanelProps {
@@ -52,12 +132,17 @@ export function ContentSignalPanel({
     initialConfig ?? null
   );
   const [signals, setSignals] = useState<PostSignal[]>([]);
+  const [signalsTotal, setSignalsTotal] = useState(0);
+  const [signalsPage, setSignalsPage] = useState(1);
   const [loadingSignals, setLoadingSignals] = useState(false);
+  const [jobs, setJobs] = useState<ContentSignalJob[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
 
   // Config form state
   const [keyword, setKeyword] = useState(initialConfig?.keyword ?? "");
   const [dateRange, setDateRange] = useState(initialConfig?.dateRangeDays ?? 7);
   const [maxLeads, setMaxLeads] = useState(initialConfig?.maxLeads ?? 50);
+  const [maxPagesPerRun, setMaxPagesPerRun] = useState(initialConfig?.maxPagesPerRun ?? 3);
   const [titleFilter, setTitleFilter] = useState(initialConfig?.titleFilter ?? "");
   const [companyFilter, setCompanyFilter] = useState(initialConfig?.companyFilter ?? "");
   const [locationFilter, setLocationFilter] = useState(initialConfig?.locationFilter ?? "");
@@ -73,14 +158,46 @@ export function ContentSignalPanel({
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<string | null>(null);
 
-  useEffect(() => {
+  function reloadSignals() {
     setLoadingSignals(true);
-    api.contentSignal
-      .getSignals(campaignId)
-      .then(setSignals)
+    return api.contentSignal
+      .getSignals(campaignId, { page: signalsPage, limit: SIGNALS_LIMIT })
+      .then((result) => {
+        setSignals(result.signals);
+        setSignalsTotal(result.total);
+      })
       .catch(() => {})
       .finally(() => setLoadingSignals(false));
+  }
+
+  useEffect(() => {
+    void reloadSignals();
+  }, [campaignId, signalsPage]);
+
+  function reloadJobs() {
+    setJobsLoading(true);
+    return api.contentSignal
+      .jobs(campaignId)
+      .then((result) => setJobs(result.jobs))
+      .catch(() => {})
+      .finally(() => setJobsLoading(false));
+  }
+
+  useEffect(() => {
+    void reloadJobs();
   }, [campaignId]);
+
+  useEffect(() => {
+    const hasActiveJob = jobs.some((job) =>
+      ["waiting", "active", "delayed"].includes(job.state)
+    );
+    if (!hasActiveJob) return;
+    const id = window.setInterval(() => {
+      void reloadJobs();
+      void reloadSignals();
+    }, 4_000);
+    return () => window.clearInterval(id);
+  }, [campaignId, jobs]);
 
   async function handleSaveConfig(e: React.FormEvent) {
     e.preventDefault();
@@ -92,6 +209,7 @@ export function ContentSignalPanel({
         keyword,
         dateRangeDays: dateRange,
         maxLeads,
+        maxPagesPerRun,
         titleFilter: titleFilter || null,
         companyFilter: companyFilter || null,
         locationFilter: locationFilter || null,
@@ -106,6 +224,20 @@ export function ContentSignalPanel({
     }
   }
 
+  async function handleResetCursor() {
+    setRunning(true);
+    setRunResult(null);
+    try {
+      const updated = await api.contentSignal.resetCursor(campaignId);
+      setConfig(updated);
+      setRunResult("Search cursor reset. The next scrape will start from page 1.");
+    } catch (e) {
+      setRunResult(`Error: ${(e as Error).message}`);
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function handleRun() {
     if (!config) return;
     setRunning(true);
@@ -113,11 +245,12 @@ export function ContentSignalPanel({
     try {
       const result = await api.contentSignal.run(campaignId);
       setRunResult(
-        `Scrape job queued for keyword "${result.keyword}". Results will appear below once the worker completes.`
+        `Scrape job queued for keyword "${result.keyword}" from page ${result.startPage} to ${result.startPage + result.pageCount - 1}${result.jobId ? ` (job ${result.jobId})` : ""}.`
       );
-      // Refresh signals after a short delay
+      await reloadJobs();
       setTimeout(() => {
-        api.contentSignal.getSignals(campaignId).then(setSignals).catch(() => {});
+        void reloadSignals();
+        void reloadJobs();
       }, 3000);
     } catch (e) {
       setRunResult(`Error: ${(e as Error).message}`);
@@ -197,6 +330,44 @@ export function ContentSignalPanel({
                 className="field w-full"
               />
             </div>
+          </div>
+
+          <div className="grid gap-4 rounded-2xl border border-white/[0.06] bg-slate-950/30 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
+                Pages per run
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={maxPagesPerRun}
+                onChange={(e) => setMaxPagesPerRun(Number(e.target.value))}
+                className="field w-full"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Max 10 pages per scrape session.
+              </p>
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-semibold text-slate-300">
+                Next scrape starts
+              </p>
+              <div className="rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-slate-200">
+                Page {config?.nextPageToScrape ?? 1}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Successful runs advance this automatically.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleResetCursor}
+              disabled={running || !config}
+              className="btn-secondary px-3 py-2 text-xs"
+            >
+              Reset to page 1
+            </button>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -307,15 +478,94 @@ export function ContentSignalPanel({
             {runResult}
           </div>
         )}
+
+        <div className="mt-4 rounded-2xl border border-white/[0.08] bg-slate-950/40 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                Scrape progress
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Tracks the current Content Signal queue job from accepted to finished.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={reloadJobs}
+                disabled={jobsLoading}
+                className="btn-secondary px-3 py-1.5 text-xs"
+              >
+                {jobsLoading ? "Refreshing..." : "Refresh"}
+              </button>
+              <a
+                href="/jobs?queue=contentSignal"
+                className="btn-secondary px-3 py-1.5 text-xs text-violet-400"
+              >
+                Open Jobs
+              </a>
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {jobs.length === 0 ? (
+              <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 text-sm text-slate-400">
+                No content scrape jobs have been queued for this campaign yet.
+              </div>
+            ) : (
+              jobs.slice(0, 3).map((job) => {
+                const progress = jobProgress(job);
+                return (
+                  <div
+                    key={job.id ?? `${job.timestamp}-${job.data.keyword}`}
+                    className={`rounded-xl border p-3 ${
+                      JOB_STYLES[job.state] ?? "border-slate-700 bg-slate-800/50 text-slate-300"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">
+                        {jobLabel(job.state)}
+                        {job.id ? ` · Job ${job.id}` : ""}
+                      </p>
+                      <p className="text-xs opacity-80">
+                        Updated {jobTime(job.finishedOn ?? job.processedOn ?? job.timestamp)}
+                      </p>
+                    </div>
+                    <p className="mt-1 text-xs opacity-80">
+                      Keyword: <span className="font-semibold">{job.data.keyword ?? keyword}</span>
+                    </p>
+                    {["waiting", "active", "delayed", "completed"].includes(job.state) && (
+                      <div className="mt-3">
+                        <div className="mb-1 flex items-center justify-between gap-3 text-[11px] font-semibold opacity-90">
+                          <span>{progress.label}</span>
+                          <span>{progress.pct}%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-950/50">
+                          <div
+                            className="h-full rounded-full bg-teal-400 transition-all"
+                            style={{ width: `${progress.pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    <p className="mt-2 text-xs leading-5 opacity-90">
+                      {jobDetail(job)}
+                    </p>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Post signals collected */}
       <div>
         <h3 className="mb-3 text-base font-semibold text-white">
           Collected Post Signals
-          {signals.length > 0 && (
+          {signalsTotal > 0 && (
             <span className="ml-2 text-sm font-normal text-slate-400">
-              {signals.length} posts
+              {signalsTotal} post{signalsTotal === 1 ? "" : "s"}
             </span>
           )}
         </h3>
@@ -395,6 +645,40 @@ export function ContentSignalPanel({
             </div>
           ))}
         </div>
+
+        {signalsTotal > SIGNALS_LIMIT && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-slate-900/60 p-3 text-sm text-slate-300">
+            <span>
+              Showing {(signalsPage - 1) * SIGNALS_LIMIT + 1}-
+              {Math.min(signalsPage * SIGNALS_LIMIT, signalsTotal)} of {signalsTotal}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSignalsPage((page) => Math.max(1, page - 1))}
+                disabled={signalsPage <= 1}
+                className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-slate-400">
+                Page {signalsPage} of {Math.max(1, Math.ceil(signalsTotal / SIGNALS_LIMIT))}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setSignalsPage((page) =>
+                    Math.min(Math.max(1, Math.ceil(signalsTotal / SIGNALS_LIMIT)), page + 1)
+                  )
+                }
+                disabled={signalsPage >= Math.ceil(signalsTotal / SIGNALS_LIMIT)}
+                className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

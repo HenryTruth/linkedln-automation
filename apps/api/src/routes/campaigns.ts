@@ -1016,11 +1016,14 @@ campaignsRouter.post("/:id/start", async (req, res, next) => {
           keyword: config.keyword,
           dateRangeDays: config.dateRangeDays,
           maxLeads: config.maxLeads,
+          startPage: config.nextPageToScrape,
+          maxPagesPerRun: config.maxPagesPerRun,
           titleFilter: config.titleFilter,
           companyFilter: config.companyFilter,
+          locationFilter: config.locationFilter,
           connectionNoteTemplate: config.connectionNoteTemplate,
         },
-        { jobId: `campaign-${fullCampaign.id}-content-signal` }
+        { jobId: `campaign-${fullCampaign.id}-content-signal-${Date.now()}` }
       );
       dispatched.push(`content-signal:${config.keyword}`);
     }

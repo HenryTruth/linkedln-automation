@@ -938,27 +938,6 @@ export default function CampaignDetailPage() {
         </section>
       )}
 
-      {/* Content Signal config + post signal list */}
-      {isContentSignal && (
-        <section>
-          <div className="mb-4">
-            <p className="page-kicker">Signal targeting</p>
-            <h2 className="mt-1 text-xl font-semibold text-white">
-              Content Signal Targeting
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
-              Configure the keyword to search, then run the scraper to find
-              people who posted about it. Each collected author becomes a lead
-              with their post stored as context for personalised outreach.
-            </p>
-          </div>
-          <ContentSignalPanel
-            campaignId={id}
-            initialConfig={campaign.contentSignalConfig}
-          />
-        </section>
-      )}
-
       {/* Message template builder */}
       {(isMessage || isInMail) && (
         <section>
@@ -1913,6 +1892,27 @@ export default function CampaignDetailPage() {
           </div>
         )}
       </section>
+
+      {/* Content Signal config + post signal list */}
+      {isContentSignal && (
+        <section>
+          <div className="mb-4">
+            <p className="page-kicker">Signal targeting</p>
+            <h2 className="mt-1 text-xl font-semibold text-white">
+              Content Signal Targeting
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
+              Configure the keyword to search, then run the scraper to find
+              people who posted about it. Each collected author becomes a lead
+              with their post stored as context for personalised outreach.
+            </p>
+          </div>
+          <ContentSignalPanel
+            campaignId={id}
+            initialConfig={campaign.contentSignalConfig}
+          />
+        </section>
+      )}
 
       {/* Sequence graph builder */}
       {isSequence && (

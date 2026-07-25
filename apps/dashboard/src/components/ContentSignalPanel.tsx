@@ -129,33 +129,33 @@ export function ContentSignalPanel({
   return (
     <div className="space-y-6">
       {/* Config form */}
-      <div className="app-panel border-teal-200 bg-teal-50/70 p-5">
-        <h3 className="mb-1 text-sm font-semibold text-teal-950">
+      <div className="rounded-2xl border border-teal-500/30 bg-teal-500/5 p-5">
+        <h3 className="mb-1 text-sm font-semibold text-teal-300">
           Keyword Configuration
         </h3>
-        <p className="mb-4 text-xs leading-5 text-teal-800">
+        <p className="mb-4 text-xs leading-5 text-slate-400">
           The scraper will search LinkedIn posts for this keyword, extract the
           authors, and add them as leads. Connection requests will reference
           their post using{" "}
-          <code className="rounded bg-teal-100 px-1">{"{{postTopic}}"}</code>,{" "}
-          <code className="rounded bg-teal-100 px-1">{"{{postExcerpt}}"}</code>,{" "}
-          <code className="rounded bg-teal-100 px-1">{"{{postDate}}"}</code>.
+          <code className="rounded bg-slate-800 px-1 text-teal-300">{"{{postTopic}}"}</code>,{" "}
+          <code className="rounded bg-slate-800 px-1 text-teal-300">{"{{postExcerpt}}"}</code>,{" "}
+          <code className="rounded bg-slate-800 px-1 text-teal-300">{"{{postDate}}"}</code>.
         </p>
 
         <form onSubmit={handleSaveConfig} className="space-y-4">
           {saveError && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
               {saveError}
             </div>
           )}
           {saved && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">
               Config saved.
             </div>
           )}
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-900">
+            <label className="mb-1 block text-xs font-semibold text-slate-300">
               Keyword / phrase *
             </label>
             <input
@@ -169,7 +169,7 @@ export function ContentSignalPanel({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-900">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 Post age limit (days)
               </label>
               <input
@@ -180,12 +180,12 @@ export function ContentSignalPanel({
                 onChange={(e) => setDateRange(Number(e.target.value))}
                 className="field w-full"
               />
-              <p className="mt-1 text-xs text-slate-700">
+              <p className="mt-1 text-xs text-slate-500">
                 Skip posts older than this
               </p>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-900">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 Max leads to collect
               </label>
               <input
@@ -201,7 +201,7 @@ export function ContentSignalPanel({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-900">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 Title filter (optional)
               </label>
               <input
@@ -212,7 +212,7 @@ export function ContentSignalPanel({
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-900">
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
                 Company filter (optional)
               </label>
               <input
@@ -225,7 +225,7 @@ export function ContentSignalPanel({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-900">
+            <label className="mb-1 block text-xs font-semibold text-slate-300">
               Location (optional)
             </label>
             <select
@@ -240,20 +240,20 @@ export function ContentSignalPanel({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-slate-700">
+            <p className="mt-1 text-xs text-slate-500">
               Filters LinkedIn search results to post authors in this country.
             </p>
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-900">
+            <label className="mb-1 block text-xs font-semibold text-slate-300">
               Connection note template{" "}
-              <span className="font-normal text-slate-700">
+              <span className="font-normal text-slate-500">
                 (max 300 chars — must include{" "}
-                <code className="rounded bg-teal-100 px-1">{"{{postTopic}}"}</code>,{" "}
-                <code className="rounded bg-teal-100 px-1">{"{{postExcerpt}}"}</code>,{" "}
+                <code className="rounded bg-slate-800 px-1 text-teal-300">{"{{postTopic}}"}</code>,{" "}
+                <code className="rounded bg-slate-800 px-1 text-teal-300">{"{{postExcerpt}}"}</code>,{" "}
                 or{" "}
-                <code className="rounded bg-teal-100 px-1">{"{{postDate}}"}</code>)
+                <code className="rounded bg-slate-800 px-1 text-teal-300">{"{{postDate}}"}</code>)
               </span>
             </label>
             <textarea
@@ -263,10 +263,10 @@ export function ContentSignalPanel({
               onChange={(e) => setConnectionNote(e.target.value)}
               className="field w-full font-mono text-xs"
             />
-            <p className="mt-1 text-right text-xs text-slate-600">
+            <p className="mt-1 text-right text-xs text-slate-500">
               {connectionNote.length}/300
             </p>
-            <p className="text-xs text-slate-700">
+            <p className="text-xs text-slate-500">
               Leave blank to collect leads without auto-sending connection requests.
             </p>
           </div>
@@ -284,7 +284,7 @@ export function ContentSignalPanel({
               onClick={handleRun}
               disabled={running || !config}
               title={!config ? "Save config first" : "Run a scrape job now"}
-              className="btn-secondary text-teal-700"
+              className="btn-secondary text-teal-400"
             >
               {running ? "Queuing..." : "Run Now"}
             </button>
@@ -300,8 +300,8 @@ export function ContentSignalPanel({
           <div
             className={`mt-3 rounded-2xl p-3 text-sm ${
               runResult.startsWith("Error")
-                ? "bg-red-50 border border-red-200 text-red-700"
-                : "bg-emerald-50 border border-emerald-200 text-emerald-700"
+                ? "border border-red-500/30 bg-red-500/10 text-red-400"
+                : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
             }`}
           >
             {runResult}
@@ -311,7 +311,7 @@ export function ContentSignalPanel({
 
       {/* Post signals collected */}
       <div>
-        <h3 className="mb-3 text-base font-semibold text-slate-950">
+        <h3 className="mb-3 text-base font-semibold text-white">
           Collected Post Signals
           {signals.length > 0 && (
             <span className="ml-2 text-sm font-normal text-slate-400">
@@ -338,13 +338,13 @@ export function ContentSignalPanel({
               className="app-panel flex gap-4 p-4"
             >
               {/* Signal context panel (per plan) */}
-              <div className="w-48 shrink-0 space-y-1 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+              <div className="w-48 shrink-0 space-y-1 rounded-2xl border border-white/[0.06] bg-slate-950/40 p-3 text-xs">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                   Signal Context
                 </p>
                 <p>
                   <span className="text-slate-400">Keyword:</span>{" "}
-                  <span className="font-medium text-slate-700">
+                  <span className="font-medium text-slate-300">
                     &quot;{sig.keyword}&quot;
                   </span>
                 </p>
@@ -356,7 +356,7 @@ export function ContentSignalPanel({
                   href={sig.postUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-1 inline-block font-semibold text-teal-700 hover:underline"
+                  className="mt-1 inline-block font-semibold text-teal-400 hover:underline"
                 >
                   View original post
                 </a>
@@ -370,7 +370,7 @@ export function ContentSignalPanel({
                       href={sig.lead.linkedinUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-sm font-semibold text-teal-700 hover:underline"
+                      className="text-sm font-semibold text-teal-400 hover:underline"
                     >
                       {sig.lead.firstName || sig.lead.lastName
                         ? `${sig.lead.firstName ?? ""} ${sig.lead.lastName ?? ""}`.trim()
@@ -388,7 +388,7 @@ export function ContentSignalPanel({
                     {new Date(sig.scrapedAt).toLocaleDateString()}
                   </span>
                 </div>
-                <p className="line-clamp-3 text-sm italic text-slate-600">
+                <p className="line-clamp-3 text-sm italic text-slate-400">
                   &quot;{sig.excerpt}&quot;
                 </p>
               </div>

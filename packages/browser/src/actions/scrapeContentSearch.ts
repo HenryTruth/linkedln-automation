@@ -23,56 +23,165 @@ interface PostCard {
   publishedAt: Date;
 }
 
-async function extractPostCards(page: Page, keyword: string): Promise<PostCard[]> {
+export async function extractPostCards(
+  page: Page,
+  keyword: string,
+): Promise<PostCard[]> {
   const raw = await page.evaluate(() => {
-    const feed = Array.from(
+    const bySelector = Array.from(
       document.querySelectorAll(
-        ".feed-shared-update-v2, .occludable-update, [data-urn]"
-      )
+        ".feed-shared-update-v2, .occludable-update, [data-urn]",
+      ),
     );
+    const currentSearchCards = Array.from(
+      document.querySelectorAll("main [role='listitem']"),
+    ).filter((card) => {
+      const componentKey =
+        card.getAttribute("componentkey") ??
+        card.querySelector("[componentkey]")?.getAttribute("componentkey") ??
+        "";
+      const text = card.textContent ?? "";
+      return (
+        componentKey.includes("FeedType_FLAGSHIP_SEARCH") ||
+        /^Feed post\b/i.test(text.trim())
+      );
+    });
+    const feed = Array.from(new Set([...bySelector, ...currentSearchCards]));
+
+    const directText = (el: Element) =>
+      Array.from(el.childNodes)
+        .filter((n) => n.nodeType === Node.TEXT_NODE)
+        .map((n) => n.textContent?.trim() ?? "")
+        .filter(Boolean)
+        .join(" ");
+
+    const cleanText = (value: string | null | undefined) =>
+      (value ?? "").replace(/\s+/g, " ").trim();
+
+    const normalizeLinkedInUrl = (href: string) => {
+      try {
+        const url = new URL(href);
+        url.search = "";
+        url.hash = "";
+        return url.toString().replace(/\/$/, "");
+      } catch {
+        return href.split("?")[0].replace(/\/$/, "");
+      }
+    };
 
     return feed.map((card) => {
       // Author profile link
-      const authorAnchor = card.querySelector(
-        "a[href*='/in/']"
-      ) as HTMLAnchorElement | null;
-      const authorUrl = authorAnchor?.href?.split("?")[0].replace(/\/$/, "") ?? "";
+      const authorAnchors = Array.from(
+        card.querySelectorAll("a[href*='/in/']"),
+      ) as HTMLAnchorElement[];
+      const authorAnchor =
+        authorAnchors.find((a) => directText(a).trim()) ??
+        authorAnchors[0] ??
+        null;
+      const authorUrl = authorAnchor?.href
+        ? normalizeLinkedInUrl(authorAnchor.href)
+        : "";
 
       // Author name
-      const fullName =
-        card.querySelector(".update-components-actor__name span[aria-hidden='true']")
+      const legacyFullName =
+        card
+          .querySelector(
+            ".update-components-actor__name span[aria-hidden='true']",
+          )
           ?.textContent?.trim() ??
         card.querySelector(".feed-shared-actor__name")?.textContent?.trim() ??
         null;
+      const currentFullName = cleanText(
+        authorAnchor
+          ? directText(authorAnchor) ||
+              (authorAnchor.textContent?.replace(/\s*•.*$/, "") ?? null)
+          : null,
+      ).replace(/\s*•.*$/, "");
+      const fullName = legacyFullName ?? (currentFullName || null);
       const [firstName = null, ...rest] = fullName?.split(" ") ?? [];
       const lastName = rest.join(" ") || null;
 
       // Title and company from actor description
-      const description =
-        card.querySelector(".update-components-actor__description")
+      const legacyDescription =
+        card
+          .querySelector(".update-components-actor__description")
           ?.textContent?.trim() ??
-        card.querySelector(".feed-shared-actor__description")?.textContent?.trim() ??
+        card
+          .querySelector(".feed-shared-actor__description")
+          ?.textContent?.trim() ??
         "";
-      const [title = null, company = null] = description.split(" at ").map((s: string) => s.trim() || null);
+      const cardText = cleanText(card.textContent);
+      const nameInText = fullName ? cardText.indexOf(fullName) : -1;
+      const afterName =
+        nameInText >= 0
+          ? cardText.slice(nameInText + fullName!.length)
+          : cardText;
+      const currentDescription =
+        afterName
+          .replace(/^\s*•\s*(?:1st|2nd|3rd\+?|Follow)\s*/i, "")
+          .split(/\d+\s*(?:s|m|h|d|w|mo)\b\s*•/i)[0]
+          ?.replace(/\b(?:Visit my website|View my newsletter)\b.*$/i, "")
+          .trim() ?? "";
+      const description = legacyDescription || currentDescription;
+      const [title = null, company = null] = description
+        .split(" at ")
+        .map((s: string) => s.trim() || null);
 
       // Post body — take first 300 chars
       const bodyEl =
         card.querySelector(".feed-shared-update-v2__description") ??
         card.querySelector(".feed-shared-text") ??
         card.querySelector(".update-components-text");
-      const excerpt = (bodyEl?.textContent?.trim() ?? "").slice(0, 300);
+      const legacyExcerpt = bodyEl?.textContent?.trim() ?? "";
+      const currentExcerpt = cardText
+        .replace(/^Feed post\s*/i, "")
+        .replace(fullName ?? "", "")
+        .replace(description, "")
+        .replace(
+          /\d+\s*(?:s|m|h|d|w|mo)\b\s*(?:•\s*Edited\s*)?•?\s*Follow\s*/i,
+          "",
+        )
+        .replace(/\b(?:Like|Comment|Repost|Send)\b.*$/i, "")
+        .trim();
+      const excerpt = (legacyExcerpt || currentExcerpt).slice(0, 300);
 
       // Permalink — timestamp link
-      const permalinkAnchor = card.querySelector(
-        "a[href*='/activity/'], a[href*='/posts/']"
-      ) as HTMLAnchorElement | null;
-      const postUrl = permalinkAnchor?.href?.split("?")[0] ?? "";
+      const permalinkAnchor = Array.from(card.querySelectorAll("a[href]")).find(
+        (a) => {
+          const href = (a as HTMLAnchorElement).href;
+          return (
+            href.includes("/feed/update/") ||
+            href.includes("/activity/") ||
+            href.includes("/posts/") ||
+            href.includes("/pulse/")
+          );
+        },
+      ) as HTMLAnchorElement | undefined;
+      const postUrl = permalinkAnchor?.href
+        ? normalizeLinkedInUrl(permalinkAnchor.href)
+        : "";
 
       // Published date — from time element or aria-label
-      const timeEl = card.querySelector("time, .feed-shared-actor__sub-description");
-      const dateText = timeEl?.getAttribute("datetime") ?? timeEl?.textContent?.trim() ?? "";
+      const timeEl = card.querySelector(
+        "time, .feed-shared-actor__sub-description",
+      );
+      const relativeDate =
+        cardText.match(/\d+\s*(?:s|m|h|d|w|mo)\b/i)?.[0] ?? "";
+      const dateText =
+        timeEl?.getAttribute("datetime") ??
+        timeEl?.textContent?.trim() ??
+        relativeDate;
 
-      return { authorUrl, firstName, lastName, title, company, excerpt, postUrl, dateText };
+      return {
+        authorUrl,
+        firstName,
+        lastName,
+        title,
+        company,
+        excerpt,
+        postUrl,
+        dateText,
+      };
     });
   });
 
@@ -86,13 +195,17 @@ async function extractPostCards(page: Page, keyword: string): Promise<PostCard[]
     let publishedAt = new Date(r.dateText);
     if (isNaN(publishedAt.getTime())) {
       // Parse relative format
-      const relMatch = r.dateText.match(/^(\d+)\s*(s|m|h|d|w|mo)$/i);
+      const relMatch = r.dateText.match(/\b(\d+)\s*(s|m|h|d|w|mo)\b/i);
       if (relMatch) {
         const n = parseInt(relMatch[1]);
         const unit = relMatch[2].toLowerCase();
         const ms: Record<string, number> = {
-          s: 1000, m: 60_000, h: 3_600_000,
-          d: 86_400_000, w: 604_800_000, mo: 2_592_000_000,
+          s: 1000,
+          m: 60_000,
+          h: 3_600_000,
+          d: 86_400_000,
+          w: 604_800_000,
+          mo: 2_592_000_000,
         };
         publishedAt = new Date(now - n * (ms[unit] ?? 86_400_000));
       } else {
@@ -116,7 +229,11 @@ async function extractPostCards(page: Page, keyword: string): Promise<PostCard[]
   return results;
 }
 
-function buildContentSearchUrl(keyword: string, page = 1, geoUrn?: string | null): string {
+function buildContentSearchUrl(
+  keyword: string,
+  page = 1,
+  geoUrn?: string | null,
+): string {
   const base = "https://www.linkedin.com/search/results/content/";
   const params = new URLSearchParams({
     keywords: keyword,
@@ -148,7 +265,7 @@ export async function scrapeContentSearch(
   maxLeads: number,
   titleFilter?: string | null,
   companyFilter?: string | null,
-  locationFilter?: string | null
+  locationFilter?: string | null,
 ): Promise<{ collected: number; skipped: number; newLeads: CollectedLead[] }> {
   let collected = 0;
   let skipped = 0;
@@ -160,9 +277,16 @@ export async function scrapeContentSearch(
   });
 
   // Guard A: max 3 pages per session
-  const pagesToScrape = Math.min(MAX_PAGES_PER_SESSION, Math.ceil(maxLeads / 10));
+  const pagesToScrape = Math.min(
+    MAX_PAGES_PER_SESSION,
+    Math.ceil(maxLeads / 10),
+  );
 
-  for (let pageNum = 1; pageNum <= pagesToScrape && collected < maxLeads; pageNum++) {
+  for (
+    let pageNum = 1;
+    pageNum <= pagesToScrape && collected < maxLeads;
+    pageNum++
+  ) {
     const url = buildContentSearchUrl(keyword, pageNum, locationFilter);
     await navigateTo(page, url);
     await humanDelay(4_000, 8_000);
@@ -174,29 +298,46 @@ export async function scrapeContentSearch(
       if (collected >= maxLeads) break;
 
       // Guard F — post URL unique key
-      if (seenPostUrls.has(card.postUrl)) { skipped++; continue; }
+      if (seenPostUrls.has(card.postUrl)) {
+        skipped++;
+        continue;
+      }
       seenPostUrls.add(card.postUrl);
 
       // Check if post_url already stored
       const existingSignal = await prisma.postSignal.findUnique({
         where: { postUrl: card.postUrl },
       });
-      if (existingSignal) { skipped++; continue; }
+      if (existingSignal) {
+        skipped++;
+        continue;
+      }
 
       // Guard C — post freshness
       try {
         checkPostFreshness(card.publishedAt, dateRangeDays);
       } catch (e) {
-        if (e instanceof ContentSignalGuardError) { skipped++; continue; }
+        if (e instanceof ContentSignalGuardError) {
+          skipped++;
+          continue;
+        }
         throw e;
       }
 
       // Optional title/company filter
-      if (titleFilter && !card.title?.toLowerCase().includes(titleFilter.toLowerCase())) {
-        skipped++; continue;
+      if (
+        titleFilter &&
+        !card.title?.toLowerCase().includes(titleFilter.toLowerCase())
+      ) {
+        skipped++;
+        continue;
       }
-      if (companyFilter && !card.company?.toLowerCase().includes(companyFilter.toLowerCase())) {
-        skipped++; continue;
+      if (
+        companyFilter &&
+        !card.company?.toLowerCase().includes(companyFilter.toLowerCase())
+      ) {
+        skipped++;
+        continue;
       }
 
       // Upsert lead
@@ -230,11 +371,17 @@ export async function scrapeContentSearch(
       try {
         await checkAuthorDedup(lead.id);
       } catch (e) {
-        if (e instanceof ContentSignalGuardError) { skipped++; continue; }
+        if (e instanceof ContentSignalGuardError) {
+          skipped++;
+          continue;
+        }
         throw e;
       }
 
-      if (lead.blacklisted) { skipped++; continue; }
+      if (lead.blacklisted) {
+        skipped++;
+        continue;
+      }
 
       // Save post signal (Guard F ensures postUrl is unique)
       const postSignal = await prisma.postSignal.create({

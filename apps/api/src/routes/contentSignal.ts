@@ -13,6 +13,7 @@ export const contentSignalRouter: IRouter = Router();
 type CampaignReadyAccount = {
   status: string;
   cookiesEncrypted: string | null;
+  browserProfileStatus?: string | null;
   proxyId: string | null;
 };
 
@@ -23,8 +24,8 @@ function campaignAccountReadinessError(account: CampaignReadyAccount): string | 
   if (!account.proxyId) {
     return "Proxy required. Assign a matching residential proxy to this account before starting a campaign.";
   }
-  if (!account.cookiesEncrypted) {
-    return "LinkedIn session required. Connect or refresh this account's LinkedIn session before starting a campaign.";
+  if (!account.cookiesEncrypted && account.browserProfileStatus !== "AUTHENTICATED") {
+    return "LinkedIn session required. Connect the hosted browser profile or refresh this account's LinkedIn session before starting a campaign.";
   }
   return null;
 }
@@ -163,6 +164,7 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
           select: {
             status: true,
             cookiesEncrypted: true,
+            browserProfileStatus: true,
             proxyId: true,
           },
         },

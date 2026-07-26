@@ -1,6 +1,16 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { prisma, LeadSource } from "@linkedin-automation/db";
+import { searchScrapeQueue } from "@linkedin-automation/queue";
+import { remainingDailyCap } from "@linkedin-automation/guards";
+import { hasActiveBrowserSession } from "./browserSessions.js";
+import {
+  SEARCH_QUALIFICATION_TTL_MS,
+  REQUIRE_SEARCH_QUALIFICATION,
+  isSalesNavigatorUrl,
+  assertAccountReadyForScraping,
+  normalizeSearchUrlForQualification,
+} from "./searchScrapeGuards.js";
 
 export const leadsRouter: IRouter = Router();
 
@@ -246,6 +256,229 @@ leadsRouter.get("/export", async (req, res, next) => {
       `attachment; filename="leads-${new Date().toISOString().slice(0, 10)}.csv"`
     );
     res.send(lines.join("\n"));
+  } catch (err) {
+    next(err);
+  }
+});
+
+const SearchUrlSchema = z.object({
+  accountId: z.string().min(1),
+  searchUrl: z.string().url(),
+  source: z.enum(["LINKEDIN", "SALES_NAVIGATOR"]).default("LINKEDIN"),
+  leadLimit: z.number().int().min(1).max(200).optional(),
+});
+
+// POST /leads/search-urls — queue a search-scrape job against an account with
+// no campaign involved. Discovered profiles are saved straight to the lead
+// database (see searchScrapeProcessor) for later assignment to any campaign.
+leadsRouter.post("/search-urls", async (req, res, next) => {
+  try {
+    const { accountId, searchUrl, source, leadLimit } = SearchUrlSchema.parse(req.body);
+
+    if (source === "SALES_NAVIGATOR" && !isSalesNavigatorUrl(searchUrl)) {
+      res.status(422).json({
+        error: "Sales Navigator source requires a linkedin.com/sales search, list, or lead URL.",
+      });
+      return;
+    }
+    if (source === "LINKEDIN" && isSalesNavigatorUrl(searchUrl)) {
+      res.status(422).json({
+        error: "This is a Sales Navigator URL. Select Sales Navigator as the source.",
+      });
+      return;
+    }
+
+    const account = await prisma.account.findFirstOrThrow({
+      where: { id: accountId, userId: req.user.id },
+      select: {
+        id: true,
+        status: true,
+        cookiesEncrypted: true,
+        browserProfileStatus: true,
+        lastSearchQualifiedAt: true,
+        lastSearchQualifiedUrl: true,
+        lastSearchQualifiedSource: true,
+        lastSearchQualifiedNextButtons: true,
+        proxyId: true,
+        salesNavigatorEnabled: true,
+        timezone: true,
+      },
+    });
+
+    const readinessError = assertAccountReadyForScraping(account);
+    if (readinessError) {
+      res.status(422).json({ error: readinessError });
+      return;
+    }
+    if (source === "SALES_NAVIGATOR" && !account.salesNavigatorEnabled) {
+      res.status(422).json({
+        error: "Enable Sales Navigator on this account before scraping Sales Navigator URLs.",
+      });
+      return;
+    }
+
+    // Same 30-day checkpoint-caution + qualification-freshness rules as the
+    // campaign-scoped version (apps/api/src/routes/campaigns.ts) — multi-page
+    // pagination proved unsafe on recently-checkpointed accounts.
+    const CHECKPOINT_LOOKBACK_DAYS = 30;
+    const recentCheckpoint = await prisma.checkpoint.findFirst({
+      where: {
+        accountId: account.id,
+        detectedAt: {
+          gte: new Date(Date.now() - CHECKPOINT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000),
+        },
+      },
+    });
+    const openCheckpoint = await prisma.checkpoint.findFirst({
+      where: { accountId: account.id, resolvedAt: null },
+      select: { id: true },
+    });
+
+    const effectiveLeadLimit = leadLimit;
+    let leadLimitWarning: string | undefined;
+    if (openCheckpoint && leadLimit && leadLimit > 10) {
+      res.status(422).json({
+        error:
+          "This account has an unresolved LinkedIn checkpoint. Resolve it in the hosted browser before running multi-page search scraping.",
+      });
+      return;
+    }
+    if (recentCheckpoint && leadLimit && leadLimit > 10) {
+      leadLimitWarning =
+        "This account had a LinkedIn security checkpoint in the last 30 days. Multi-page search will still run with the requested lead count, but watch the job progress and pause if LinkedIn shows another checkpoint.";
+    }
+    if (REQUIRE_SEARCH_QUALIFICATION && effectiveLeadLimit && effectiveLeadLimit > 10) {
+      const qualifiedAt = account.lastSearchQualifiedAt?.getTime() ?? 0;
+      const qualificationFresh = Date.now() - qualifiedAt <= SEARCH_QUALIFICATION_TTL_MS;
+      const qualifiedUrl = account.lastSearchQualifiedUrl;
+      const requestedUrl = normalizeSearchUrlForQualification(searchUrl);
+      const sourceMatches = account.lastSearchQualifiedSource === source;
+      const urlMatches = qualifiedUrl === requestedUrl;
+      const hasNextPage = (account.lastSearchQualifiedNextButtons ?? 0) > 0;
+
+      if (!qualificationFresh || !urlMatches || !sourceMatches || !hasNextPage) {
+        const reason = !qualificationFresh
+          ? "No recent hosted-browser qualification exists for this account."
+          : !urlMatches
+          ? "The last qualified search URL does not match this URL."
+          : !sourceMatches
+          ? "The last qualified search source does not match this source."
+          : "The last qualified search did not expose a next-page control.";
+        res.status(422).json({
+          error: `${reason} Open the account's hosted browser, load this exact search URL while logged in, click Qualify search, then add the URL again for more than 10 leads.`,
+        });
+        return;
+      }
+    }
+    if (await hasActiveBrowserSession(req.user.id, account.id)) {
+      res.status(409).json({
+        error:
+          "Hosted browser is still open for this account. Close it from Accounts, then queue the search again so the worker can use the persistent profile.",
+      });
+      return;
+    }
+    const requiredSearchPages = effectiveLeadLimit ? Math.ceil(effectiveLeadLimit / 10) : 5;
+    const remainingSearchPages = await remainingDailyCap(
+      account.id,
+      "searchPage",
+      account.timezone ?? undefined
+    );
+    if (remainingSearchPages < requiredSearchPages) {
+      res.status(422).json({
+        error: `Not enough search-page capacity for this scrape. Requested ${effectiveLeadLimit ?? "default"} leads needs ${requiredSearchPages} search page${requiredSearchPages === 1 ? "" : "s"}, but this account has ${remainingSearchPages} search page${remainingSearchPages === 1 ? "" : "s"} remaining today. Lower the lead count, raise the account's Search Pages cap, or try again tomorrow.`,
+      });
+      return;
+    }
+
+    const job = await searchScrapeQueue.add("scrape-search", {
+      accountId: account.id,
+      searchUrl,
+      leadLimit: effectiveLeadLimit,
+      source,
+    });
+
+    res.status(201).json({
+      queued: 1,
+      jobId: job.id,
+      searchUrl,
+      source,
+      leadLimit: effectiveLeadLimit,
+      ...(leadLimitWarning ? { warning: leadLimitWarning } : {}),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+leadsRouter.get("/search-jobs", async (req, res, next) => {
+  try {
+    const accountId = z.string().min(1).parse(req.query.accountId);
+    await prisma.account.findFirstOrThrow({
+      where: { id: accountId, userId: req.user.id },
+      select: { id: true },
+    });
+
+    const jobs = await searchScrapeQueue.getJobs(
+      ["waiting", "active", "delayed", "completed", "failed"],
+      0,
+      24,
+      false
+    );
+
+    const scoped = await Promise.all(
+      jobs
+        .filter((job) => {
+          const data = job.data as { accountId?: string; campaignId?: string };
+          return data.accountId === accountId && !data.campaignId;
+        })
+        .map(async (job) => ({
+          id: job.id,
+          name: job.name,
+          state: await job.getState(),
+          attemptsMade: job.attemptsMade,
+          failedReason: job.failedReason ?? null,
+          timestamp: job.timestamp,
+          processedOn: job.processedOn ?? null,
+          finishedOn: job.finishedOn ?? null,
+          progress: job.progress,
+          data: job.data,
+          returnvalue: job.returnvalue ?? null,
+        }))
+    );
+
+    scoped.sort(
+      (a, b) =>
+        (b.finishedOn ?? b.processedOn ?? b.timestamp) -
+        (a.finishedOn ?? a.processedOn ?? a.timestamp)
+    );
+
+    res.json({ jobs: scoped });
+  } catch (err) {
+    next(err);
+  }
+});
+
+leadsRouter.delete("/search-jobs", async (req, res, next) => {
+  try {
+    const accountId = z.string().min(1).parse(req.query.accountId);
+    await prisma.account.findFirstOrThrow({
+      where: { id: accountId, userId: req.user.id },
+      select: { id: true },
+    });
+
+    // Only finished jobs are cleared — waiting/active/delayed ones are still
+    // doing work and stay visible until they resolve.
+    const jobs = await searchScrapeQueue.getJobs(["completed", "failed"], 0, 200, false);
+
+    let removed = 0;
+    for (const job of jobs) {
+      const data = job.data as { accountId?: string; campaignId?: string };
+      if (data.accountId !== accountId || data.campaignId) continue;
+      await job.remove();
+      removed++;
+    }
+
+    res.json({ removed });
   } catch (err) {
     next(err);
   }

@@ -12,53 +12,17 @@ import {
 } from "@linkedin-automation/queue";
 import { remainingDailyCap, renderTemplate, validateTemplate } from "@linkedin-automation/guards";
 import { hasActiveBrowserSession } from "./browserSessions.js";
+import {
+  SEARCH_QUALIFICATION_TTL_MS,
+  REQUIRE_SEARCH_QUALIFICATION,
+  isSalesNavigatorUrl,
+  assertAccountReadyForScraping as assertCampaignAccountReady,
+  normalizeSearchUrlForQualification,
+} from "./searchScrapeGuards.js";
 
 export const campaignsRouter: IRouter = Router();
 
 const NOTE_MAX = 300;
-const SEARCH_QUALIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
-const REQUIRE_SEARCH_QUALIFICATION =
-  process.env.LINKEDIN_REQUIRE_SEARCH_QUALIFICATION !== "false";
-
-function isSalesNavigatorUrl(value: string): boolean {
-  const url = new URL(value);
-  return (
-    url.hostname.endsWith("linkedin.com") &&
-    (url.pathname.startsWith("/sales/search/people") ||
-      url.pathname.startsWith("/sales/lists/people") ||
-      url.pathname.startsWith("/sales/lead/"))
-  );
-}
-
-type CampaignReadyAccount = {
-  id: string;
-  status: string;
-  cookiesEncrypted: string | null;
-  browserProfileStatus?: string | null;
-  proxyId: string | null;
-  salesNavigatorEnabled?: boolean;
-};
-
-function assertCampaignAccountReady(account: CampaignReadyAccount): string | null {
-  if (account.status !== "ACTIVE") {
-    return "Account is paused or restricted. Resume the account before starting a campaign.";
-  }
-  if (!account.proxyId) {
-    return "Proxy required. Assign a matching residential proxy to this account before starting a campaign.";
-  }
-  if (!account.cookiesEncrypted && account.browserProfileStatus !== "AUTHENTICATED") {
-    return "LinkedIn session required. Connect the hosted browser profile or refresh this account's LinkedIn session before starting a campaign.";
-  }
-  return null;
-}
-
-function normalizeSearchUrlForQualification(value: string): string {
-  const url = new URL(value);
-  url.hash = "";
-  url.searchParams.delete("page");
-  url.searchParams.sort();
-  return url.toString();
-}
 
 function isSalesNavigatorLeadUrl(value: string): boolean {
   try {

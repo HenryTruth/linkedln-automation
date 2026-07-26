@@ -2,12 +2,71 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { api, type Lead, type Campaign } from "@/lib/api";
+import { api, type Lead, type Campaign, type Account, type SearchScrapeCampaignJob } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { SkeletonTableRows } from "@/components/Skeleton";
 
 const STATUS_OPTIONS = ["", "NONE", "PENDING", "CONNECTED", "WITHDRAWN"];
 const LIMIT_OPTIONS = [25, 50, 100];
+
+const SEARCH_JOB_STYLES: Record<string, string> = {
+  waiting: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  active: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+  delayed: "border-violet-500/30 bg-violet-500/10 text-violet-300",
+  completed: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  failed: "border-red-500/30 bg-red-500/10 text-red-300",
+};
+
+function searchJobLabel(state: string) {
+  if (state === "waiting") return "Queued";
+  if (state === "active") return "Running now";
+  if (state === "delayed") return "Waiting to retry";
+  if (state === "completed") return "Completed";
+  if (state === "failed") return "Failed";
+  return state;
+}
+
+function searchJobDetail(job: SearchScrapeCampaignJob) {
+  if (job.state === "waiting") return "Accepted. The worker will pick this up automatically.";
+  if (job.state === "active") return "Browser automation is currently scraping this search URL.";
+  if (job.state === "delayed") return "The job is delayed, usually because it is retrying after a temporary failure.";
+  if (job.state === "completed") {
+    const scraped = job.returnvalue?.scraped;
+    if (typeof scraped === "number") {
+      if (scraped === 0) {
+        return "Scrape finished but found 0 profiles. LinkedIn may have served an unrecognized page layout or an expired session — check the Activity page for the landing URL and screenshot artifact.";
+      }
+      return `Scrape finished — discovered ${scraped} profile${scraped === 1 ? "" : "s"} across ${job.returnvalue?.pagesScraped ?? "?"} page${job.returnvalue?.pagesScraped === 1 ? "" : "s"}. They're saved as leads — refresh the table below.`;
+    }
+    return "Scrape finished. Newly discovered profiles should appear in the table below after refresh.";
+  }
+  if (job.state === "failed") return job.failedReason ?? "The search scrape failed. Open Jobs for the full payload and error.";
+  return "Search scrape job recorded.";
+}
+
+function fmtJobTime(value: number | null | undefined) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString();
+}
+
+// Mirrors isSalesNavigatorUrl in apps/api/src/routes/searchScrapeGuards.ts so
+// the source dropdown can auto-sync with whatever URL gets pasted in.
+function detectSearchSource(value: string): "LINKEDIN" | "SALES_NAVIGATOR" | null {
+  try {
+    const url = new URL(value);
+    if (!url.hostname.endsWith("linkedin.com")) return null;
+    if (
+      url.pathname.startsWith("/sales/search/people") ||
+      url.pathname.startsWith("/sales/lists/people") ||
+      url.pathname.startsWith("/sales/lead/")
+    ) {
+      return "SALES_NAVIGATOR";
+    }
+    return "LINKEDIN";
+  } catch {
+    return null;
+  }
+}
 
 interface ParsedLead {
   linkedinUrl: string;
@@ -74,7 +133,7 @@ export default function LeadsPage() {
   const [keyword, setKeyword] = useState("");
 
   // Add-single form
-  const [tab, setTab] = useState<"single" | "csv">("single");
+  const [tab, setTab] = useState<"single" | "csv" | "search">("single");
   const [sUrl, setSUrl] = useState("");
   const [sFirst, setSFirst] = useState("");
   const [sLast, setSLast] = useState("");
@@ -94,6 +153,19 @@ export default function LeadsPage() {
   const [importErrors, setImportErrors] = useState<
     Array<{ row: number; error: string }>
   >([]);
+
+  // Bulk search-URL form
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [searchAccountId, setSearchAccountId] = useState("");
+  const [searchUrl, setSearchUrl] = useState("");
+  const [searchSource, setSearchSource] = useState<"LINKEDIN" | "SALES_NAVIGATOR">("LINKEDIN");
+  const [searchLeadLimit, setSearchLeadLimit] = useState(10);
+  const [addingSearch, setAddingSearch] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
+  const [searchJobs, setSearchJobs] = useState<SearchScrapeCampaignJob[]>([]);
+  const [searchJobsLoading, setSearchJobsLoading] = useState(false);
+  const [clearingSearchJobs, setClearingSearchJobs] = useState(false);
 
   const fetchLeads = useCallback(() => {
     setLoading(true);
@@ -117,11 +189,77 @@ export default function LeadsPage() {
 
   useEffect(() => {
     api.campaigns.list().then(setCampaigns).catch(() => {});
+    api.accounts.list().then(setAccounts).catch(() => {});
   }, []);
 
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
+
+  function reloadSearchJobs() {
+    if (!searchAccountId) return;
+    setSearchJobsLoading(true);
+    api.leads
+      .searchJobs(searchAccountId)
+      .then((result) => {
+        setSearchJobs(result.jobs);
+        if (
+          result.jobs.some(
+            (job) => job.state === "completed" && (job.returnvalue?.scraped ?? 0) > 0
+          )
+        ) {
+          fetchLeads();
+        }
+      })
+      .catch(() => {})
+      .finally(() => setSearchJobsLoading(false));
+  }
+
+  useEffect(() => {
+    if (tab !== "search" || !searchAccountId) return;
+    reloadSearchJobs();
+    const interval = window.setInterval(reloadSearchJobs, 10_000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, searchAccountId]);
+
+  async function clearSearchJobHistory() {
+    if (!searchAccountId) return;
+    setClearingSearchJobs(true);
+    try {
+      await api.leads.clearSearchJobs(searchAccountId);
+      reloadSearchJobs();
+    } catch {
+      // Clearing history is cosmetic — a failure here shouldn't break the page.
+    } finally {
+      setClearingSearchJobs(false);
+    }
+  }
+
+  async function handleAddSearchUrl(e: React.FormEvent) {
+    e.preventDefault();
+    setAddingSearch(true);
+    setSearchError(null);
+    setSearchNotice(null);
+    try {
+      const result = await api.leads.searchUrls({
+        accountId: searchAccountId,
+        searchUrl,
+        source: searchSource,
+        leadLimit: searchLeadLimit,
+      });
+      setSearchNotice(
+        result.warning ??
+          `Search URL accepted and queued${result.jobId ? ` as job ${result.jobId}` : ""} for up to ${searchLeadLimit} leads. Discovered profiles are saved as leads directly — no campaign needed.`
+      );
+      setSearchUrl("");
+      reloadSearchJobs();
+    } catch (e) {
+      setSearchError((e as Error).message);
+    } finally {
+      setAddingSearch(false);
+    }
+  }
 
   async function handleAddOne(e: React.FormEvent) {
     e.preventDefault();
@@ -276,7 +414,7 @@ export default function LeadsPage() {
       <div className="app-panel overflow-hidden">
         {/* Tabs */}
         <div className="flex border-b border-white/[0.06] bg-slate-950/40 p-1">
-          {(["single", "csv"] as const).map((t) => (
+          {(["single", "csv", "search"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -286,7 +424,7 @@ export default function LeadsPage() {
                   : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              {t === "single" ? "Add Single Lead" : "Bulk CSV Import"}
+              {t === "single" ? "Add Single Lead" : t === "csv" ? "Bulk CSV Import" : "Search URL"}
             </button>
           ))}
         </div>
@@ -468,6 +606,188 @@ export default function LeadsPage() {
                     : "Paste CSV above"}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Bulk search-URL form */}
+          {tab === "search" && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-white/[0.06] bg-slate-800/50 p-4 text-xs leading-5 text-slate-300">
+                Paste a LinkedIn or Sales Navigator people-search URL and pick which
+                account&apos;s browser session should run it. Discovered profiles are
+                saved straight to the lead database — no campaign required. Requesting
+                more than 10 leads needs a recent search qualification on that account
+                (Accounts page hosted browser).
+              </div>
+
+              {searchError && (
+                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+                  {searchError}
+                </div>
+              )}
+              {searchNotice && (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+                  {searchNotice}
+                </div>
+              )}
+
+              <form onSubmit={handleAddSearchUrl} className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-300">
+                      Account *
+                    </label>
+                    <select
+                      required
+                      value={searchAccountId}
+                      onChange={(e) => setSearchAccountId(e.target.value)}
+                      className="field w-full"
+                    >
+                      <option value="">Choose account</option>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.email}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-300">
+                      Source
+                    </label>
+                    <select
+                      value={searchSource}
+                      onChange={(e) => setSearchSource(e.target.value as "LINKEDIN" | "SALES_NAVIGATOR")}
+                      className="field w-full"
+                    >
+                      <option value="LINKEDIN">LinkedIn people search</option>
+                      <option value="SALES_NAVIGATOR">Sales Navigator search/list</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-300">
+                    Search URL *
+                  </label>
+                  <input
+                    required
+                    value={searchUrl}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSearchUrl(value);
+                      const detected = detectSearchSource(value);
+                      if (detected) setSearchSource(detected);
+                    }}
+                    placeholder={
+                      searchSource === "SALES_NAVIGATOR"
+                        ? "https://www.linkedin.com/sales/search/people?query=..."
+                        : "https://www.linkedin.com/search/results/people/?keywords=doctor&geoUrn=..."
+                    }
+                    className="field w-full font-mono text-xs"
+                  />
+                  {searchUrl && detectSearchSource(searchUrl) && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Detected{" "}
+                      <span className="font-semibold text-slate-300">
+                        {detectSearchSource(searchUrl) === "SALES_NAVIGATOR"
+                          ? "Sales Navigator"
+                          : "LinkedIn people search"}
+                      </span>{" "}
+                      — source set automatically.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-300">
+                    Number of leads to import
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={searchLeadLimit}
+                    onChange={(e) =>
+                      setSearchLeadLimit(Math.min(200, Math.max(1, parseInt(e.target.value, 10) || 1)))
+                    }
+                    className="field w-40"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    LinkedIn shows 10 results per page — Vectra pages through search
+                    results until it collects this many leads (up to 200).
+                  </p>
+                </div>
+
+                <button type="submit" disabled={addingSearch || !searchAccountId} className="btn-primary">
+                  {addingSearch ? "Adding..." : "Add Search URL"}
+                </button>
+              </form>
+
+              {searchAccountId && (
+                <div className="rounded-2xl border border-white/[0.08] bg-slate-900/60 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                      Search job status
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={reloadSearchJobs}
+                        disabled={searchJobsLoading}
+                        className="btn-secondary px-3 py-1.5 text-xs"
+                      >
+                        {searchJobsLoading ? "Refreshing..." : "Refresh"}
+                      </button>
+                      <a
+                        href="/jobs?queue=searchScrape"
+                        className="btn-secondary px-3 py-1.5 text-xs text-violet-400"
+                      >
+                        Open Jobs
+                      </a>
+                      <button
+                        type="button"
+                        onClick={clearSearchJobHistory}
+                        disabled={clearingSearchJobs || searchJobs.length === 0}
+                        className="btn-secondary px-3 py-1.5 text-xs text-rose-400 disabled:opacity-40"
+                      >
+                        {clearingSearchJobs ? "Clearing..." : "Clear history"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {searchJobs.length === 0 ? (
+                      <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 text-sm text-slate-400">
+                        No search URL jobs have been queued for this account yet.
+                      </div>
+                    ) : (
+                      searchJobs.slice(0, 5).map((job) => (
+                        <div
+                          key={job.id ?? `${job.timestamp}-${job.data.searchUrl}`}
+                          className={`rounded-xl border p-3 ${
+                            SEARCH_JOB_STYLES[job.state] ?? "border-slate-700 bg-slate-800/50 text-slate-300"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold">
+                              {searchJobLabel(job.state)}
+                              {job.id ? ` · Job ${job.id}` : ""}
+                            </p>
+                            <p className="text-xs opacity-80">
+                              Updated {fmtJobTime(job.finishedOn ?? job.processedOn ?? job.timestamp)}
+                            </p>
+                          </div>
+                          <p className="mt-1 break-all font-mono text-[11px] opacity-80">
+                            {job.data.source ?? "LINKEDIN"} · {job.data.searchUrl ?? "Search URL unavailable"}
+                          </p>
+                          <p className="mt-2 text-xs leading-5 opacity-90">{searchJobDetail(job)}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

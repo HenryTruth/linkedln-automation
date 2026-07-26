@@ -854,6 +854,22 @@ export const api = {
       }),
     unblacklist: (id: string) =>
       apiFetch<Lead>(`/leads/${id}/blacklist`, { method: "DELETE" }),
+    searchUrls: (data: {
+      accountId: string;
+      searchUrl: string;
+      source?: "LINKEDIN" | "SALES_NAVIGATOR";
+      leadLimit?: number;
+    }) =>
+      apiFetch<{ queued: number; jobId?: string; searchUrl: string; source: "LINKEDIN" | "SALES_NAVIGATOR"; leadLimit?: number; warning?: string }>(
+        "/leads/search-urls",
+        { method: "POST", body: JSON.stringify(data) }
+      ),
+    searchJobs: (accountId: string) =>
+      apiFetch<{ jobs: SearchScrapeCampaignJob[] }>(`/leads/search-jobs?accountId=${accountId}`),
+    clearSearchJobs: (accountId: string) =>
+      apiFetch<{ removed: number }>(`/leads/search-jobs?accountId=${accountId}`, {
+        method: "DELETE",
+      }),
   },
 
   checkpoints: {

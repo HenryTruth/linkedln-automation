@@ -115,7 +115,7 @@ export async function searchScrapeProcessor(
       },
     });
 
-    if (campaignId && urls.length > 0) {
+    if (urls.length > 0) {
       const leadSource =
         source === "SALES_NAVIGATOR" ? LeadSource.SALES_NAVIGATOR : LeadSource.LINKEDIN_SEARCH;
       for (const linkedinUrl of urls) {
@@ -130,19 +130,23 @@ export async function searchScrapeProcessor(
           update: {},
         });
 
-        await prisma.campaignLead.upsert({
-          where: { campaignId_leadId: { campaignId, leadId: lead.id } },
-          create: { campaignId, leadId: lead.id },
-          update: {},
-        });
+        if (campaignId) {
+          await prisma.campaignLead.upsert({
+            where: { campaignId_leadId: { campaignId, leadId: lead.id } },
+            create: { campaignId, leadId: lead.id },
+            update: {},
+          });
+        }
       }
 
       // Fresh leads mean fresh work — a campaign that had auto-completed
       // goes back to ACTIVE so the new profiles can be scraped.
-      await prisma.campaign.updateMany({
-        where: { id: campaignId, status: CampaignStatus.COMPLETED },
-        data: { status: CampaignStatus.ACTIVE },
-      });
+      if (campaignId) {
+        await prisma.campaign.updateMany({
+          where: { id: campaignId, status: CampaignStatus.COMPLETED },
+          data: { status: CampaignStatus.ACTIVE },
+        });
+      }
     }
 
     return { scraped: urls.length, pagesScraped, lastUrl };

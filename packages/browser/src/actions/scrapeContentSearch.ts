@@ -136,9 +136,13 @@ export async function extractPostCards(
           ?.replace(/\b(?:Visit my website|View my newsletter)\b.*$/i, "")
           .trim() ?? "";
       const description = legacyDescription || currentDescription;
-      const [title = null, company = null] = description
-        .split(" at ")
-        .map((s: string) => s.trim() || null);
+      // LinkedIn headlines often chain extra pipe/bullet-separated taglines after
+      // "<title> at <company>" (e.g. "Founder & CEO at Acme | AI tagline | ...") —
+      // only the first segment after "at" is the actual company name.
+      const [rawTitle = "", rawCompanyRest = ""] = description.split(" at ");
+      const title = rawTitle.trim() || null;
+      const company =
+        rawCompanyRest.split(/\s*[|•·]\s*/)[0]?.trim() || null;
 
       // Post body — take first 300 chars
       const bodyEl =

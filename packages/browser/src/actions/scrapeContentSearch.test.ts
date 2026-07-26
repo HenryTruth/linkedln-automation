@@ -70,4 +70,37 @@ describe("extractPostCards", () => {
       company: "SNS Institutions",
     });
   });
+
+  it("only takes the first pipe-separated segment as company, not the whole tagline chain", async () => {
+    // Regression: LinkedIn headlines often chain extra taglines after the
+    // company with " | " separators, e.g. "Founder & CEO at Nexora AI | AI
+    // Innovation & Digital Transformation" — the old code took everything
+    // after "at" as the company, producing garbage like
+    // "Nexora AI | Artificial Intelligence & Machine Learning | ...".
+    document.documentElement.innerHTML = `
+      <main>
+        <div role="listitem" componentkey="expandedghiFeedType_FLAGSHIP_SEARCH">
+          <h2><span>Feed post</span></h2>
+          <a href="https://www.linkedin.com/in/maya-exley/"></a>
+          <a href="https://www.linkedin.com/in/maya-exley/">Maya Exley • 2nd</a>
+          <span>Founder &amp; CEO at Nexora AI | Artificial Intelligence &amp; Machine Learning | Building Intelligent Software Solutions | AI Innovation &amp; Digital Transformation</span>
+          <span>2d • Follow</span>
+          <p>Excited to share our latest AI automation milestone.</p>
+          <a href="https://www.linkedin.com/feed/update/urn:li:activity:1234567890/">
+            Excited to share our latest AI automation milestone.
+          </a>
+        </div>
+      </main>
+    `;
+
+    const cards = await extractPostCards(pageStub() as never, "AI automation");
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      firstName: "Maya",
+      lastName: "Exley",
+      title: "Founder & CEO",
+      company: "Nexora AI",
+    });
+  });
 });

@@ -643,6 +643,16 @@ export function ContentSignalPanel({
                         {sig.lead.company}
                       </p>
                     )}
+                    {!isLinkedPostUrl(sig.postUrl) && (
+                      <a
+                        href={sig.lead.linkedinUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-block text-xs font-semibold text-teal-500 hover:underline"
+                      >
+                        Open profile
+                      </a>
+                    )}
                   </div>
                   <span className="shrink-0 text-xs text-slate-400">
                     {new Date(sig.scrapedAt).toLocaleDateString()}

@@ -1855,9 +1855,14 @@ export default function CampaignDetailPage() {
                             Open
                           </a>
                         ) : (
-                          <span className="ml-auto shrink-0 font-medium text-teal-500/70">
-                            Search result
-                          </span>
+                          <a
+                            href={cl.lead.linkedinUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ml-auto shrink-0 font-semibold text-teal-500 hover:underline"
+                          >
+                            Open profile
+                          </a>
                         )}
                       </div>
                     </td>

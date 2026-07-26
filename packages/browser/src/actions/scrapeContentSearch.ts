@@ -34,6 +34,29 @@ async function loadContentSearchResults(page: Page): Promise<void> {
   await humanDelay(500, 900);
 }
 
+async function harvestContentSearchResults(page: Page, keyword: string): Promise<PostCard[]> {
+  const cards = new Map<string, PostCard>();
+  const remember = (next: PostCard[]) => {
+    for (const card of next) {
+      cards.set(`${card.postUrl}:${card.authorUrl}`, card);
+    }
+  };
+
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await humanDelay(500, 900);
+  remember(await extractPostCards(page, keyword));
+
+  // LinkedIn virtualizes content search results, so the DOM often only contains
+  // the cards near the current viewport. Harvest while moving down the page.
+  for (let i = 0; i < 8; i++) {
+    await page.mouse.wheel(0, 900);
+    await humanDelay(700, 1_300);
+    remember(await extractPostCards(page, keyword));
+  }
+
+  return Array.from(cards.values());
+}
+
 export async function extractPostCards(
   page: Page,
   keyword: string,
@@ -152,7 +175,9 @@ export async function extractPostCards(
       const bodyEl =
         card.querySelector(".feed-shared-update-v2__description") ??
         card.querySelector(".feed-shared-text") ??
-        card.querySelector(".update-components-text");
+        card.querySelector(".update-components-text") ??
+        card.querySelector("[data-testid='expandable-text-box']") ??
+        card.querySelector("p");
       const legacyExcerpt = bodyEl?.textContent?.trim() ?? "";
       const currentExcerpt = cardText
         .replace(/^Feed post\s*/i, "")
@@ -387,7 +412,7 @@ export async function scrapeContentSearch(
       scanned,
       leadLimit: maxLeads,
     });
-    const cards = await extractPostCards(page, keyword);
+    const cards = await harvestContentSearchResults(page, keyword);
     if (cards.length === 0) break;
 
     for (const card of cards) {

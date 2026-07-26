@@ -51,10 +51,14 @@ function includePostRelations() {
 }
 
 async function assertAccountOwner(accountId: string, userId: string) {
-  return prisma.account.findFirstOrThrow({
+  const account = await prisma.account.findFirst({
     where: { id: accountId, userId },
     select: { id: true },
   });
+  if (!account) {
+    throw new Error("Account not found");
+  }
+  return account;
 }
 
 function makeDraft(data: z.infer<typeof GeneratePostSchema>) {

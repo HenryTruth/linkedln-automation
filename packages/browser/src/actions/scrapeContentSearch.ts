@@ -81,6 +81,10 @@ export async function extractPostCards(
     };
 
     return feed.map((card) => {
+      const componentKey =
+        card.getAttribute("componentkey") ??
+        card.querySelector("[componentkey]")?.getAttribute("componentkey") ??
+        "";
       // Author profile link
       const authorAnchors = Array.from(
         card.querySelectorAll("a[href*='/in/']"),
@@ -164,20 +168,40 @@ export async function extractPostCards(
       const excerpt = (legacyExcerpt || currentExcerpt).slice(0, 300);
 
       // Permalink — timestamp link
-      const permalinkAnchor = Array.from(card.querySelectorAll("a[href]")).find(
-        (a) => {
-          const href = (a as HTMLAnchorElement).href;
-          return (
-            href.includes("/feed/update/") ||
-            href.includes("/activity/") ||
-            href.includes("/posts/") ||
-            href.includes("/pulse/")
-          );
-        },
-      ) as HTMLAnchorElement | undefined;
-      const postUrl = permalinkAnchor?.href
-        ? normalizeLinkedInUrl(permalinkAnchor.href)
-        : "";
+      const permalinkFromHref = (href: string) => {
+        if (
+          href.includes("/feed/update/") ||
+          href.includes("/activity/") ||
+          href.includes("/posts/") ||
+          href.includes("/pulse/")
+        ) {
+          return normalizeLinkedInUrl(href);
+        }
+
+        try {
+          const url = new URL(href);
+          const highlightedUpdateUrn = url.searchParams.get("highlightedUpdateUrn");
+          const activityId = highlightedUpdateUrn?.match(
+            /urn:li:activity:(\d+)/,
+          )?.[1];
+          if (activityId) {
+            return `https://www.linkedin.com/feed/update/urn:li:activity:${activityId}`;
+          }
+        } catch {
+          return "";
+        }
+
+        return "";
+      };
+      const postUrl =
+        Array.from(card.querySelectorAll("a[href]"))
+          .map((a) => permalinkFromHref((a as HTMLAnchorElement).href))
+          .find(Boolean) ??
+        (componentKey
+          ? `linkedin-search-card:${componentKey}`
+          : `linkedin-search-card:${encodeURIComponent(
+              `${authorUrl}:${excerpt.slice(0, 120)}`,
+            )}`);
 
       // Published date — from time element or aria-label
       const timeEl = card.querySelector(

@@ -103,4 +103,59 @@ describe("extractPostCards", () => {
       company: "Nexora AI",
     });
   });
+
+  it("keeps visible profile posts even when LinkedIn omits a permalink", async () => {
+    document.documentElement.innerHTML = `
+      <main>
+        <div role="listitem" componentkey="expandedlivecardFeedType_FLAGSHIP_SEARCH">
+          <h2><span>Feed post</span></h2>
+          <a href="https://www.linkedin.com/in/elizabeth-olawumi-5374283a7/"></a>
+          <a href="https://www.linkedin.com/in/elizabeth-olawumi-5374283a7/">
+            Elizabeth Olawumi • 3rd+
+          </a>
+          <span>AI Operations &amp; Workflow Automation Specialist | CRM, AI Systems &amp; Process Automation</span>
+          <span>3h • Follow</span>
+          <span data-testid="expandable-text-box">
+            Working in automation has taught me something useful about AI systems.
+          </span>
+          <button>Like</button><button>Comment</button><button>Repost</button><button>Send</button>
+        </div>
+      </main>
+    `;
+
+    const cards = await extractPostCards(pageStub() as never, "AI automation");
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      authorUrl: "https://www.linkedin.com/in/elizabeth-olawumi-5374283a7",
+      firstName: "Elizabeth",
+      lastName: "Olawumi",
+      postUrl: "linkedin-search-card:expandedlivecardFeedType_FLAGSHIP_SEARCH",
+    });
+    expect(cards[0].excerpt).toContain("Working in automation");
+  });
+
+  it("builds a real feed URL from highlighted group result URNs", async () => {
+    document.documentElement.innerHTML = `
+      <main>
+        <div role="listitem" componentkey="expandedgroupFeedType_FLAGSHIP_SEARCH">
+          <h2><span>Feed post</span></h2>
+          <a href="https://www.linkedin.com/in/syed-kamran-mehdi/">Syed Kamran Mehdi • 3rd+</a>
+          <span>Chief Executives: AI Strategy, Enterprise ROI &amp; Scale</span>
+          <span>3d • Join</span>
+          <p>AI is rapidly transforming engineering.</p>
+          <a href="https://www.linkedin.com/groups/2153908/?q=highlightedFeedForGroups&amp;highlightedUpdateUrn=urn%3Ali%3Aactivity%3A7485923183502647297">
+            Chief Executives: AI Strategy, Enterprise ROI &amp; Scale
+          </a>
+        </div>
+      </main>
+    `;
+
+    const cards = await extractPostCards(pageStub() as never, "AI automation");
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0].postUrl).toBe(
+      "https://www.linkedin.com/feed/update/urn:li:activity:7485923183502647297",
+    );
+  });
 });

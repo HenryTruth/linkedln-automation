@@ -1845,14 +1845,20 @@ export default function CampaignDetailPage() {
                       <div className="flex items-start gap-2 rounded-2xl border border-teal-500/20 bg-teal-500/5 p-3 text-xs text-teal-300">
                         <span className="shrink-0 font-medium">Post:</span>
                         <span className="italic line-clamp-2">&quot;{cl.postSignal.excerpt}&quot;</span>
-                        <a
-                          href={cl.postSignal.postUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="ml-auto shrink-0 font-semibold text-teal-400 hover:underline"
-                        >
-                          Open
-                        </a>
+                        {/^https?:\/\//i.test(cl.postSignal.postUrl) ? (
+                          <a
+                            href={cl.postSignal.postUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ml-auto shrink-0 font-semibold text-teal-400 hover:underline"
+                          >
+                            Open
+                          </a>
+                        ) : (
+                          <span className="ml-auto shrink-0 font-medium text-teal-500/70">
+                            Search result
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -119,6 +119,10 @@ function jobDetail(job: ContentSignalJob) {
   return "Content scrape job recorded.";
 }
 
+function isLinkedPostUrl(value: string) {
+  return /^https?:\/\//i.test(value);
+}
+
 interface ContentSignalPanelProps {
   campaignId: string;
   initialConfig?: ContentSignalConfig | null;
@@ -602,14 +606,20 @@ export function ContentSignalPanel({
                   <span className="text-slate-400">Posted:</span>{" "}
                   {relativeDate(sig.publishedAt)}
                 </p>
-                <a
-                  href={sig.postUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 inline-block font-semibold text-teal-400 hover:underline"
-                >
-                  View original post
-                </a>
+                {isLinkedPostUrl(sig.postUrl) ? (
+                  <a
+                    href={sig.postUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block font-semibold text-teal-400 hover:underline"
+                  >
+                    View original post
+                  </a>
+                ) : (
+                  <p className="mt-1 font-medium text-slate-500">
+                    Captured from search
+                  </p>
+                )}
               </div>
 
               {/* Author + excerpt */}

@@ -147,6 +147,15 @@ export function ContentSignalPanel({
   const [dateRange, setDateRange] = useState(initialConfig?.dateRangeDays ?? 7);
   const [maxLeads, setMaxLeads] = useState(initialConfig?.maxLeads ?? 50);
   const [maxPagesPerRun, setMaxPagesPerRun] = useState(initialConfig?.maxPagesPerRun ?? 3);
+  const [autoContinueUntilTarget, setAutoContinueUntilTarget] = useState(
+    initialConfig?.autoContinueUntilTarget ?? false
+  );
+  const [autoContinueDelayMinutes, setAutoContinueDelayMinutes] = useState(
+    initialConfig?.autoContinueDelayMinutes ?? 60
+  );
+  const [autoContinueEmptyRunsLimit, setAutoContinueEmptyRunsLimit] = useState(
+    initialConfig?.autoContinueEmptyRunsLimit ?? 3
+  );
   const [titleFilter, setTitleFilter] = useState(initialConfig?.titleFilter ?? "");
   const [companyFilter, setCompanyFilter] = useState(initialConfig?.companyFilter ?? "");
   const [locationFilter, setLocationFilter] = useState(initialConfig?.locationFilter ?? "");
@@ -214,6 +223,9 @@ export function ContentSignalPanel({
         dateRangeDays: dateRange,
         maxLeads,
         maxPagesPerRun,
+        autoContinueUntilTarget,
+        autoContinueDelayMinutes,
+        autoContinueEmptyRunsLimit,
         titleFilter: titleFilter || null,
         companyFilter: companyFilter || null,
         locationFilter: locationFilter || null,
@@ -372,6 +384,53 @@ export function ContentSignalPanel({
             >
               Reset to page 1
             </button>
+          </div>
+
+          <div className="grid gap-4 rounded-2xl border border-white/[0.06] bg-slate-950/30 p-4 md:grid-cols-[1.3fr_1fr_1fr] md:items-end">
+            <label className="flex items-start gap-3 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={autoContinueUntilTarget}
+                onChange={(e) => setAutoContinueUntilTarget(e.target.checked)}
+                className="mt-1 size-4 rounded border-white/20 bg-slate-900"
+              />
+              <span>
+                <span className="block font-semibold text-slate-200">
+                  Continue until target is reached
+                </span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  Queues more scrape batches while the campaign is below max leads and safety caps allow it.
+                </span>
+              </span>
+            </label>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
+                Delay between batches
+              </label>
+              <input
+                type="number"
+                min={15}
+                max={1440}
+                value={autoContinueDelayMinutes}
+                onChange={(e) => setAutoContinueDelayMinutes(Number(e.target.value))}
+                className="field w-full"
+              />
+              <p className="mt-1 text-xs text-slate-500">Minutes. Min 15.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-300">
+                Stop after empty batches
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={autoContinueEmptyRunsLimit}
+                onChange={(e) => setAutoContinueEmptyRunsLimit(Number(e.target.value))}
+                className="field w-full"
+              />
+              <p className="mt-1 text-xs text-slate-500">Consecutive batches with 0 new leads.</p>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -36,6 +36,9 @@ const ConfigSchema = z.object({
   maxLeads: z.number().int().min(1).max(200).default(50),
   maxPagesPerRun: z.number().int().min(1).max(10).default(3),
   nextPageToScrape: z.number().int().min(1).max(100).optional(),
+  autoContinueUntilTarget: z.boolean().default(false),
+  autoContinueDelayMinutes: z.number().int().min(15).max(24 * 60).default(60),
+  autoContinueEmptyRunsLimit: z.number().int().min(1).max(10).default(3),
   titleFilter: z.string().optional().nullable(),
   companyFilter: z.string().optional().nullable(),
   locationFilter: z.string().optional().nullable(),
@@ -160,6 +163,7 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
       where: { id: req.params.campaignId, account: { userId: req.user.id } },
       include: {
         contentSignalConfig: true,
+        _count: { select: { leads: true } },
         account: {
           select: {
             status: true,
@@ -188,6 +192,12 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
       return;
     }
 
+    const remainingLeadTarget = Math.max(0, config.maxLeads - campaign._count.leads);
+    if (remainingLeadTarget <= 0) {
+      res.status(422).json({ error: "Content Signal target already reached. Increase max leads or remove leads before running again." });
+      return;
+    }
+
     const job = await contentSignalQueue.add(
       "content-signal-scrape",
       {
@@ -202,11 +212,16 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
         companyFilter: config.companyFilter,
         locationFilter: config.locationFilter,
         connectionNoteTemplate: config.connectionNoteTemplate,
+        autoContinueUntilTarget: config.autoContinueUntilTarget,
+        emptyBatchCount: 0,
       },
       { jobId: `campaign-${campaign.id}-content-signal-${Date.now()}` }
     );
 
-    const pageCount = Math.min(config.maxPagesPerRun, Math.ceil(config.maxLeads / 10));
+    const pageCount = Math.min(
+      config.maxPagesPerRun,
+      Math.max(1, Math.ceil(remainingLeadTarget / 10))
+    );
     res.json({
       queued: true,
       keyword: config.keyword,
@@ -214,6 +229,7 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
       startPage: config.nextPageToScrape,
       maxPagesPerRun: config.maxPagesPerRun,
       pageCount,
+      autoContinueUntilTarget: config.autoContinueUntilTarget,
     });
   } catch (err) {
     next(err);

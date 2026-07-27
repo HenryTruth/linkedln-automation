@@ -103,6 +103,8 @@ export interface ContentSignalJobData {
   locationFilter?: string | null;
   /** Guard D: connection note template — must include {{postTopic}}, {{postExcerpt}}, or {{postDate}} */
   connectionNoteTemplate?: string | null;
+  autoContinueUntilTarget?: boolean;
+  emptyBatchCount?: number;
 }
 
 export const connectQueue = new Queue<ConnectJobData>("connect", {

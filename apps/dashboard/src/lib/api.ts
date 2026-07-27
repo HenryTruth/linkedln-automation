@@ -293,6 +293,9 @@ export interface ContentSignalConfig {
   maxLeads: number;
   maxPagesPerRun: number;
   nextPageToScrape: number;
+  autoContinueUntilTarget: boolean;
+  autoContinueDelayMinutes: number;
+  autoContinueEmptyRunsLimit: number;
   titleFilter?: string | null;
   companyFilter?: string | null;
   locationFilter?: string | null;

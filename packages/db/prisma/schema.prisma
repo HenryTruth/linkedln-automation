@@ -363,6 +363,9 @@ model ContentSignalConfig {
   connectionNoteTemplate String?   @db.Text
   maxPagesPerRun         Int       @default(3)
   nextPageToScrape       Int       @default(1)
+  autoContinueUntilTarget Boolean   @default(false)
+  autoContinueDelayMinutes Int      @default(60)
+  autoContinueEmptyRunsLimit Int    @default(3)
   lastScrapedAt          DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt

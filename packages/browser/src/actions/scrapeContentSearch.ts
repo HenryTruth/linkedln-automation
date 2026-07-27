@@ -92,6 +92,15 @@ export async function extractPostCards(
     const cleanText = (value: string | null | undefined) =>
       (value ?? "").replace(/\s+/g, " ").trim();
 
+    const isActorMetaText = (value: string) =>
+      /^•?\s*(?:1st|2nd|3rd\+?|Follow|Join)\s*$/i.test(value) ||
+      /^\d+\s*(?:s|m|h|d|w|mo)\b(?:\s*•\s*(?:Edited\s*)?)?$/i.test(value) ||
+      /^(?:Follow|Join|Connect|Message)$/i.test(value);
+
+    const isPostChromeText = (value: string) =>
+      /^(?:Feed post|Like|Comment|Repost|Send|Learn more|Show results)$/i.test(value) ||
+      /^(?:\d+\s+)?(?:reaction|reactions|comment|comments|repost|reposts)$/i.test(value);
+
     const normalizeLinkedInUrl = (href: string) => {
       try {
         const url = new URL(href);
@@ -150,6 +159,38 @@ export async function extractPostCards(
           .querySelector(".feed-shared-actor__description")
           ?.textContent?.trim() ??
         "";
+      const spanRecords = Array.from(card.querySelectorAll("span"))
+        .map((span) => ({
+          text: cleanText(span.textContent),
+          inPostBody: Boolean(
+            span.closest(
+              ".feed-shared-update-v2__description, .feed-shared-text, .update-components-text, [data-testid='expandable-text-box'], p",
+            ),
+          ),
+        }))
+        .filter(({ text }) => Boolean(text));
+      const currentStructuredDescription = (() => {
+        if (!fullName) return "";
+        const nameIndex = spanRecords.findIndex(
+          ({ text }) => text === fullName || text.startsWith(`${fullName} •`),
+        );
+        if (nameIndex < 0) return "";
+
+        for (const { text, inPostBody } of spanRecords.slice(nameIndex + 1)) {
+          if (inPostBody) break;
+          if (
+            text === fullName ||
+            text.startsWith(`${fullName} •`) ||
+            isActorMetaText(text) ||
+            isPostChromeText(text)
+          ) {
+            continue;
+          }
+          if (text.length > 260) break;
+          return text;
+        }
+        return "";
+      })();
       const cardText = cleanText(card.textContent);
       const nameInText = fullName ? cardText.indexOf(fullName) : -1;
       const afterName =
@@ -162,7 +203,8 @@ export async function extractPostCards(
           .split(/\d+\s*(?:s|m|h|d|w|mo)\b\s*•/i)[0]
           ?.replace(/\b(?:Visit my website|View my newsletter)\b.*$/i, "")
           .trim() ?? "";
-      const description = legacyDescription || currentDescription;
+      const description =
+        legacyDescription || currentStructuredDescription || currentDescription;
       // LinkedIn headlines often chain extra pipe/bullet-separated taglines after
       // "<title> at <company>" (e.g. "Founder & CEO at Acme | AI tagline | ...") —
       // only the first segment after "at" is the actual company name.

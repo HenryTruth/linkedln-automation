@@ -104,6 +104,42 @@ describe("extractPostCards", () => {
     });
   });
 
+  it("uses the actor headline span when full-card text slicing stops at timestamp chrome", async () => {
+    // Live content-search cards expose the headline as a standalone actor span.
+    // This protects against card.textContent ordering where the timestamp/follow
+    // controls appear before the headline, making the old after-name split empty.
+    document.documentElement.innerHTML = `
+      <main>
+        <div role="listitem" componentkey="expandedtimestampFeedType_FLAGSHIP_SEARCH">
+          <h2><span>Feed post</span></h2>
+          <a href="https://www.linkedin.com/in/toni-adele/"></a>
+          <a href="https://www.linkedin.com/in/toni-adele/">
+            <span>Toni Adele • 3rd+</span>
+          </a>
+          <span>2d •</span>
+          <span>Follow</span>
+          <span>Revenue Operations Lead at Meridian Systems | AI Automation</span>
+          <p>
+            AI automation is changing the way revenue teams work every day.
+          </p>
+          <a href="https://www.linkedin.com/feed/update/urn:li:activity:7894561230/">
+            AI automation is changing the way revenue teams work every day.
+          </a>
+        </div>
+      </main>
+    `;
+
+    const cards = await extractPostCards(pageStub() as never, "AI automation");
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      firstName: "Toni",
+      lastName: "Adele",
+      title: "Revenue Operations Lead",
+      company: "Meridian Systems",
+    });
+  });
+
   it("keeps visible profile posts even when LinkedIn omits a permalink", async () => {
     document.documentElement.innerHTML = `
       <main>

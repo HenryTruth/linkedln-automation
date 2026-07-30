@@ -540,6 +540,44 @@ export default function PostsPage() {
                     }
                     placeholder="Optional media description"
                   />
+                  {item.url.trim() && (
+                    <div className="sm:col-span-3">
+                      {item.type === "IMAGE" ? (
+                        <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-slate-950">
+                          <img
+                            src={item.url}
+                            alt={item.title || "Generated post image preview"}
+                            className="h-64 w-full object-contain"
+                          />
+                        </div>
+                      ) : item.type === "DOCUMENT" ? (
+                        <div className="rounded-xl border border-white/[0.08] bg-slate-950 p-3">
+                          <iframe
+                            src={item.url}
+                            title={item.title || "Generated document preview"}
+                            className="h-72 w-full rounded-lg bg-white"
+                          />
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex text-xs font-semibold text-teal-400 hover:underline"
+                          >
+                            Open document preview
+                          </a>
+                        </div>
+                      ) : (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex text-xs font-semibold text-teal-400 hover:underline"
+                        >
+                          Preview {item.type.toLowerCase()} URL
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

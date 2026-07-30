@@ -60,7 +60,7 @@ export function getLinkedInConfig() {
 }
 
 function getLinkedInOAuthScopes() {
-  return process.env.LINKEDIN_OAUTH_SCOPES ?? "w_member_social";
+  return process.env.LINKEDIN_OAUTH_SCOPES ?? "openid profile w_member_social";
 }
 
 function stateSecret() {

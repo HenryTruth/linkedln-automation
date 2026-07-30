@@ -6,8 +6,10 @@ import {
   WarmUpError,
   AnomalyError,
   AccountPausedError,
+  IpMismatchError,
+  MissingProxyError,
 } from "@linkedin-automation/guards";
-import { BrowserProfileInUseError } from "@linkedin-automation/browser";
+import { BrowserProfileInUseError, ProxyHealthError } from "@linkedin-automation/browser";
 
 export function errorMiddleware(
   err: unknown,
@@ -31,7 +33,10 @@ export function errorMiddleware(
     err instanceof WarmUpError ||
     err instanceof AnomalyError ||
     err instanceof AccountPausedError ||
-    err instanceof BrowserProfileInUseError
+    err instanceof IpMismatchError ||
+    err instanceof MissingProxyError ||
+    err instanceof BrowserProfileInUseError ||
+    err instanceof ProxyHealthError
   ) {
     res.status(409).json({ error: (err as Error).message });
     return;

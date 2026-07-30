@@ -768,6 +768,10 @@ export const api = {
       apiFetch<{ ok: boolean }>(`/accounts/${accountId}/browser-session/stop`, {
         method: "POST",
       }),
+    logout: (accountId: string) =>
+      apiFetch<{ ok: boolean }>(`/accounts/${accountId}/browser-session/logout`, {
+        method: "POST",
+      }),
     status: (accountId: string) =>
       apiFetch<BrowserSessionStatus>(`/accounts/${accountId}/browser-session/status`),
     navigate: (accountId: string, url: string) =>

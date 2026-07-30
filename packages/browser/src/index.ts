@@ -1,4 +1,9 @@
-export { BrowserWorker, BrowserProfileInUseError } from "./worker.js";
+export {
+  BrowserWorker,
+  BrowserProfileInUseError,
+  ProxyHealthError,
+  clearBrowserProfile,
+} from "./worker.js";
 export { saveCookies, loadCookies } from "./session.js";
 export {
   getProxyForAccount,

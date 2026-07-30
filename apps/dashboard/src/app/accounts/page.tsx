@@ -862,6 +862,30 @@ export default function AccountsPage() {
     }
   }
 
+  async function handleLogoutLinkedIn(accountId: string) {
+    setBrowserBusy(accountId);
+    clearAccountNotice(accountId);
+    try {
+      await api.browserSessions.logout(accountId);
+      setBrowserPanel(accountId, {
+        open: false,
+        status: undefined,
+        url: LINKEDIN_LOGIN_URL,
+        refreshKey: Date.now(),
+      });
+      await reload();
+      setAccountNotice(
+        accountId,
+        "success",
+        "LinkedIn was logged out from the hosted browser. Open Connect / Login to sign in again."
+      );
+    } catch (e) {
+      setAccountNotice(accountId, "error", (e as Error).message);
+    } finally {
+      setBrowserBusy(null);
+    }
+  }
+
   async function refreshBrowser(accountId: string) {
     setBrowserBusy(accountId);
     try {
@@ -1332,6 +1356,14 @@ export default function AccountsPage() {
                         Stop
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => handleLogoutLinkedIn(account.id)}
+                      disabled={browserBusy === account.id}
+                      className="rounded-xl border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                    >
+                      Log out LinkedIn
+                    </button>
                   </div>
                 </div>
 

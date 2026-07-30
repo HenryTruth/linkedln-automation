@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { prisma } from "@linkedin-automation/db";
-import { BrowserWorker } from "@linkedin-automation/browser";
+import { BrowserWorker, clearBrowserProfile } from "@linkedin-automation/browser";
 
 export const browserSessionsRouter: IRouter = Router();
 
@@ -145,18 +145,20 @@ export async function hasActiveBrowserSession(
 }
 
 browserSessionsRouter.post("/:id/browser-session/start", async (req, res, next) => {
+  let accountId: string | null = null;
+  let worker: BrowserWorker | null = null;
   try {
     const schema = z.object({
       url: z.string().url().optional(),
     });
     const { url = DEFAULT_URL } = schema.parse(req.body ?? {});
-    const accountId = req.params.id;
+    accountId = req.params.id;
     await assertAccountOwner(req.user.id, accountId);
 
     const sessionKey = key(req.user.id, accountId);
     await closeSession(sessionKey);
 
-    const worker = new BrowserWorker(accountId, {
+    worker = new BrowserWorker(accountId, {
       allowPaused: true,
       usePersistentProfile: true,
     });
@@ -177,6 +179,22 @@ browserSessionsRouter.post("/:id/browser-session/start", async (req, res, next) 
     await persistBrowserSummary(accountId, summary);
     res.json(summary);
   } catch (err) {
+    if (worker) {
+      await worker.close().catch(() => {});
+    }
+    if (accountId) {
+      const message = err instanceof Error ? err.message : "Unable to start hosted browser.";
+      await prisma.account
+        .update({
+          where: { id: accountId },
+          data: {
+            browserProfileStatus: "UNKNOWN",
+            browserProfileLastCheckedAt: new Date(),
+            browserProfileLastCheckError: message,
+          },
+        })
+        .catch(() => {});
+    }
     next(err);
   }
 });
@@ -185,6 +203,48 @@ browserSessionsRouter.post("/:id/browser-session/stop", async (req, res, next) =
   try {
     await assertAccountOwner(req.user.id, req.params.id);
     await closeSession(key(req.user.id, req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+browserSessionsRouter.post("/:id/browser-session/logout", async (req, res, next) => {
+  try {
+    const accountId = req.params.id;
+    await assertAccountOwner(req.user.id, accountId);
+
+    const session = await getSession(req.user.id, accountId);
+    if (session) {
+      await session.page.context().clearCookies().catch(() => {});
+      await session.page
+        .evaluate(() => {
+          localStorage.clear();
+          sessionStorage.clear();
+        })
+        .catch(() => {});
+    }
+
+    await closeSession(key(req.user.id, accountId));
+    await clearBrowserProfile(accountId);
+    await prisma.account.update({
+      where: { id: accountId },
+      data: {
+        cookiesEncrypted: null,
+        cookiesConsentAt: null,
+        browserProfileStatus: "LOGIN_REQUIRED",
+        browserProfileLastCheckedAt: new Date(),
+        browserProfileLastCheckError:
+          "LinkedIn was logged out from the hosted browser.",
+        lastSearchQualifiedAt: null,
+        lastSearchQualifiedUrl: null,
+        lastSearchQualifiedSource: null,
+        lastSearchQualifiedProfileLinks: null,
+        lastSearchQualifiedNextButtons: null,
+        lastSearchQualificationError: null,
+      },
+    });
+
     res.json({ ok: true });
   } catch (err) {
     next(err);

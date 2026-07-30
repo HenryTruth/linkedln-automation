@@ -1,6 +1,6 @@
 import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { prisma, AccountStatus, type Proxy } from "@linkedin-automation/db";
 import {
@@ -43,8 +43,27 @@ export class BrowserProfileInUseError extends Error {
   }
 }
 
+export class ProxyHealthError extends Error {
+  constructor(accountId: string) {
+    super(
+      `Proxy for account ${accountId} is unhealthy. Check the proxy credentials and network, then try opening the hosted browser again.`
+    );
+    this.name = "ProxyHealthError";
+  }
+}
+
 function safeName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 120);
+}
+
+export async function clearBrowserProfile(
+  accountId: string,
+  profileRoot = DEFAULT_PROFILE_ROOT
+): Promise<void> {
+  await rm(path.join(profileRoot, safeName(accountId)), {
+    recursive: true,
+    force: true,
+  });
 }
 
 export interface BrowserWorkerOptions {
@@ -107,7 +126,7 @@ export class BrowserWorker {
       const healthy = await import("./proxy.js").then((m) =>
         m.checkProxyHealth(proxy, proxySessionId ?? undefined)
       );
-      if (!healthy) throw new Error(`Proxy for account ${this.accountId} is unhealthy`);
+      if (!healthy) throw new ProxyHealthError(this.accountId);
 
       // Guard 10: capture the proxy exit IP at session start so we can detect
       // mid-session rotation (residential proxies occasionally rotate unexpectedly).

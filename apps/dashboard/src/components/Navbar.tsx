@@ -71,10 +71,11 @@ export function Navbar() {
                   {user.email}
                 </span>
                 <button
+                  type="button"
                   onClick={handleLogout}
-                  className="text-xs font-semibold text-slate-500 transition-colors hover:text-white"
+                  className="rounded-xl border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-200"
                 >
-                  Sign out
+                  Sign out of Vectra
                 </button>
               </div>
             </div>

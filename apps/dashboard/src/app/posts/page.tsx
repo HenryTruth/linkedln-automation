@@ -365,6 +365,22 @@ export default function PostsPage() {
                   <button type="button" className="btn-danger px-3 py-2" onClick={() => setMedia((prev) => prev.filter((_, i) => i !== index))}>
                     Remove
                   </button>
+                  <input
+                    className="field sm:col-start-2"
+                    value={item.title}
+                    onChange={(e) =>
+                      setMedia((prev) => prev.map((m, i) => (i === index ? { ...m, title: e.target.value } : m)))
+                    }
+                    placeholder="Optional media title"
+                  />
+                  <input
+                    className="field sm:col-start-2"
+                    value={item.description}
+                    onChange={(e) =>
+                      setMedia((prev) => prev.map((m, i) => (i === index ? { ...m, description: e.target.value } : m)))
+                    }
+                    placeholder="Optional media description"
+                  />
                 </div>
               ))}
             </div>

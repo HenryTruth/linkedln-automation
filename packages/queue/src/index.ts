@@ -58,6 +58,8 @@ export { withdrawSingleProcessor } from "./processors/withdrawSingle.processor.j
 export { visitProfileProcessor } from "./processors/visitProfile.processor.js";
 export { sessionHealthCheckProcessor } from "./processors/sessionHealthCheck.processor.js";
 export { linkedInPostPublishProcessor } from "./processors/linkedinPostPublish.processor.js";
+export { publishLinkedInPost } from "./linkedinPublisher.js";
+export type { LinkedInPublishMedia } from "./linkedinPublisher.js";
 export {
   activateSequenceEngineAcceptedBranch,
   activateSequenceEngineTimeoutBranch,

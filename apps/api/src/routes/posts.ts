@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { prisma, LinkedInPostStatus, PostMediaType } from "@linkedin-automation/db";
-import { publishLinkedInTextPost } from "../lib/linkedinApi.js";
+import { publishLinkedInPost } from "@linkedin-automation/queue";
 
 export const postsRouter: IRouter = Router();
 
@@ -260,17 +260,6 @@ postsRouter.post("/:id/publish", async (req, res, next) => {
       return;
     }
 
-    const unsupportedMedia = post.media.filter((item) => item.type !== PostMediaType.ARTICLE);
-    if (unsupportedMedia.length > 0) {
-      res.status(400).json({
-        error:
-          "Official LinkedIn publishing currently supports text and article URL posts. Image, video, and document upload support needs LinkedIn asset upload handling.",
-      });
-      return;
-    }
-
-    const articleUrl = post.media.find((item) => item.type === PostMediaType.ARTICLE)?.url ?? null;
-
     await prisma.linkedInPost.update({
       where: { id: post.id },
       data: { status: LinkedInPostStatus.PUBLISHING, lastError: null },
@@ -278,12 +267,12 @@ postsRouter.post("/:id/publish", async (req, res, next) => {
 
     let linkedinPostUrn: string | null = null;
     try {
-      linkedinPostUrn = await publishLinkedInTextPost({
+      linkedinPostUrn = await publishLinkedInPost({
         accessTokenEncrypted: post.account.linkedinAccessTokenEncrypted,
         authorUrn: post.account.linkedinMemberUrn,
         body: post.body,
         visibility: data.visibility,
-        articleUrl,
+        media: post.media,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "LinkedIn publish failed.";

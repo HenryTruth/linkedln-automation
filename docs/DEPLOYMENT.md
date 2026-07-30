@@ -29,6 +29,13 @@ START_WORKERS=false
 BROWSER_ARTIFACT_DIR=/tmp/linkedin-automation-artifacts
 ```
 
+Optional AI copilot variables for campaign strategy and post drafting:
+
+```text
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
 For the worker service:
 
 ```text

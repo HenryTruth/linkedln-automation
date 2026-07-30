@@ -8,6 +8,7 @@ import {
   type LinkedInPost,
   type LinkedInPostStatus,
   type PostMediaType,
+  type GeneratedPostDraft,
 } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
@@ -53,6 +54,7 @@ export default function PostsPage() {
   const [body, setBody] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
   const [media, setMedia] = useState<MediaDraft[]>([]);
+  const [mediaSuggestions, setMediaSuggestions] = useState<NonNullable<GeneratedPostDraft["mediaSuggestions"]>>([]);
   const [error, setError] = useState<string | null>(null);
 
   function refresh() {
@@ -87,6 +89,7 @@ export default function PostsPage() {
     setCallToAction("");
     setScheduledFor("");
     setMedia([]);
+    setMediaSuggestions([]);
   }
 
   function editPost(post: LinkedInPost) {
@@ -127,6 +130,7 @@ export default function PostsPage() {
       setTitle(draft.title);
       setBody(draft.body);
       setCallToAction(draft.callToAction ?? "");
+      setMediaSuggestions(draft.mediaSuggestions ?? []);
       toast.success("Draft generated");
     } catch (e) {
       toast.error((e as Error).message);
@@ -303,8 +307,39 @@ export default function PostsPage() {
               />
             </label>
             <button type="button" onClick={generateDraft} disabled={busy === "generate"} className="btn-accent w-full">
-              Generate Draft
+              {busy === "generate" ? "Generating..." : "Generate Draft"}
             </button>
+            {mediaSuggestions.length > 0 && (
+              <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-300">
+                  Media angles
+                </p>
+                <div className="mt-3 space-y-3">
+                  {mediaSuggestions.map((item) => (
+                    <button
+                      key={`${item.type}-${item.title}`}
+                      type="button"
+                      className="w-full rounded-lg border border-white/[0.08] bg-slate-950/50 p-3 text-left hover:border-teal-400/40"
+                      onClick={() =>
+                        setMedia((prev) => [
+                          ...prev,
+                          {
+                            type: item.type,
+                            url: "",
+                            title: item.title,
+                            description: item.description,
+                          },
+                        ])
+                      }
+                    >
+                      <span className="text-xs font-semibold text-teal-300">{item.type}</span>
+                      <span className="mt-1 block text-sm font-semibold text-white">{item.title}</span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-400">{item.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

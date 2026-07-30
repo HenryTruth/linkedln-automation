@@ -402,6 +402,42 @@ export interface GeneratedPostDraft {
   tone: string;
   audience: string;
   callToAction?: string | null;
+  mediaSuggestions?: Array<{
+    type: "ARTICLE" | "IMAGE" | "VIDEO" | "DOCUMENT";
+    title: string;
+    description: string;
+  }>;
+}
+
+export interface CampaignStrategy {
+  name: string;
+  type: Campaign["type"];
+  dailyLimit: number;
+  targetTimezone: string | null;
+  connectionNoteTemplate: string | null;
+  searchKeywords: string[];
+  contentSignal: {
+    keyword: string;
+    dateRangeDays: number;
+    maxLeads: number;
+    titleFilter: string | null;
+    companyFilter: string | null;
+    connectionNoteTemplate: string | null;
+  } | null;
+  messages: Array<{
+    sequenceOrder: number;
+    subjectTemplate: string | null;
+    bodyTemplate: string;
+    variantGroup: string;
+    delayDays: number;
+  }>;
+  postIdeas: Array<{
+    title: string;
+    angle: string;
+    format: "TEXT" | "ARTICLE" | "IMAGE" | "VIDEO" | "DOCUMENT";
+  }>;
+  safetyChecks: string[];
+  rationale: string;
 }
 
 export interface SearchScrapeCampaignJob {
@@ -534,6 +570,20 @@ export const api = {
 
   stats: {
     get: () => apiFetch<Stats>("/stats"),
+  },
+
+  ai: {
+    campaignStrategy: (data: {
+      accountId?: string | null;
+      goal: string;
+      targetAudience: string;
+      offer?: string | null;
+      tone?: string;
+    }) =>
+      apiFetch<CampaignStrategy>("/ai/campaign-strategy", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
   },
 
   accounts: {

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, type Account } from "@/lib/api";
+import { toast } from "sonner";
+import { api, type Account, type CampaignStrategy } from "@/lib/api";
 
 const TIMEZONES = [
   "America/New_York",
@@ -41,6 +42,14 @@ export default function NewCampaignPage() {
     targetTimezone: "" as string | null,
   });
   const [saving, setSaving] = useState(false);
+  const [strategizing, setStrategizing] = useState(false);
+  const [strategy, setStrategy] = useState<CampaignStrategy | null>(null);
+  const [brief, setBrief] = useState({
+    goal: "",
+    targetAudience: "",
+    offer: "",
+    tone: "professional",
+  });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,6 +58,64 @@ export default function NewCampaignPage() {
       if (list.length > 0) setForm((f) => ({ ...f, accountId: list[0].id }));
     });
   }, []);
+
+  async function generateStrategy() {
+    if (!brief.goal.trim() || !brief.targetAudience.trim()) {
+      toast.error("Add a campaign goal and target audience first.");
+      return;
+    }
+    setStrategizing(true);
+    setError(null);
+    try {
+      const next = await api.ai.campaignStrategy({
+        accountId: form.accountId || null,
+        goal: brief.goal,
+        targetAudience: brief.targetAudience,
+        offer: brief.offer || null,
+        tone: brief.tone,
+      });
+      setStrategy(next);
+      setForm((current) => ({
+        ...current,
+        name: next.name,
+        type: next.type,
+        dailyLimit: next.dailyLimit,
+        targetTimezone: next.targetTimezone,
+        connectionNoteTemplate: next.connectionNoteTemplate ?? "",
+      }));
+      toast.success("Strategy drafted");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setStrategizing(false);
+    }
+  }
+
+  async function applyStrategySetup(campaignId: string, createdType: string) {
+    if (!strategy) return;
+
+    if (createdType === "CONTENT_SIGNAL" && strategy.contentSignal) {
+      await api.contentSignal.saveConfig(campaignId, {
+        keyword: strategy.contentSignal.keyword,
+        dateRangeDays: strategy.contentSignal.dateRangeDays,
+        maxLeads: strategy.contentSignal.maxLeads,
+        maxPagesPerRun: 2,
+        autoContinueUntilTarget: true,
+        autoContinueDelayMinutes: 20,
+        autoContinueEmptyRunsLimit: 2,
+        titleFilter: strategy.contentSignal.titleFilter,
+        companyFilter: strategy.contentSignal.companyFilter,
+        locationFilter: null,
+        connectionNoteTemplate: strategy.contentSignal.connectionNoteTemplate,
+      });
+    }
+
+    if ((createdType === "MESSAGE" || createdType === "INMAIL") && strategy.messages.length > 0) {
+      for (const message of strategy.messages.slice(0, 4)) {
+        await api.campaigns.messages.create(campaignId, message);
+      }
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -59,6 +126,7 @@ export default function NewCampaignPage() {
         ...form,
         connectionNoteTemplate: form.connectionNoteTemplate.trim() || null,
       });
+      await applyStrategySetup(campaign.id, campaign.type);
       router.push(`/campaigns/${campaign.id}`);
     } catch (err) {
       setError((err as Error).message);
@@ -76,6 +144,100 @@ export default function NewCampaignPage() {
           leads, search URLs, messages, or content-signal settings after
           creation.
         </p>
+      </section>
+
+      <section className="app-panel p-6">
+        <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <p className="page-kicker">AI strategy builder</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Turn a goal into a campaign plan</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              The builder suggests the campaign type, conservative limits, search angles, message drafts, content-signal setup, and safety checks.
+            </p>
+          </div>
+          <div className="grid gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-semibold text-slate-300">
+                Target audience
+                <input
+                  className="field mt-1 w-full"
+                  value={brief.targetAudience}
+                  onChange={(e) => setBrief((current) => ({ ...current, targetAudience: e.target.value }))}
+                  placeholder="B2B SaaS founders, clinic owners, recruiters..."
+                />
+              </label>
+              <label className="block text-sm font-semibold text-slate-300">
+                Tone
+                <select
+                  className="field mt-1 w-full"
+                  value={brief.tone}
+                  onChange={(e) => setBrief((current) => ({ ...current, tone: e.target.value }))}
+                >
+                  <option value="professional">Professional</option>
+                  <option value="direct">Direct</option>
+                  <option value="founder-led">Founder-led</option>
+                  <option value="consultative">Consultative</option>
+                </select>
+              </label>
+            </div>
+            <label className="block text-sm font-semibold text-slate-300">
+              Goal
+              <textarea
+                className="field mt-1 min-h-24 w-full"
+                value={brief.goal}
+                onChange={(e) => setBrief((current) => ({ ...current, goal: e.target.value }))}
+                placeholder="Book demos for our LinkedIn outreach platform, source founders discussing AI automation..."
+              />
+            </label>
+            <label className="block text-sm font-semibold text-slate-300">
+              Offer or angle
+              <input
+                className="field mt-1 w-full"
+                value={brief.offer}
+                onChange={(e) => setBrief((current) => ({ ...current, offer: e.target.value }))}
+                placeholder="Audit, demo, content collaboration, hiring pipeline..."
+              />
+            </label>
+            <button
+              type="button"
+              onClick={generateStrategy}
+              disabled={strategizing || accounts.length === 0}
+              className="btn-accent w-full"
+            >
+              {strategizing ? "Building strategy..." : "Build Strategy"}
+            </button>
+          </div>
+        </div>
+        {strategy && (
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-2xl border border-white/[0.08] bg-slate-950/50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-300">Plan</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">{strategy.rationale}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-lg bg-teal-500/10 px-2 py-1 text-xs font-semibold text-teal-300">{strategy.type}</span>
+                <span className="rounded-lg bg-white/[0.06] px-2 py-1 text-xs font-semibold text-slate-300">{strategy.dailyLimit}/day</span>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/[0.08] bg-slate-950/50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-300">Search angles</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {strategy.searchKeywords.map((keyword) => (
+                  <span key={keyword} className="rounded-lg border border-white/[0.08] px-2 py-1 text-xs text-slate-300">
+                    {keyword}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/[0.08] bg-slate-950/50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-300">Safety checks</p>
+              <ul className="mt-3 space-y-2 text-xs leading-5 text-slate-300">
+                {strategy.safetyChecks.slice(0, 4).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_0.7fr]">

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { prisma, LinkedInPostStatus, PostMediaType } from "@linkedin-automation/db";
 import { publishLinkedInPost } from "@linkedin-automation/queue";
+import { generatePostDraft } from "../lib/ai.js";
 
 export const postsRouter: IRouter = Router();
 
@@ -62,28 +63,6 @@ async function assertAccountOwner(accountId: string, userId: string) {
   return account;
 }
 
-function makeDraft(data: z.infer<typeof GeneratePostSchema>) {
-  const hook =
-    data.tone.toLowerCase().includes("casual")
-      ? `A quick thought on ${data.topic}:`
-      : `${data.topic} is becoming one of those areas where execution matters more than noise.`;
-  const audienceLine = `For ${data.audience}, the useful question is not whether to pay attention, but how to turn attention into a repeatable operating habit.`;
-  const insight =
-    "The teams that win usually do three things well: define the signal they care about, make the workflow easy to repeat, and review outcomes before scaling volume.";
-  const cta = data.callToAction
-    ? data.callToAction
-    : "What would you add to this checklist?";
-
-  return {
-    title: data.topic.length > 76 ? `${data.topic.slice(0, 73)}...` : data.topic,
-    body: [hook, "", audienceLine, "", insight, "", cta].join("\n"),
-    prompt: data.topic,
-    tone: data.tone,
-    audience: data.audience,
-    callToAction: data.callToAction ?? cta,
-  };
-}
-
 postsRouter.get("/", async (req, res, next) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
@@ -107,7 +86,7 @@ postsRouter.post("/generate", async (req, res, next) => {
   try {
     const data = GeneratePostSchema.parse(req.body);
     await assertAccountOwner(data.accountId, req.user.id);
-    const draft = makeDraft(data);
+    const draft = await generatePostDraft(data);
     res.json(draft);
   } catch (err) {
     next(err);

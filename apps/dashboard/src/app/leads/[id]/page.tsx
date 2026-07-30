@@ -40,6 +40,7 @@ export default function LeadDetailPage() {
   const [blacklistReason, setBlacklistReason] = useState("");
   const [showBlacklistForm, setShowBlacklistForm] = useState(false);
   const [markingReplied, setMarkingReplied] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     (api.leads.get as (id: string) => Promise<LeadDetail>)(id)
@@ -97,6 +98,20 @@ export default function LeadDetailPage() {
       toast.error((err as Error).message);
     } finally {
       setBlacklistBusy(false);
+    }
+  }
+
+  async function handleAnalyzeLead() {
+    if (!lead) return;
+    setAnalyzing(true);
+    try {
+      const updated = await api.ai.analyzeLead(lead.id);
+      setLead((prev) => prev && { ...prev, ...updated });
+      toast.success("Lead analyzed");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setAnalyzing(false);
     }
   }
 
@@ -165,8 +180,33 @@ export default function LeadDetailPage() {
                 Reason: {lead.blacklistReason}
               </p>
             )}
+            {typeof lead.aiFitScore === "number" && (
+              <div className="mt-4 max-w-2xl rounded-2xl border border-teal-500/30 bg-teal-500/10 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-lg bg-teal-500/20 px-2 py-1 text-xs font-semibold text-teal-200">
+                    {lead.aiFit ?? "FIT"} {lead.aiFitScore}
+                  </span>
+                  {lead.aiAnalyzedAt && (
+                    <span className="text-xs text-slate-400">
+                      Analyzed {new Date(lead.aiAnalyzedAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                {lead.aiSummary && <p className="mt-3 text-sm leading-6 text-slate-200">{lead.aiSummary}</p>}
+                {lead.aiRecommendedAngle && (
+                  <p className="mt-2 text-sm leading-6 text-teal-200">{lead.aiRecommendedAngle}</p>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleAnalyzeLead}
+              disabled={analyzing}
+              className="btn-secondary text-teal-400"
+            >
+              {analyzing ? "Analyzing..." : lead.aiAnalyzedAt ? "Re-analyze" : "Analyze Fit"}
+            </button>
             <a
               href={lead.linkedinUrl}
               target="_blank"
@@ -217,6 +257,31 @@ export default function LeadDetailPage() {
           </form>
         )}
       </section>
+
+      {(lead.aiSuggestedMessage || (lead.aiRiskFlags?.length ?? 0) > 0) && (
+        <section className="grid gap-4 lg:grid-cols-2">
+          {lead.aiSuggestedMessage && (
+            <div className="app-panel p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                Suggested opener
+              </p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-200">
+                {lead.aiSuggestedMessage}
+              </p>
+            </div>
+          )}
+          {(lead.aiRiskFlags?.length ?? 0) > 0 && (
+            <div className="app-panel p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                Risk flags
+              </p>
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+                {lead.aiRiskFlags?.map((flag) => <li key={flag}>{flag}</li>)}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Post signals sidebar — the conversation context panel */}

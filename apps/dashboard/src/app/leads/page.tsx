@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { api, type Lead, type Campaign, type Account, type SearchScrapeCampaignJob } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { SkeletonTableRows } from "@/components/Skeleton";
@@ -125,6 +126,7 @@ export default function LeadsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(false);
   const [tableError, setTableError] = useState<string | null>(null);
+  const [analyzingLeadId, setAnalyzingLeadId] = useState<string | null>(null);
 
   // Filters
   const [status, setStatus] = useState("");
@@ -286,6 +288,21 @@ export default function LeadsPage() {
       setAddOneError((err as Error).message);
     } finally {
       setAddingOne(false);
+    }
+  }
+
+  async function analyzeLead(lead: Lead) {
+    setAnalyzingLeadId(lead.id);
+    try {
+      const updated = await api.ai.analyzeLead(lead.id, {
+        campaignId: campaignId || undefined,
+      });
+      setLeads((current) => current.map((item) => (item.id === lead.id ? updated : item)));
+      toast.success("Lead analyzed");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setAnalyzingLeadId(null);
     }
   }
 
@@ -864,7 +881,7 @@ export default function LeadsPage() {
         <table className="min-w-full divide-y divide-white/[0.06]">
           <thead className="table-head">
             <tr>
-              {["Name", "Title", "Company", "Status", "Added"].map((h) => (
+              {["Name", "Title", "Company", "Fit", "Status", "Added", "Actions"].map((h) => (
                 <th
                   key={h}
                   className="px-6 py-3"
@@ -875,11 +892,11 @@ export default function LeadsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.06]">
-            {loading && <SkeletonTableRows cols={5} rows={8} />}
+            {loading && <SkeletonTableRows cols={7} rows={8} />}
             {!loading && leads.length === 0 && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={7}
                   className="px-6 py-8 text-center text-sm text-slate-400"
                 >
                   No leads match your filters.
@@ -905,6 +922,24 @@ export default function LeadsPage() {
                   {lead.company ?? "-"}
                 </td>
                 <td className="table-cell">
+                  {typeof lead.aiFitScore === "number" ? (
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-lg bg-teal-500/10 px-2 py-1 text-xs font-semibold text-teal-300">
+                          {lead.aiFit ?? "FIT"} {lead.aiFitScore}
+                        </span>
+                      </div>
+                      {lead.aiSummary && (
+                        <p className="mt-1 max-w-xs line-clamp-2 text-xs leading-5 text-slate-500">
+                          {lead.aiSummary}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-500">Not analyzed</span>
+                  )}
+                </td>
+                <td className="table-cell">
                   <div className="flex flex-wrap gap-1">
                     <Badge value={lead.connectionStatus} />
                     {lead.blacklisted && <Badge value="BLACKLISTED" />}
@@ -912,6 +947,16 @@ export default function LeadsPage() {
                 </td>
                 <td className="table-cell whitespace-nowrap text-slate-400">
                   {new Date(lead.createdAt).toLocaleDateString()}
+                </td>
+                <td className="table-cell">
+                  <button
+                    type="button"
+                    onClick={() => analyzeLead(lead)}
+                    disabled={analyzingLeadId === lead.id}
+                    className="btn-secondary px-3 py-1.5 text-xs"
+                  >
+                    {analyzingLeadId === lead.id ? "Analyzing..." : lead.aiAnalyzedAt ? "Re-analyze" : "Analyze"}
+                  </button>
                 </td>
               </tr>
             ))}

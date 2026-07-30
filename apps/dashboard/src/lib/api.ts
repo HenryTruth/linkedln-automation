@@ -176,6 +176,13 @@ export interface Lead {
   lastName?: string | null;
   title?: string | null;
   company?: string | null;
+  aiFitScore?: number | null;
+  aiFit?: "GOOD" | "WEAK" | "REJECT" | string | null;
+  aiSummary?: string | null;
+  aiRecommendedAngle?: string | null;
+  aiRiskFlags?: string[] | null;
+  aiSuggestedMessage?: string | null;
+  aiAnalyzedAt?: string | null;
   source: "MANUAL" | "CSV" | "LINKEDIN_SEARCH" | "SALES_NAVIGATOR" | "CONTENT_SIGNAL";
   connectionStatus: "NONE" | "PENDING" | "CONNECTED" | "WITHDRAWN";
   blacklisted: boolean;
@@ -440,6 +447,16 @@ export interface CampaignStrategy {
   rationale: string;
 }
 
+export interface CampaignPreflight {
+  readinessScore: number;
+  status: "READY" | "NEEDS_REVIEW" | "BLOCKED";
+  blockers: string[];
+  warnings: string[];
+  recommendations: string[];
+  messageFeedback: string[];
+  safetySummary: string;
+}
+
 export interface SearchScrapeCampaignJob {
   id?: string;
   name: string;
@@ -583,6 +600,15 @@ export const api = {
       apiFetch<CampaignStrategy>("/ai/campaign-strategy", {
         method: "POST",
         body: JSON.stringify(data),
+      }),
+    analyzeLead: (id: string, data?: { campaignId?: string | null }) =>
+      apiFetch<Lead>(`/ai/leads/${id}/analyze`, {
+        method: "POST",
+        body: JSON.stringify(data ?? {}),
+      }),
+    campaignPreflight: (id: string) =>
+      apiFetch<CampaignPreflight>(`/ai/campaigns/${id}/preflight`, {
+        method: "POST",
       }),
   },
 

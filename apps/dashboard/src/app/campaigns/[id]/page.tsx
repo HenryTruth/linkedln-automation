@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, type Campaign, type CampaignDetail, type CampaignLeadJobStatus, type CampaignStats, type Lead, type SearchScrapeCampaignJob } from "@/lib/api";
+import { api, type Campaign, type CampaignDetail, type CampaignLeadJobStatus, type CampaignPreflight, type CampaignStats, type Lead, type SearchScrapeCampaignJob } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { SequenceBuilder } from "@/components/SequenceBuilder";
 import { SequenceGraphBuilder, STEP_TYPE_LABELS } from "@/components/SequenceGraphBuilder";
@@ -232,6 +232,8 @@ export default function CampaignDetailPage() {
     ok: boolean;
     msg: string;
   } | null>(null);
+  const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
+  const [preflightBusy, setPreflightBusy] = useState(false);
 
   const TIMEZONES = [
     "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
@@ -474,6 +476,19 @@ export default function CampaignDetailPage() {
       setStartResult({ ok: false, msg: (e as Error).message });
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handlePreflight() {
+    setPreflightBusy(true);
+    try {
+      const review = await api.ai.campaignPreflight(id);
+      setPreflight(review);
+      toast.success("Preflight review complete");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setPreflightBusy(false);
     }
   }
 
@@ -779,6 +794,13 @@ export default function CampaignDetailPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button
+              onClick={handlePreflight}
+              disabled={preflightBusy}
+              className="btn-secondary text-teal-400"
+            >
+              {preflightBusy ? "Reviewing..." : "AI Preflight"}
+            </button>
+            <button
               onClick={handleStart}
               disabled={busy || campaign.status === "PAUSED"}
               title={
@@ -817,6 +839,47 @@ export default function CampaignDetailPage() {
           >
             {startResult.ok ? "OK " : "Error "}
             {startResult.msg}
+          </div>
+        )}
+        {preflight && (
+          <div className="mt-4 rounded-2xl border border-teal-500/30 bg-teal-500/10 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-300">
+                  AI preflight
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-200">{preflight.safetySummary}</p>
+              </div>
+              <span className="rounded-lg bg-slate-950/60 px-3 py-1.5 text-xs font-semibold text-teal-200">
+                {preflight.status} {preflight.readinessScore}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Blockers</p>
+                <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-300">
+                  {(preflight.blockers.length ? preflight.blockers : ["No blockers found."]).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Warnings</p>
+                <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-300">
+                  {(preflight.warnings.length ? preflight.warnings : ["No warnings found."]).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Recommendations</p>
+                <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-300">
+                  {preflight.recommendations.slice(0, 4).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         )}
       </section>

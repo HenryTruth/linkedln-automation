@@ -48,6 +48,25 @@ export type PostDraft = {
   }>;
 };
 
+export type LeadQualification = {
+  fitScore: number;
+  fit: "GOOD" | "WEAK" | "REJECT";
+  summary: string;
+  recommendedAngle: string;
+  riskFlags: string[];
+  suggestedMessage: string;
+};
+
+export type CampaignPreflight = {
+  readinessScore: number;
+  status: "READY" | "NEEDS_REVIEW" | "BLOCKED";
+  blockers: string[];
+  warnings: string[];
+  recommendations: string[];
+  messageFeedback: string[];
+  safetySummary: string;
+};
+
 type ChatMessage = {
   role: "system" | "user";
   content: string;
@@ -259,6 +278,169 @@ export async function generatePostDraft(input: {
         role: "user",
         content: JSON.stringify({
           task: "Generate a LinkedIn post draft and media suggestions using the expected JSON shape.",
+          expectedShape: fallback,
+          input,
+        }),
+      },
+    ],
+    fallback
+  );
+}
+
+export function fallbackLeadQualification(input: {
+  lead: {
+    firstName?: string | null;
+    lastName?: string | null;
+    title?: string | null;
+    company?: string | null;
+    linkedinUrl: string;
+  };
+  campaign?: {
+    name: string;
+    type: string;
+    connectionNoteTemplate?: string | null;
+  } | null;
+  postSignals?: Array<{ keyword: string; excerpt: string }> | null;
+}): LeadQualification {
+  const title = input.lead.title?.trim() ?? "";
+  const company = input.lead.company?.trim() ?? "";
+  const hasContext = (input.postSignals?.length ?? 0) > 0;
+  const hasRole = Boolean(title || company);
+  const fitScore = hasContext ? 78 : hasRole ? 62 : 38;
+  const fit = fitScore >= 70 ? "GOOD" : fitScore >= 45 ? "WEAK" : "REJECT";
+  const signal = input.postSignals?.[0];
+  const angle = signal
+    ? `Reference their post about ${signal.keyword} and connect it to the campaign goal.`
+    : title || company
+      ? `Reference their role${company ? ` at ${company}` : ""} and keep the ask light.`
+      : "Do not personalize beyond a light introduction until more profile context is collected.";
+
+  return {
+    fitScore,
+    fit,
+    summary: hasRole
+      ? `${[title, company].filter(Boolean).join(" at ")} looks ${fit === "GOOD" ? "relevant" : "partially relevant"} based on available lead data.`
+      : "There is not enough lead data to confidently qualify this person.",
+    recommendedAngle: angle,
+    riskFlags: [
+      ...(!hasRole ? ["Missing title/company context"] : []),
+      ...(fit === "REJECT" ? ["Low personalization confidence"] : []),
+    ],
+    suggestedMessage:
+      fit === "REJECT"
+        ? "Collect more context before sending outreach."
+        : `Hi {{firstName}}, ${signal ? `saw your post about ${signal.keyword}` : `noticed your work${company ? ` at ${company}` : ""}`}. Open to connecting?`,
+  };
+}
+
+export async function qualifyLead(input: {
+  lead: {
+    firstName?: string | null;
+    lastName?: string | null;
+    title?: string | null;
+    company?: string | null;
+    linkedinUrl: string;
+    source?: string | null;
+    connectionStatus?: string | null;
+    blacklisted?: boolean | null;
+  };
+  campaign?: {
+    name: string;
+    type: string;
+    connectionNoteTemplate?: string | null;
+    dailyLimit?: number | null;
+  } | null;
+  postSignals?: Array<{ keyword: string; excerpt: string }> | null;
+}) {
+  const fallback = fallbackLeadQualification(input);
+  return callOpenAIJson<LeadQualification>(
+    [
+      {
+        role: "system",
+        content:
+          "You are Vectra's lead qualification analyst. Return only valid JSON. Be conservative. Flag poor fit, missing context, competitors, and low personalization confidence. Never fabricate facts.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          task: "Score this LinkedIn lead for outreach and draft a safe personalized opener using the expected JSON shape.",
+          expectedShape: fallback,
+          maxConnectionNoteChars: 300,
+          variables: ["{{firstName}}", "{{lastName}}", "{{company}}", "{{title}}"],
+          input,
+        }),
+      },
+    ],
+    fallback
+  );
+}
+
+export function fallbackCampaignPreflight(input: {
+  campaign: {
+    name: string;
+    type: string;
+    status: string;
+    dailyLimit: number;
+    connectionNoteTemplate?: string | null;
+    leadTotal: number;
+    messages?: Array<{ bodyTemplate: string; delayDays: number }> | null;
+  };
+  account?: {
+    status?: string | null;
+    browserProfileStatus?: string | null;
+    warmUpPhase?: string | null;
+  } | null;
+}) {
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  const recommendations: string[] = [];
+
+  if (input.account?.status && input.account.status !== "ACTIVE") {
+    blockers.push(`Account status is ${input.account.status}.`);
+  }
+  if (input.account?.browserProfileStatus && input.account.browserProfileStatus !== "AUTHENTICATED") {
+    warnings.push(`Browser profile is ${input.account.browserProfileStatus}.`);
+  }
+  if (input.campaign.leadTotal === 0) blockers.push("Campaign has no leads.");
+  if (input.campaign.dailyLimit > 15) warnings.push("Daily limit is above the conservative default.");
+  if (input.campaign.type === "CONNECT" && !input.campaign.connectionNoteTemplate) {
+    recommendations.push("Add a short connection note or use content-signal context before starting.");
+  }
+  if ((input.campaign.messages?.length ?? 0) === 0 && ["MESSAGE", "INMAIL"].includes(input.campaign.type)) {
+    blockers.push("Campaign has no message templates.");
+  }
+
+  const status = blockers.length > 0 ? "BLOCKED" : warnings.length > 0 ? "NEEDS_REVIEW" : "READY";
+  return {
+    readinessScore: status === "READY" ? 88 : status === "NEEDS_REVIEW" ? 64 : 35,
+    status,
+    blockers,
+    warnings,
+    recommendations:
+      recommendations.length > 0
+        ? recommendations
+        : ["Review the first 10 leads manually before increasing volume."],
+    messageFeedback: ["Keep language specific, short, and tied to observable profile or post context."],
+    safetySummary:
+      status === "READY"
+        ? "This campaign looks ready for a conservative launch."
+        : "Review the listed items before starting this campaign.",
+  } satisfies CampaignPreflight;
+}
+
+export async function reviewCampaignPreflight(input: Parameters<typeof fallbackCampaignPreflight>[0]) {
+  const fallback = fallbackCampaignPreflight(input);
+  return callOpenAIJson<CampaignPreflight>(
+    [
+      {
+        role: "system",
+        content:
+          "You are Vectra's campaign safety reviewer. Return only valid JSON. Prioritize account safety, personalization quality, missing setup, lead fit, and conservative volume.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          task: "Review this campaign before launch using the expected JSON shape.",
           expectedShape: fallback,
           input,
         }),

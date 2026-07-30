@@ -210,6 +210,13 @@ model Lead {
   lastName          String?
   title             String?
   company           String?
+  aiFitScore        Int?
+  aiFit             String?
+  aiSummary         String?          @db.Text
+  aiRecommendedAngle String?         @db.Text
+  aiRiskFlags       Json             @default("[]")
+  aiSuggestedMessage String?         @db.Text
+  aiAnalyzedAt      DateTime?
   connectionStatus  ConnectionStatus @default(NONE)
   blacklisted       Boolean          @default(false)
   blacklistReason   String?

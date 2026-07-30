@@ -120,6 +120,10 @@ export interface Account {
   inMailMonthlyLimit: number;
   hasSession: boolean;
   sessionStatus: "ACTIVE" | "MISSING";
+  hasLinkedInApiConnection: boolean;
+  linkedinConnectedAt?: string | null;
+  linkedinAccessTokenExpiresAt?: string | null;
+  linkedinMemberUrn?: string | null;
   browserProfileStatus: "UNKNOWN" | "AUTHENTICATED" | "LOGIN_REQUIRED" | "CHECKPOINT" | string;
   browserProfileLastCheckedAt?: string | null;
   browserProfileLastCheckError?: string | null;
@@ -554,6 +558,10 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ cookies, consent }),
       }),
+    startLinkedInOAuth: (id: string) =>
+      apiFetch<{ authorizationUrl: string }>(`/accounts/${id}/linkedin-oauth/start`, {
+        method: "POST",
+      }),
     advanceWarmup: (id: string) =>
       apiFetch<Account>(`/accounts/${id}/advance-warmup`, { method: "POST" }),
     downgradeWarmup: (id: string) =>
@@ -980,10 +988,10 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ scheduledFor }),
       }),
-    publish: (id: string, linkedinPostUrn?: string | null) =>
+    publish: (id: string, visibility: "PUBLIC" | "CONNECTIONS" = "PUBLIC") =>
       apiFetch<LinkedInPost>(`/posts/${id}/publish`, {
         method: "POST",
-        body: JSON.stringify({ linkedinPostUrn }),
+        body: JSON.stringify({ visibility }),
       }),
     delete: (id: string) => apiFetch<void>(`/posts/${id}`, { method: "DELETE" }),
   },

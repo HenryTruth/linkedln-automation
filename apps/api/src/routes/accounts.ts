@@ -3,6 +3,11 @@ import { z } from "zod";
 import { prisma, AccountStatus, WarmUpPhase } from "@linkedin-automation/db";
 import { scheduleWithdrawalForAccount } from "@linkedin-automation/queue";
 import { encrypt, SYSTEM_CAPS, HARD_CEILING } from "@linkedin-automation/guards";
+import {
+  buildLinkedInAuthorizationUrl,
+  exchangeLinkedInCode,
+  parseLinkedInOAuthState,
+} from "../lib/linkedinApi.js";
 
 const WARMUP_ORDER: WarmUpPhase[] = [
   WarmUpPhase.MANUAL,
@@ -13,6 +18,7 @@ const WARMUP_ORDER: WarmUpPhase[] = [
 ];
 
 export const accountsRouter: IRouter = Router();
+export const linkedinOAuthCallbackRouter: IRouter = Router();
 
 type AccountPayload = Awaited<ReturnType<typeof prisma.account.findFirstOrThrow>>;
 
@@ -23,11 +29,19 @@ function publicProxy<T extends { password?: string } | null | undefined>(proxy: 
 }
 
 function publicAccount<T extends AccountPayload & { proxy?: unknown }>(account: T) {
-  const { cookiesEncrypted: _cookiesEncrypted, proxy, ...safeAccount } = account;
+  const {
+    cookiesEncrypted: _cookiesEncrypted,
+    linkedinAccessTokenEncrypted: _linkedinAccessTokenEncrypted,
+    proxy,
+    ...safeAccount
+  } = account;
   return {
     ...safeAccount,
     hasSession: Boolean(_cookiesEncrypted),
     sessionStatus: _cookiesEncrypted ? "ACTIVE" : "MISSING",
+    hasLinkedInApiConnection: Boolean(
+      _linkedinAccessTokenEncrypted && safeAccount.linkedinMemberUrn
+    ),
     proxy: publicProxy(proxy as ({ password?: string } & Record<string, unknown>) | null | undefined),
   };
 }
@@ -62,6 +76,66 @@ accountsRouter.get("/", async (req, res, next) => {
       orderBy: { createdAt: "desc" },
     });
     res.json(accounts.map(publicAccount));
+  } catch (err) {
+    next(err);
+  }
+});
+
+linkedinOAuthCallbackRouter.get("/", async (req, res) => {
+  const successRedirect =
+    process.env.LINKEDIN_OAUTH_SUCCESS_REDIRECT ??
+    "http://localhost:3000/accounts?linkedin=connected";
+  const errorRedirect =
+    process.env.LINKEDIN_OAUTH_ERROR_REDIRECT ??
+    "http://localhost:3000/accounts?linkedin=error";
+
+  try {
+    const code = typeof req.query.code === "string" ? req.query.code : null;
+    const stateParam = typeof req.query.state === "string" ? req.query.state : null;
+    const error = typeof req.query.error_description === "string"
+      ? req.query.error_description
+      : typeof req.query.error === "string"
+      ? req.query.error
+      : null;
+
+    if (error) throw new Error(error);
+    if (!code || !stateParam) throw new Error("Missing LinkedIn OAuth callback parameters.");
+
+    const state = parseLinkedInOAuthState(stateParam);
+    const token = await exchangeLinkedInCode(code);
+
+    const result = await prisma.account.updateMany({
+      where: { id: state.accountId, userId: state.userId },
+      data: {
+        linkedinAccessTokenEncrypted: token.accessTokenEncrypted,
+        linkedinAccessTokenExpiresAt: token.accessTokenExpiresAt,
+        linkedinMemberUrn: token.memberUrn,
+        linkedinConnectedAt: new Date(),
+      },
+    });
+
+    if (result.count === 0) throw new Error("LinkedIn account was not found.");
+    res.redirect(successRedirect);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "LinkedIn OAuth failed.";
+    const url = new URL(errorRedirect);
+    url.searchParams.set("message", message);
+    res.redirect(url.toString());
+  }
+});
+
+accountsRouter.post("/:id/linkedin-oauth/start", async (req, res, next) => {
+  try {
+    await prisma.account.findFirstOrThrow({
+      where: { id: req.params.id, userId: req.user.id },
+      select: { id: true },
+    });
+    res.json({
+      authorizationUrl: buildLinkedInAuthorizationUrl({
+        accountId: req.params.id,
+        userId: req.user.id,
+      }),
+    });
   } catch (err) {
     next(err);
   }

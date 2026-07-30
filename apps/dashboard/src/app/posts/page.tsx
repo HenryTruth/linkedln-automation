@@ -184,7 +184,7 @@ export default function PostsPage() {
     try {
       const updated = await api.posts.publish(post.id);
       setPosts((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-      toast.success("Post marked as published");
+      toast.success("Post published to LinkedIn");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -408,7 +408,7 @@ export default function PostsPage() {
                   <div className="flex flex-wrap gap-2">
                     <button onClick={() => editPost(post)} className="btn-secondary px-3 py-1.5">Edit</button>
                     <button onClick={() => markPublished(post)} disabled={busy === post.id || post.status === "PUBLISHED"} className="btn-secondary px-3 py-1.5">
-                      Published
+                      Publish
                     </button>
                     <button onClick={() => deletePost(post)} disabled={busy === post.id} className="btn-danger px-3 py-1.5">
                       Delete

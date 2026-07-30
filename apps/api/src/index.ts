@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { accountsRouter } from "./routes/accounts.js";
+import { accountsRouter, linkedinOAuthCallbackRouter } from "./routes/accounts.js";
 import { campaignsRouter } from "./routes/campaigns.js";
 import { sequencesRouter } from "./routes/sequences.js";
 import { leadsRouter } from "./routes/leads.js";
@@ -65,6 +65,7 @@ app.get("/health", async (_req, res) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/accounts/linkedin/callback", linkedinOAuthCallbackRouter);
 app.use(requireAuth);
 
 app.use("/accounts", accountsRouter);

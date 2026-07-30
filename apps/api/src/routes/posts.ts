@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { prisma, LinkedInPostStatus, PostMediaType } from "@linkedin-automation/db";
+import { publishLinkedInTextPost } from "../lib/linkedinApi.js";
 
 export const postsRouter: IRouter = Router();
 
@@ -217,21 +218,92 @@ postsRouter.post("/:id/schedule", async (req, res, next) => {
 postsRouter.post("/:id/publish", async (req, res, next) => {
   try {
     const data = z
-      .object({ linkedinPostUrn: z.string().max(300).optional().nullable() })
+      .object({
+        visibility: z.enum(["PUBLIC", "CONNECTIONS"]).default("PUBLIC"),
+      })
       .parse(req.body);
-    const result = await prisma.linkedInPost.updateMany({
+    const post = await prisma.linkedInPost.findFirst({
       where: { id: req.params.id, userId: req.user.id },
-      data: {
-        status: LinkedInPostStatus.PUBLISHED,
-        publishedAt: new Date(),
-        linkedinPostUrn: data.linkedinPostUrn,
-        lastError: null,
+      include: {
+        account: {
+          select: {
+            linkedinAccessTokenEncrypted: true,
+            linkedinAccessTokenExpiresAt: true,
+            linkedinMemberUrn: true,
+          },
+        },
+        media: { orderBy: { createdAt: "asc" } },
       },
     });
-    if (result.count === 0) {
+
+    if (!post) {
       res.status(404).json({ error: "Post not found" });
       return;
     }
+
+    if (!post.account.linkedinAccessTokenEncrypted || !post.account.linkedinMemberUrn) {
+      res.status(409).json({
+        error:
+          "Connect this account with LinkedIn API access before publishing. Use Accounts > Connect posting API.",
+      });
+      return;
+    }
+
+    if (
+      post.account.linkedinAccessTokenExpiresAt &&
+      post.account.linkedinAccessTokenExpiresAt < new Date()
+    ) {
+      res.status(409).json({
+        error:
+          "LinkedIn API access expired. Reconnect this account from the Accounts page.",
+      });
+      return;
+    }
+
+    const unsupportedMedia = post.media.filter((item) => item.type !== PostMediaType.ARTICLE);
+    if (unsupportedMedia.length > 0) {
+      res.status(400).json({
+        error:
+          "Official LinkedIn publishing currently supports text and article URL posts. Image, video, and document upload support needs LinkedIn asset upload handling.",
+      });
+      return;
+    }
+
+    const articleUrl = post.media.find((item) => item.type === PostMediaType.ARTICLE)?.url ?? null;
+
+    await prisma.linkedInPost.update({
+      where: { id: post.id },
+      data: { status: LinkedInPostStatus.PUBLISHING, lastError: null },
+    });
+
+    let linkedinPostUrn: string | null = null;
+    try {
+      linkedinPostUrn = await publishLinkedInTextPost({
+        accessTokenEncrypted: post.account.linkedinAccessTokenEncrypted,
+        authorUrn: post.account.linkedinMemberUrn,
+        body: post.body,
+        visibility: data.visibility,
+        articleUrl,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "LinkedIn publish failed.";
+      await prisma.linkedInPost.update({
+        where: { id: post.id },
+        data: { status: LinkedInPostStatus.FAILED, lastError: message },
+      });
+      throw err;
+    }
+
+    await prisma.linkedInPost.update({
+      where: { id: post.id },
+      data: {
+        status: LinkedInPostStatus.PUBLISHED,
+        publishedAt: new Date(),
+        linkedinPostUrn,
+        lastError: null,
+      },
+    });
+
     const updated = await prisma.linkedInPost.findFirstOrThrow({
       where: { id: req.params.id, userId: req.user.id },
       include: includePostRelations(),

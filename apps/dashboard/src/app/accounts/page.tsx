@@ -455,6 +455,33 @@ export default function AccountsPage() {
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("linkedin");
+    if (result === "connected") {
+      setNotice((prev) => ({
+        ...prev,
+        _global: {
+          type: "success",
+          message: "LinkedIn posting API connected. You can now publish text posts from Posts.",
+        },
+      }));
+      reload().catch(() => {});
+    }
+    if (result === "error") {
+      setNotice((prev) => ({
+        ...prev,
+        _global: {
+          type: "error",
+          message: params.get("message") ?? "LinkedIn posting API connection failed.",
+        },
+      }));
+    }
+    if (result) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!largeBrowserFor) return;
     const id = window.setTimeout(() => {
       largeBrowserRef.current?.focus();
@@ -705,6 +732,18 @@ export default function AccountsPage() {
       setAccountNotice(id, "error", (e as Error).message);
     } finally {
       setUploadingCookies(false);
+    }
+  }
+
+  async function handleConnectLinkedInApi(account: Account) {
+    setBusy(account.id);
+    clearAccountNotice(account.id);
+    try {
+      const { authorizationUrl } = await api.accounts.startLinkedInOAuth(account.id);
+      window.location.href = authorizationUrl;
+    } catch (e) {
+      setAccountNotice(account.id, "error", (e as Error).message);
+      setBusy(null);
     }
   }
 
@@ -1181,6 +1220,19 @@ export default function AccountsPage() {
       )}
 
       {/* Account cards */}
+      {notice._global && (
+        <div
+          className={`rounded-2xl border p-4 text-sm ${
+            notice._global.type === "success"
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+              : notice._global.type === "info"
+              ? "border-sky-500/30 bg-sky-500/10 text-sky-400"
+              : "border-red-500/30 bg-red-500/10 text-red-400"
+          }`}
+        >
+          {notice._global.message}
+        </div>
+      )}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {accounts.map((account) => {
           const today = dayKeyForTimezone(account.timezone);
@@ -1314,6 +1366,13 @@ export default function AccountsPage() {
                           : "border-white/10 bg-slate-900 text-slate-400"
                       }`}>
                         Search {account.lastSearchQualifiedAt ? "qualified" : "unqualified"}
+                      </span>
+                      <span className={`rounded-full border px-3 py-1 ${
+                        account.hasLinkedInApiConnection
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                          : "border-white/10 bg-slate-900 text-slate-400"
+                      }`}>
+                        Posting API {account.hasLinkedInApiConnection ? "connected" : "not connected"}
                       </span>
                     </div>
                   </div>
@@ -1737,6 +1796,23 @@ export default function AccountsPage() {
                     tone="teal"
                     active={showCookieFor === account.id}
                     onClick={() => toggleCookiePanel(account.id)}
+                  />
+
+                  <AccountActionButton
+                    title={
+                      account.hasLinkedInApiConnection
+                        ? "Reconnect posting API"
+                        : "Connect posting API"
+                    }
+                    description="Authorize Share on LinkedIn so saved posts can publish through the official API."
+                    detail={
+                      account.linkedinConnectedAt
+                        ? `Connected ${new Date(account.linkedinConnectedAt).toLocaleDateString()}`
+                        : "OAuth required"
+                    }
+                    tone="teal"
+                    onClick={() => handleConnectLinkedInApi(account)}
+                    disabled={accountBusy}
                   />
                 </div>
 

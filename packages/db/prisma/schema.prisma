@@ -152,6 +152,10 @@ model Account {
   lastSearchQualifiedProfileLinks Int?
   lastSearchQualifiedNextButtons Int?
   lastSearchQualificationError String? @db.Text
+  linkedinAccessTokenEncrypted String? @db.Text
+  linkedinAccessTokenExpiresAt DateTime?
+  linkedinMemberUrn String?
+  linkedinConnectedAt DateTime?
   dailyCaps         Json          @default("{}")
   monthlyCaps       Json          @default("{}")
   maxDailyCaps      Json          @default("{}")

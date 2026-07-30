@@ -4,6 +4,7 @@ import { encrypt, decrypt } from "@linkedin-automation/guards";
 const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const LINKEDIN_USERINFO_URL = "https://api.linkedin.com/v2/userinfo";
+const LINKEDIN_ME_URL = "https://api.linkedin.com/v2/me";
 const LINKEDIN_UGC_POSTS_URL = "https://api.linkedin.com/v2/ugcPosts";
 
 type LinkedInTokenResponse = {
@@ -14,6 +15,10 @@ type LinkedInTokenResponse = {
 
 type LinkedInUserInfo = {
   sub: string;
+};
+
+type LinkedInMe = {
+  id: string;
 };
 
 type LinkedInUgcPostResponse = {
@@ -52,6 +57,10 @@ export function getLinkedInConfig() {
   }
 
   return { clientId, clientSecret, redirectUri };
+}
+
+function getLinkedInOAuthScopes() {
+  return process.env.LINKEDIN_OAUTH_SCOPES ?? "w_member_social";
 }
 
 function stateSecret() {
@@ -111,7 +120,7 @@ export function buildLinkedInAuthorizationUrl(input: {
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("state", createLinkedInOAuthState(input));
-  url.searchParams.set("scope", "openid profile w_member_social");
+  url.searchParams.set("scope", getLinkedInOAuthScopes());
   return url.toString();
 }
 
@@ -131,6 +140,33 @@ async function readJson<T>(response: Response): Promise<T> {
   return text ? (JSON.parse(text) as T) : ({} as T);
 }
 
+async function readJsonOrNull<T>(url: string, accessToken: string): Promise<T | null> {
+  try {
+    return await readJson<T>(
+      await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function resolveLinkedInMemberUrn(accessToken: string) {
+  const me = await readJsonOrNull<LinkedInMe>(LINKEDIN_ME_URL, accessToken);
+  if (me?.id) return `urn:li:person:${me.id}`;
+
+  const userInfo = await readJsonOrNull<LinkedInUserInfo>(
+    LINKEDIN_USERINFO_URL,
+    accessToken
+  );
+  if (userInfo?.sub) return `urn:li:person:${userInfo.sub}`;
+
+  throw new Error(
+    "LinkedIn OAuth succeeded, but the app could not read the member id. Add the 'Sign in with LinkedIn using OpenID Connect' product in LinkedIn, or set LINKEDIN_OAUTH_SCOPES to include profile/email scopes available on your app."
+  );
+}
+
 export async function exchangeLinkedInCode(code: string) {
   const { clientId, clientSecret, redirectUri } = getLinkedInConfig();
   const body = new URLSearchParams({
@@ -148,18 +184,14 @@ export async function exchangeLinkedInCode(code: string) {
       body,
     })
   );
-  const userInfo = await readJson<LinkedInUserInfo>(
-    await fetch(LINKEDIN_USERINFO_URL, {
-      headers: { Authorization: `Bearer ${token.access_token}` },
-    })
-  );
+  const memberUrn = await resolveLinkedInMemberUrn(token.access_token);
 
   return {
     accessTokenEncrypted: encrypt(token.access_token),
     accessTokenExpiresAt: token.expires_in
       ? new Date(Date.now() + token.expires_in * 1000)
       : null,
-    memberUrn: `urn:li:person:${userInfo.sub}`,
+    memberUrn,
   };
 }
 

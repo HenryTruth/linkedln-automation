@@ -194,3 +194,13 @@ export const sessionHealthCheckQueue = new Queue<SessionHealthCheckJobData>(
   "sessionHealthCheck",
   { connection: getConnection(), defaultJobOptions }
 );
+
+export interface LinkedInPostPublishTickJobData {
+  /** Intentionally empty — the processor scans for due scheduled posts */
+  _tick: true;
+}
+
+export const linkedInPostPublishQueue = new Queue<LinkedInPostPublishTickJobData>(
+  "linkedinPostPublish",
+  { connection: getConnection(), defaultJobOptions }
+);

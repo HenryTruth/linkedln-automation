@@ -16,6 +16,7 @@ import { likePostProcessor } from "./processors/likePost.processor.js";
 import { withdrawSingleProcessor } from "./processors/withdrawSingle.processor.js";
 import { visitProfileProcessor } from "./processors/visitProfile.processor.js";
 import { sessionHealthCheckProcessor } from "./processors/sessionHealthCheck.processor.js";
+import { linkedInPostPublishProcessor } from "./processors/linkedinPostPublish.processor.js";
 import {
   withdrawQueue,
   sequenceDispatchQueue,
@@ -23,6 +24,7 @@ import {
   syncStatusQueue,
   sequenceEngineDispatchQueue,
   sessionHealthCheckQueue,
+  linkedInPostPublishQueue,
 } from "./queues.js";
 import { maybeCompleteCampaignForLead } from "./campaignCompletion.js";
 import { advanceSequenceLead } from "./sequenceGraph.js";
@@ -98,6 +100,7 @@ export function startWorkers(): void {
   // Not lead-scoped — proactively visits LinkedIn per account to surface a
   // dead session early instead of waiting for some other job to hit it.
   new Worker("sessionHealthCheck", sessionHealthCheckProcessor, { connection, concurrency: 1 });
+  new Worker("linkedinPostPublish", linkedInPostPublishProcessor, { connection, concurrency: 1 });
 
   console.log("BullMQ workers started");
 }
@@ -186,6 +189,20 @@ export async function startSessionHealthCheckTicker(): Promise<void> {
     }
   );
   console.log("Session health check ticker registered (every 30 min)");
+}
+
+const LINKEDIN_POST_PUBLISH_TICK_MS = 60 * 1000; // every minute
+
+export async function startLinkedInPostPublishTicker(): Promise<void> {
+  await linkedInPostPublishQueue.add(
+    "linkedin-post-publish-tick",
+    { _tick: true },
+    {
+      repeat: { every: LINKEDIN_POST_PUBLISH_TICK_MS },
+      jobId: "linkedin-post-publish-tick",
+    }
+  );
+  console.log("LinkedIn post publish ticker registered (every 1 min)");
 }
 
 export async function scheduleWithdrawalForAccount(

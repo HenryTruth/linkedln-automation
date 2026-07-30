@@ -14,6 +14,7 @@ export {
   withdrawSingleQueue,
   visitProfileQueue,
   sessionHealthCheckQueue,
+  linkedInPostPublishQueue,
 } from "./queues.js";
 export type {
   ConnectJobData,
@@ -31,6 +32,7 @@ export type {
   WithdrawSingleJobData,
   VisitProfileJobData,
   SessionHealthCheckJobData,
+  LinkedInPostPublishTickJobData,
 } from "./queues.js";
 export { maybeCompleteCampaign } from "./campaignCompletion.js";
 export { advanceSequenceLead } from "./sequenceGraph.js";
@@ -43,6 +45,7 @@ export {
   startSyncStatusTicker,
   startSequenceEngineTicker,
   startSessionHealthCheckTicker,
+  startLinkedInPostPublishTicker,
 } from "./scheduler.js";
 // Individual processors — exported so verification scripts can invoke a
 // single unit of work directly without needing a live BullMQ Worker, the
@@ -54,6 +57,7 @@ export { likePostProcessor } from "./processors/likePost.processor.js";
 export { withdrawSingleProcessor } from "./processors/withdrawSingle.processor.js";
 export { visitProfileProcessor } from "./processors/visitProfile.processor.js";
 export { sessionHealthCheckProcessor } from "./processors/sessionHealthCheck.processor.js";
+export { linkedInPostPublishProcessor } from "./processors/linkedinPostPublish.processor.js";
 export {
   activateSequenceEngineAcceptedBranch,
   activateSequenceEngineTimeoutBranch,

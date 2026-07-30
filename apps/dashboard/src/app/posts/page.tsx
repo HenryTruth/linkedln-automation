@@ -50,6 +50,9 @@ export default function PostsPage() {
   const [tone, setTone] = useState("professional");
   const [audience, setAudience] = useState("founders and operators");
   const [callToAction, setCallToAction] = useState("");
+  const [refineInstruction, setRefineInstruction] = useState("");
+  const [refineAngle, setRefineAngle] = useState("make it more practical");
+  const [assetPrompt, setAssetPrompt] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
@@ -87,6 +90,8 @@ export default function PostsPage() {
     setBody("");
     setTopic("");
     setCallToAction("");
+    setRefineInstruction("");
+    setAssetPrompt("");
     setScheduledFor("");
     setMedia([]);
     setMediaSuggestions([]);
@@ -132,6 +137,72 @@ export default function PostsPage() {
       setCallToAction(draft.callToAction ?? "");
       setMediaSuggestions(draft.mediaSuggestions ?? []);
       toast.success("Draft generated");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function refineDraft() {
+    if (!title.trim() || !body.trim() || !refineInstruction.trim()) {
+      toast.error("Add a post draft and a refinement instruction first.");
+      return;
+    }
+    setBusy("refine");
+    try {
+      const draft = await api.ai.refinePost({
+        title,
+        body,
+        instruction: refineInstruction,
+        angle: refineAngle || null,
+        tone,
+        audience,
+        context: topic || null,
+      });
+      setTitle(draft.title);
+      setBody(draft.body);
+      setCallToAction(draft.callToAction ?? "");
+      setMediaSuggestions(draft.mediaSuggestions ?? []);
+      toast.success("Draft refined");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function generateAsset(type: "IMAGE" | "DOCUMENT") {
+    if (!title.trim() || !body.trim()) {
+      toast.error("Generate or write the post first.");
+      return;
+    }
+    setBusy(type === "IMAGE" ? "image" : "document");
+    try {
+      const asset =
+        type === "IMAGE"
+          ? await api.ai.generatePostImage({
+              title,
+              body,
+              prompt: assetPrompt || null,
+              audience,
+            })
+          : await api.ai.generatePostDocument({
+              title,
+              body,
+              prompt: assetPrompt || null,
+              audience,
+            });
+      setMedia((prev) => [
+        ...prev,
+        {
+          type: asset.type,
+          url: asset.url,
+          title: asset.title,
+          description: asset.description,
+        },
+      ]);
+      toast.success(`${asset.type === "IMAGE" ? "Image" : "Document"} generated and attached`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -309,6 +380,59 @@ export default function PostsPage() {
             <button type="button" onClick={generateDraft} disabled={busy === "generate"} className="btn-accent w-full">
               {busy === "generate" ? "Generating..." : "Generate Draft"}
             </button>
+            <div className="rounded-xl border border-white/[0.08] bg-slate-950/40 p-3">
+              <p className="text-sm font-semibold text-white">Refine draft</p>
+              <div className="mt-3 grid gap-3">
+                <select
+                  className="field w-full"
+                  value={refineAngle}
+                  onChange={(e) => setRefineAngle(e.target.value)}
+                >
+                  <option value="make it more practical">More practical</option>
+                  <option value="make it founder-led">Founder-led</option>
+                  <option value="make it contrarian">Contrarian</option>
+                  <option value="make it educational">Educational</option>
+                  <option value="make it concise">Concise</option>
+                  <option value="make it story-driven">Story-driven</option>
+                </select>
+                <textarea
+                  className="field min-h-20 w-full"
+                  value={refineInstruction}
+                  onChange={(e) => setRefineInstruction(e.target.value)}
+                  placeholder="Add context, switch angle, sharpen hook, remove hype, target a different audience..."
+                />
+                <button type="button" onClick={refineDraft} disabled={busy === "refine"} className="btn-secondary w-full">
+                  {busy === "refine" ? "Refining..." : "Refine Draft"}
+                </button>
+              </div>
+            </div>
+            <div className="rounded-xl border border-white/[0.08] bg-slate-950/40 p-3">
+              <p className="text-sm font-semibold text-white">Generate media</p>
+              <textarea
+                className="field mt-3 min-h-20 w-full"
+                value={assetPrompt}
+                onChange={(e) => setAssetPrompt(e.target.value)}
+                placeholder="Optional visual direction: checklist PDF, clean framework image, bold announcement graphic..."
+              />
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => generateAsset("IMAGE")}
+                  disabled={busy === "image"}
+                  className="btn-secondary w-full"
+                >
+                  {busy === "image" ? "Generating..." : "Generate Image"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => generateAsset("DOCUMENT")}
+                  disabled={busy === "document"}
+                  className="btn-secondary w-full"
+                >
+                  {busy === "document" ? "Generating..." : "Generate PDF"}
+                </button>
+              </div>
+            </div>
             {mediaSuggestions.length > 0 && (
               <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-300">

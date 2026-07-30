@@ -114,6 +114,7 @@ model User {
   proxies      Proxy[]
   leads        Lead[]
   linkedinPosts LinkedInPost[]
+  aiGeneratedAssets AiGeneratedAsset[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -431,6 +432,21 @@ model LinkedInPost {
   @@index([userId, status])
   @@index([accountId, scheduledFor])
   @@index([scheduledFor])
+}
+
+model AiGeneratedAsset {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  filename  String
+  mimeType  String
+  bytes     Bytes
+  prompt    String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([kind])
 }
 
 model PostMedia {

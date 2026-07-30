@@ -457,6 +457,14 @@ export interface CampaignPreflight {
   safetySummary: string;
 }
 
+export interface GeneratedPostAsset {
+  id: string;
+  type: "IMAGE" | "DOCUMENT";
+  url: string;
+  title: string;
+  description: string;
+}
+
 export interface SearchScrapeCampaignJob {
   id?: string;
   name: string;
@@ -609,6 +617,39 @@ export const api = {
     campaignPreflight: (id: string) =>
       apiFetch<CampaignPreflight>(`/ai/campaigns/${id}/preflight`, {
         method: "POST",
+      }),
+    refinePost: (data: {
+      title: string;
+      body: string;
+      instruction: string;
+      angle?: string | null;
+      tone?: string | null;
+      audience?: string | null;
+      context?: string | null;
+    }) =>
+      apiFetch<GeneratedPostDraft & { angle: string }>("/ai/posts/refine", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    generatePostImage: (data: {
+      title: string;
+      body: string;
+      prompt?: string | null;
+      audience?: string | null;
+    }) =>
+      apiFetch<GeneratedPostAsset>("/ai/posts/assets/image", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    generatePostDocument: (data: {
+      title: string;
+      body: string;
+      prompt?: string | null;
+      audience?: string | null;
+    }) =>
+      apiFetch<GeneratedPostAsset>("/ai/posts/assets/document", {
+        method: "POST",
+        body: JSON.stringify(data),
       }),
   },
 

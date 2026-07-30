@@ -1,7 +1,9 @@
 import { CampaignType } from "@linkedin-automation/db";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+const OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations";
 const DEFAULT_MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+const DEFAULT_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
 
 export type CampaignStrategy = {
   name: string;
@@ -65,6 +67,19 @@ export type CampaignPreflight = {
   recommendations: string[];
   messageFeedback: string[];
   safetySummary: string;
+};
+
+export type PostRefinement = PostDraft & {
+  angle: string;
+};
+
+export type DocumentPlan = {
+  title: string;
+  subtitle: string;
+  pages: Array<{
+    heading: string;
+    bullets: string[];
+  }>;
 };
 
 type ChatMessage = {
@@ -278,6 +293,138 @@ export async function generatePostDraft(input: {
         role: "user",
         content: JSON.stringify({
           task: "Generate a LinkedIn post draft and media suggestions using the expected JSON shape.",
+          expectedShape: fallback,
+          input,
+        }),
+      },
+    ],
+    fallback
+  );
+}
+
+export async function refinePostDraft(input: {
+  title: string;
+  body: string;
+  instruction: string;
+  angle?: string | null;
+  tone?: string | null;
+  audience?: string | null;
+  context?: string | null;
+}) {
+  const fallback = fallbackPostDraft({
+    topic: `${input.title}\n${input.instruction}`,
+    tone: input.tone ?? "professional",
+    audience: input.audience ?? "LinkedIn audience",
+    callToAction: null,
+  });
+  return callOpenAIJson<PostRefinement>(
+    [
+      {
+        role: "system",
+        content:
+          "You are a LinkedIn editor. Return only valid JSON. Refine the draft according to the user's requested angle, tone, audience, and context. Keep it concrete, non-hype, and publish-ready.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          task: "Refine this LinkedIn post. Use the expected JSON shape.",
+          expectedShape: { ...fallback, angle: input.angle ?? "refined" },
+          input,
+        }),
+      },
+    ],
+    { ...fallback, angle: input.angle ?? "refined" }
+  );
+}
+
+export async function generateImageBytes(input: {
+  prompt: string;
+  title?: string | null;
+  body?: string | null;
+  format?: "png" | "jpeg" | "webp";
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is required to generate images.");
+  }
+
+  const response = await fetch(OPENAI_IMAGES_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: DEFAULT_IMAGE_MODEL,
+      prompt: [
+        input.prompt,
+        input.title ? `Post title: ${input.title}` : "",
+        input.body ? `Post context: ${input.body.slice(0, 1200)}` : "",
+        "Create a polished LinkedIn-safe business visual. Avoid tiny text, fake logos, copyrighted characters, celebrity likeness, and unverifiable charts.",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      size: "1024x1024",
+      quality: "auto",
+      output_format: input.format ?? "png",
+      n: 1,
+    }),
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`OpenAI image request failed (${response.status}): ${text || response.statusText}`);
+  }
+
+  const parsed = JSON.parse(text) as { data?: Array<{ b64_json?: string }> };
+  const b64 = parsed.data?.[0]?.b64_json;
+  if (!b64) {
+    throw new Error("OpenAI image response did not include image data.");
+  }
+  return Buffer.from(b64, "base64");
+}
+
+export function fallbackDocumentPlan(input: {
+  title: string;
+  body: string;
+  instruction?: string | null;
+}): DocumentPlan {
+  const title = input.title.trim() || "LinkedIn Document";
+  const bodyLines = input.body
+    .split(/\n+/)
+    .map((line) => line.replace(/^\d+\.\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 9);
+  const bullets = bodyLines.length > 0 ? bodyLines : ["Define the signal.", "Build the workflow.", "Review before scaling."];
+  return {
+    title,
+    subtitle: input.instruction?.trim() || "A short operator-ready checklist",
+    pages: [
+      { heading: "The idea", bullets: bullets.slice(0, 3) },
+      { heading: "How to use it", bullets: bullets.slice(3, 6).length ? bullets.slice(3, 6) : bullets.slice(0, 3) },
+      { heading: "Before you scale", bullets: bullets.slice(6, 9).length ? bullets.slice(6, 9) : ["Keep it specific.", "Review early replies.", "Increase volume slowly."] },
+    ],
+  };
+}
+
+export async function generateDocumentPlan(input: {
+  title: string;
+  body: string;
+  instruction?: string | null;
+  audience?: string | null;
+}) {
+  const fallback = fallbackDocumentPlan(input);
+  return callOpenAIJson<DocumentPlan>(
+    [
+      {
+        role: "system",
+        content:
+          "You create concise LinkedIn carousel/PDF document outlines. Return only valid JSON. Use short, useful headings and bullets. Avoid fabricated stats.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          task: "Turn this post into a short LinkedIn document plan using the expected JSON shape.",
           expectedShape: fallback,
           input,
         }),

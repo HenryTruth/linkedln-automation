@@ -11,6 +11,7 @@ import { proxiesRouter } from "./routes/proxies.js";
 import { contentSignalRouter } from "./routes/contentSignal.js";
 import { postsRouter } from "./routes/posts.js";
 import { aiRouter } from "./routes/ai.js";
+import { aiAssetsRouter } from "./routes/aiAssets.js";
 import { settingsRouter } from "./routes/settings.js";
 import { authRouter } from "./routes/auth.js";
 import { jobsRouter } from "./routes/jobs.js";
@@ -68,6 +69,7 @@ app.get("/health", async (_req, res) => {
 
 app.use("/auth", authRouter);
 app.use("/accounts/linkedin/callback", linkedinOAuthCallbackRouter);
+app.use("/ai-assets", aiAssetsRouter);
 app.use(requireAuth);
 
 app.use("/accounts", accountsRouter);

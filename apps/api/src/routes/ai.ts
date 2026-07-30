@@ -1,7 +1,15 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { z } from "zod";
 import { prisma } from "@linkedin-automation/db";
-import { generateCampaignStrategy, qualifyLead, reviewCampaignPreflight } from "../lib/ai.js";
+import {
+  generateCampaignStrategy,
+  generateDocumentPlan,
+  generateImageBytes,
+  qualifyLead,
+  refinePostDraft,
+  reviewCampaignPreflight,
+} from "../lib/ai.js";
+import { renderDocumentPdf } from "../lib/pdf.js";
 
 export const aiRouter: IRouter = Router();
 
@@ -12,6 +20,37 @@ const CampaignStrategySchema = z.object({
   offer: z.string().max(500).optional().nullable(),
   tone: z.string().max(80).default("professional"),
 });
+
+const RefinePostSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().min(1).max(5000),
+  instruction: z.string().min(1).max(1000),
+  angle: z.string().max(160).optional().nullable(),
+  tone: z.string().max(80).optional().nullable(),
+  audience: z.string().max(160).optional().nullable(),
+  context: z.string().max(1200).optional().nullable(),
+});
+
+const AssetPostSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().min(1).max(5000),
+  prompt: z.string().max(1200).optional().nullable(),
+  audience: z.string().max(160).optional().nullable(),
+});
+
+function assetPublicUrl(req: Request, id: string, filename: string) {
+  const base = process.env.API_PUBLIC_URL ?? `${req.protocol}://${req.get("host")}`;
+  return `${base.replace(/\/$/, "")}/ai-assets/${id}/${encodeURIComponent(filename)}`;
+}
+
+function safeFilename(value: string, extension: string) {
+  const stem = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
+  return `${stem || "vectra-asset"}.${extension}`;
+}
 
 aiRouter.post("/campaign-strategy", async (req, res, next) => {
   try {
@@ -47,6 +86,82 @@ aiRouter.post("/campaign-strategy", async (req, res, next) => {
     });
 
     res.json(strategy);
+  } catch (err) {
+    next(err);
+  }
+});
+
+aiRouter.post("/posts/refine", async (req, res, next) => {
+  try {
+    const data = RefinePostSchema.parse(req.body);
+    const draft = await refinePostDraft(data);
+    res.json(draft);
+  } catch (err) {
+    next(err);
+  }
+});
+
+aiRouter.post("/posts/assets/image", async (req, res, next) => {
+  try {
+    const data = AssetPostSchema.parse(req.body);
+    const prompt =
+      data.prompt?.trim() ||
+      `Create a professional LinkedIn image that supports this post: ${data.title}`;
+    const bytes = await generateImageBytes({
+      prompt,
+      title: data.title,
+      body: data.body,
+      format: "png",
+    });
+    const asset = await prisma.aiGeneratedAsset.create({
+      data: {
+        userId: req.user.id,
+        kind: "IMAGE",
+        filename: safeFilename(data.title, "png"),
+        mimeType: "image/png",
+        bytes,
+        prompt,
+      },
+    });
+    res.status(201).json({
+      id: asset.id,
+      type: "IMAGE",
+      url: assetPublicUrl(req, asset.id, asset.filename),
+      title: data.title,
+      description: prompt,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+aiRouter.post("/posts/assets/document", async (req, res, next) => {
+  try {
+    const data = AssetPostSchema.parse(req.body);
+    const plan = await generateDocumentPlan({
+      title: data.title,
+      body: data.body,
+      instruction: data.prompt,
+      audience: data.audience,
+    });
+    const bytes = renderDocumentPdf(plan);
+    const asset = await prisma.aiGeneratedAsset.create({
+      data: {
+        userId: req.user.id,
+        kind: "DOCUMENT",
+        filename: safeFilename(plan.title, "pdf"),
+        mimeType: "application/pdf",
+        bytes,
+        prompt: data.prompt,
+      },
+    });
+    res.status(201).json({
+      id: asset.id,
+      type: "DOCUMENT",
+      url: assetPublicUrl(req, asset.id, asset.filename),
+      title: plan.title,
+      description: plan.subtitle,
+    });
   } catch (err) {
     next(err);
   }

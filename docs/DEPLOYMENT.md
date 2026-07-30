@@ -34,6 +34,8 @@ Optional AI copilot variables for campaign strategy and post drafting:
 ```text
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
+OPENAI_IMAGE_MODEL=gpt-image-1
+API_PUBLIC_URL=https://your-api.example.com
 ```
 
 For the worker service:

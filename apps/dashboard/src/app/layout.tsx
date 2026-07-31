@@ -7,7 +7,7 @@ import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Vectra",
-  description: "A polished command center for safe LinkedIn automation",
+  description: "AI-assisted LinkedIn growth workspace for campaigns, content, leads, and controlled execution",
 };
 
 export default function RootLayout({

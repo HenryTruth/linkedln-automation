@@ -24,7 +24,7 @@ export function HeroCTA() {
 
   return (
     <div className="animate-fade-up mt-8 flex flex-wrap gap-3" style={{ animationDelay: "0.24s" }}>
-      <Link href="/signup" className="btn-accent">Get started free</Link>
+      <Link href="/signup" className="btn-accent">Join beta free</Link>
       <Link href="/login"
         className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/[0.15]"
       >

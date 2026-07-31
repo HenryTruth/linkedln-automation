@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, type Campaign, type CampaignDetail, type CampaignLeadJobStatus, type CampaignPreflight, type CampaignStats, type Lead, type SearchScrapeCampaignJob } from "@/lib/api";
 import { Badge } from "@/components/Badge";
@@ -306,6 +306,8 @@ export default function CampaignDetailPage() {
   const [confirmBulkRemove, setConfirmBulkRemove] = useState(false);
   const [analyzingLeads, setAnalyzingLeads] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<{ done: number; total: number } | null>(null);
+  const [analysisStopRequested, setAnalysisStopRequested] = useState(false);
+  const analysisCancelledRef = useRef(false);
 
   // Add search URL form (SCRAPE only)
   const [searchUrl, setSearchUrl] = useState("");
@@ -616,23 +618,38 @@ export default function CampaignDetailPage() {
     }
 
     setAnalyzingLeads(true);
+    setAnalysisStopRequested(false);
+    analysisCancelledRef.current = false;
     setAnalysisProgress({ done: 0, total: uniqueLeadIds.length });
     try {
       let analyzed = 0;
       for (const leadId of uniqueLeadIds) {
+        if (analysisCancelledRef.current) break;
         await api.ai.analyzeLead(leadId, { campaignId: id });
         analyzed += 1;
         setAnalysisProgress({ done: analyzed, total: uniqueLeadIds.length });
       }
-      toast.success(`Analyzed ${uniqueLeadIds.length} lead${uniqueLeadIds.length === 1 ? "" : "s"}`);
+      if (analysisCancelledRef.current) {
+        toast.info(`Stopped after analyzing ${analyzed} of ${uniqueLeadIds.length} leads`);
+      } else {
+        toast.success(`Analyzed ${uniqueLeadIds.length} lead${uniqueLeadIds.length === 1 ? "" : "s"}`);
+      }
       await reload();
     } catch (e) {
       toast.error((e as Error).message);
       await reload().catch(() => {});
     } finally {
       setAnalyzingLeads(false);
+      setAnalysisStopRequested(false);
       setAnalysisProgress(null);
+      analysisCancelledRef.current = false;
     }
+  }
+
+  function stopLeadAnalysis() {
+    analysisCancelledRef.current = true;
+    setAnalysisStopRequested(true);
+    toast.info("Stopping analysis after the current lead finishes.");
   }
 
   function toggleSavedLead(leadId: string) {
@@ -1200,6 +1217,16 @@ export default function CampaignDetailPage() {
                 ? `Analyzing ${analysisProgress.done}/${analysisProgress.total}`
                 : "Analyze visible"}
             </button>
+            {analyzingLeads && (
+              <button
+                type="button"
+                onClick={stopLeadAnalysis}
+                disabled={analysisStopRequested}
+                className="btn-danger px-3 py-1.5"
+              >
+                {analysisStopRequested ? "Stopping..." : "Stop analysis"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -1789,6 +1816,16 @@ export default function CampaignDetailPage() {
                   ? `Analyzing ${analysisProgress.done}/${analysisProgress.total}`
                   : "Analyze selected"}
               </button>
+              {analyzingLeads && (
+                <button
+                  type="button"
+                  onClick={stopLeadAnalysis}
+                  disabled={analysisStopRequested}
+                  className="btn-danger px-3 py-1.5 text-xs"
+                >
+                  {analysisStopRequested ? "Stopping..." : "Stop"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedLeadIds([])}

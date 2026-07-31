@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, setAuthToken } from "@/lib/api";
 import { useAuth } from "@/contexts/auth";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,6 +37,10 @@ export default function LoginPage() {
     }
   }
 
+  function handleGooglePlaceholder() {
+    toast.info("Google sign-in is coming soon. Use email and password for now.");
+  }
+
   return (
     <div className="flex min-h-[80vh] items-center justify-center">
       <div className="w-full max-w-sm">
@@ -46,14 +51,14 @@ export default function LoginPage() {
             </span>
             <span className="text-left">
               <span className="block text-sm font-semibold tracking-tight text-white">Vectra</span>
-              <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-teal-400">Outreach control</span>
+              <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-teal-400">Beta workspace</span>
             </span>
           </Link>
           <h1 className="mt-6 text-2xl font-semibold tracking-tight text-white">Sign in</h1>
           <p className="mt-1 text-sm text-slate-400">
             Don&apos;t have an account?{" "}
             <Link href="/signup" className="font-semibold text-teal-400 hover:text-teal-300">
-              Sign up free
+              Join beta free
             </Link>
           </p>
         </div>
@@ -64,6 +69,23 @@ export default function LoginPage() {
               {error}
             </div>
           )}
+
+          <button
+            type="button"
+            onClick={handleGooglePlaceholder}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+          >
+            <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-xs font-bold text-slate-950">
+              G
+            </span>
+            Continue with Google
+          </button>
+
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-white/[0.08]" />
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">or</span>
+            <div className="h-px flex-1 bg-white/[0.08]" />
+          </div>
 
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-300">Email</label>

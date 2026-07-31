@@ -17,7 +17,15 @@ const faqs = [
   },
   {
     q: "What can I run in Vectra?",
-    a: "You can run connect campaigns, message campaigns, LinkedIn search scrapes, and Content Signal campaigns that find people who recently posted about a keyword.",
+    a: "You can build AI-assisted campaign strategies, generate LinkedIn post ideas and media, analyze leads, run connect/message/InMail flows, scrape search URLs, and use Content Signal campaigns that find people who recently posted about a keyword.",
+  },
+  {
+    q: "What does the AI help with?",
+    a: "AI helps turn a goal into campaign structure, narrow broad content lanes into topics, draft and refine posts, generate image/PDF assets, score campaign leads, summarize fit, and suggest safer outreach angles.",
+  },
+  {
+    q: "Is every new user a beta tester?",
+    a: "Yes. The first phase is beta onboarding, so new users get access while the product is still being shaped around real campaign, content, and lead-analysis workflows.",
   },
   {
     q: "What is Content Signal?",

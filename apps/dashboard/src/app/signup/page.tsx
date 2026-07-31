@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, setAuthToken } from "@/lib/api";
 import { useAuth } from "@/contexts/auth";
+import { toast } from "sonner";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -38,6 +39,10 @@ export default function SignupPage() {
     }
   }
 
+  function handleGooglePlaceholder() {
+    toast.info("Google sign-in is coming soon. Sign up with email and password for now.");
+  }
+
   return (
     <div className="flex min-h-[80vh] items-center justify-center">
       <div className="w-full max-w-sm">
@@ -48,10 +53,10 @@ export default function SignupPage() {
             </span>
             <span className="text-left">
               <span className="block text-sm font-semibold tracking-tight text-white">Vectra</span>
-              <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-teal-400">Outreach control</span>
+              <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-teal-400">Beta workspace</span>
             </span>
           </Link>
-          <h1 className="mt-6 text-2xl font-semibold tracking-tight text-white">Create your account</h1>
+          <h1 className="mt-6 text-2xl font-semibold tracking-tight text-white">Join the beta</h1>
           <p className="mt-1 text-sm text-slate-400">
             Already have an account?{" "}
             <Link href="/login" className="font-semibold text-teal-400 hover:text-teal-300">
@@ -68,7 +73,24 @@ export default function SignupPage() {
           )}
 
           <div className="rounded-xl border border-teal-500/30 bg-teal-500/5 px-4 py-3 text-sm text-teal-400">
-            <span className="font-semibold">Free Forever</span> — full access to all features, no credit card required.
+            <span className="font-semibold">Beta access</span> — every new user is a beta tester with full access for now, no credit card required.
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGooglePlaceholder}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+          >
+            <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-xs font-bold text-slate-950">
+              G
+            </span>
+            Continue with Google
+          </button>
+
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-white/[0.08]" />
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">or</span>
+            <div className="h-px flex-1 bg-white/[0.08]" />
           </div>
 
           <div>

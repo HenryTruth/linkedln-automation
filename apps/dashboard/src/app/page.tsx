@@ -6,18 +6,18 @@ import { FAQ } from "@/components/FAQ";
 const problems = [
   {
     number: "01",
-    title: "Volume-first tools create risk you only see later.",
-    text: "Most outreach software optimizes for more actions. Vectra treats each account like an asset, with hard limits and review points before jobs run.",
+    title: "Most teams do not need more blank campaign forms.",
+    text: "They need help deciding who to target, what angle to use, what to post, and which leads are worth human attention.",
   },
   {
     number: "02",
-    title: "Blind queues hide the signals operators need.",
-    text: "Checkpoints, proxy failures, stalled jobs, and cap usage should be visible in one place, not discovered after an account is already in trouble.",
+    title: "AI without guardrails can still damage the account.",
+    text: "Vectra pairs AI recommendations with hard account limits, checkpoint pauses, preflight reviews, and visible queue state before work reaches LinkedIn.",
   },
   {
     number: "03",
-    title: "Generic notes waste the attention you earn.",
-    text: "The best first touch has a reason to exist. Vectra turns recent post activity into context your connection requests can reference.",
+    title: "Generic content and generic outreach both miss the signal.",
+    text: "The workspace helps users narrow ideas, generate posts and media, analyze leads, and reference real activity instead of guessing.",
   },
 ];
 
@@ -37,40 +37,40 @@ const safetyGuards = [
 const workflow = [
   {
     step: "01",
-    title: "Add an account and proxy",
-    text: "Connect LinkedIn, assign a residential proxy in the same location, confirm timezone. Validated before anything runs.",
+    title: "Join the beta",
+    text: "Every new workspace starts as a beta tester account with full access while we learn from real operator workflows.",
   },
   {
     step: "02",
-    title: "Build your audience",
-    text: "Import from CSV, enter manually, scrape from search results, or use Content Signal to find recent posters on a keyword.",
+    title: "Let AI shape the motion",
+    text: "Build campaign strategy, generate content niches, create post drafts, and turn ideas into image or PDF assets.",
   },
   {
     step: "03",
-    title: "Set up a campaign",
-    text: "Choose type: connect, message, scrape, or content signal. Write sequences with dynamic fields. Set limits below the hard caps.",
+    title: "Find and qualify leads",
+    text: "Import, scrape, or collect content-signal leads, then let AI score fit and suggest the safest angle.",
   },
   {
     step: "04",
-    title: "Monitor before you scale",
-    text: "Review cap usage, failed jobs, and proxy health. Every risk signal is surfaced. You decide when to go further.",
+    title: "Launch under control",
+    text: "Use preflight, caps, sessions, proxies, and activity logs to keep every campaign reviewable before it scales.",
   },
 ];
 
 const productAreas = [
-  { title: "Account health", text: "Warm-up phase, proxy assignment, cap usage, checkpoints, and pause state per LinkedIn account.", href: "/accounts" },
-  { title: "Campaign control", text: "Connect, message, scrape, and Content Signal campaigns with limits that cannot bypass safety guards.", href: "/campaigns" },
-  { title: "Lead context", text: "CSV imports, manual leads, connection status, and recent post signals stored beside each person.", href: "/leads" },
-  { title: "Proxy discipline", text: "Residential proxy profiles, sticky sessions, health checks, timezone matching, and exit IP visibility.", href: "/proxies" },
-  { title: "Queue visibility", text: "Live job state, failed job reasons, retry history, and worker diagnostics before problems compound.", href: "/jobs" },
-  { title: "Audit trail", text: "A searchable history for every connect, message, scrape, checkpoint, and campaign event.", href: "/activity" },
+  { title: "AI campaign builder", text: "Turn a goal, audience, offer, and tone into campaign structure, limits, notes, messages, rationale, and safety checks.", href: "/campaigns/new" },
+  { title: "AI content studio", text: "Generate cascading topic niches, post drafts, refinements, image previews, and PDF documents for LinkedIn posts.", href: "/posts" },
+  { title: "AI lead analysis", text: "Score campaign leads, summarize fit, flag risks, and suggest a recommended outreach angle from the campaign context.", href: "/leads" },
+  { title: "Account health", text: "Warm-up phase, proxy assignment, cap usage, checkpoints, browser session state, and posting API connection per account.", href: "/accounts" },
+  { title: "Signal campaigns", text: "Find people from search URLs or recent LinkedIn posts, then save the context next to each lead.", href: "/campaigns" },
+  { title: "Queue visibility", text: "Live job state, failed job reasons, retry history, worker diagnostics, and audit logs before problems compound.", href: "/jobs" },
 ];
 
 const operatorProof = [
-  "Hard caps enforced by the queue",
-  "Proxy and timezone checks before browser jobs",
-  "Checkpoints pause the whole account",
-  "Post-based notes for relevant outreach",
+  "AI campaign strategy",
+  "AI topic and media generation",
+  "AI lead scoring inside campaigns",
+  "Guardrails before LinkedIn actions",
 ];
 
 function DashboardPreview() {
@@ -422,16 +422,16 @@ export default function LandingPage() {
                 <span className="absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75 animate-ping" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-500" />
               </span>
-              LinkedIn outreach control center
+              Beta access open for early testers
             </span>
 
             <h1
               className="animate-fade-up mt-6 text-5xl font-bold leading-[1.04] tracking-tight sm:text-6xl xl:text-7xl"
               style={{ animationDelay: "0.08s" }}
             >
-              Run LinkedIn outreach{" "}
+              Build LinkedIn growth motions{" "}
               <span className="bg-gradient-to-r from-teal-300 to-cyan-400 bg-clip-text text-transparent">
-                without flying blind.
+                with AI in the loop.
               </span>
             </h1>
 
@@ -439,9 +439,9 @@ export default function LandingPage() {
               className="animate-fade-up mt-6 max-w-xl text-lg leading-8 text-slate-300 sm:text-xl sm:leading-9"
               style={{ animationDelay: "0.16s" }}
             >
-              Vectra gives sales operators a safer way to manage LinkedIn accounts, campaigns,
-              proxies, and queues. Every action runs through guardrails, warm-up rules, and visible
-              risk checks before it reaches LinkedIn.
+              Vectra helps beta users generate campaign strategy, discover content ideas, draft
+              posts with media, analyze leads, and run LinkedIn workflows with account safety visible
+              at every step.
             </p>
 
             <HeroCTA />
@@ -466,9 +466,9 @@ export default function LandingPage() {
               style={{ animationDelay: "0.36s" }}
             >
               {[
+                { value: "Beta", label: "Early tester access" },
+                { value: "AI", label: "Strategy, posts, leads" },
                 { value: "10", label: "Enforced guards" },
-                { value: "15/day", label: "Connection ceiling" },
-                { value: "4 weeks", label: "Warm-up ramp" },
               ].map((stat) => (
                 <div key={stat.label}>
                   <p className="whitespace-nowrap text-3xl font-bold text-white sm:text-4xl">{stat.value}</p>
@@ -495,11 +495,12 @@ export default function LandingPage() {
           <AnimateIn className="max-w-3xl">
             <p className="page-kicker">Why Vectra exists</p>
             <h2 className="mt-3 text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
-              Most automation tools sell speed. Vectra sells control.
+              Vectra is becoming the AI operating layer for LinkedIn growth.
             </h2>
             <p className="mt-5 text-base leading-7 text-slate-600">
-              LinkedIn outreach is useful only when the account stays healthy and the message feels
-              relevant. The workspace is designed around those two constraints from the first job.
+              The first phase is beta onboarding. New users get full access so we can learn how
+              founders, operators, and sales teams move from idea to campaign to published content
+              without juggling separate tools.
             </p>
           </AnimateIn>
 
@@ -523,22 +524,22 @@ export default function LandingPage() {
           <div className="grid gap-14 lg:grid-cols-[1fr_1.1fr] lg:items-center">
             <AnimateIn from="left">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-4 py-1.5 text-sm font-semibold text-teal-300">
-                Signal-based personalization
+                AI content and signal workflows
               </span>
               <h2 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl">
-                Turn recent LinkedIn posts into relevant first touches.
+                Go from audience signal to post, asset, and outreach angle.
               </h2>
               <p className="mt-6 text-lg leading-8 text-slate-300">
-                Content Signal campaigns find people who recently posted about a keyword, save the
-                excerpt beside the lead, and generate connection notes that reference what they
-                actually wrote.
+                Vectra now helps users narrow content niches, generate topics, draft and refine
+                posts, create image or PDF assets, and connect those ideas back to the campaign and
+                lead context.
               </p>
               <div className="mt-8 space-y-4">
                 {[
-                  "Search recent LinkedIn posts inside a custom date window",
-                  "Store author, title, company, URL, post date, and excerpt per lead",
-                  "Use dynamic fields like {{postTopic}}, {{postExcerpt}}, and {{postDate}}",
-                  "Protect campaigns with deduplication, freshness gates, and throttling",
+                  "Cascade from broad ideas into niche LinkedIn topics",
+                  "Generate posts, rewrite angles, and create visual or PDF assets",
+                  "Analyze campaign leads with fit score, summary, risks, and suggested angle",
+                  "Use content signals and guardrails before outreach runs",
                 ].map((item) => (
                   <div key={item} className="flex items-start gap-3">
                     <span className="mt-0.5 h-5 w-5 flex-shrink-0 text-teal-400">
@@ -602,11 +603,11 @@ export default function LandingPage() {
           <AnimateIn className="max-w-3xl">
             <p className="page-kicker">How it works</p>
             <h2 className="mt-3 text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
-              Launch deliberately, then scale with evidence.
+              Start with AI assistance, then keep the human review loop.
             </h2>
             <p className="mt-5 text-base leading-7 text-slate-600">
-              Vectra is built for the operating rhythm teams actually need: prepare the account,
-              define the audience, run a constrained campaign, and watch the signals.
+              The goal is not to remove operator judgment. It is to remove the empty-page work:
+              choosing ideas, shaping campaigns, finding leads, and preparing the next best action.
             </p>
           </AnimateIn>
 
@@ -633,11 +634,11 @@ export default function LandingPage() {
           <AnimateIn className="max-w-3xl">
             <p className="page-kicker">The workspace</p>
             <h2 className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">
-              One cockpit for accounts, campaigns, queues, and risk.
+              One workspace for ideas, leads, campaigns, posts, and risk.
             </h2>
             <p className="mt-5 text-lg leading-8 text-slate-400">
-              Operators should not have to stitch together account health, cap usage, proxy status,
-              campaign progress, and audit logs. Vectra keeps the important decisions on one surface.
+              Operators should not have to stitch together prompt docs, lead spreadsheets, campaign
+              tools, browser sessions, and queue logs. Vectra brings the decisions into one surface.
             </p>
           </AnimateIn>
 
@@ -655,11 +656,11 @@ export default function LandingPage() {
               <div>
                 <p className="page-kicker">Product surface</p>
                 <h2 className="mt-3 text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
-                  The pages behind the promise.
+                  The AI-assisted system behind the promise.
                 </h2>
                 <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
-                  Each area maps to a real operating question: is the account safe, is the campaign
-                  constrained, what happened, and what needs review?
+                  Each area removes a different kind of friction: deciding what to say, who to
+                  target, what to publish, what to review, and when to stop.
                 </p>
               </div>
               <Link href="/dashboard" className="btn-primary shrink-0">
@@ -711,19 +712,19 @@ export default function LandingPage() {
             <div className="grid gap-10 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-300">
-                  Start controlled
+                  Join the beta
                 </p>
                 <h2 className="mt-4 max-w-2xl text-4xl font-bold tracking-tight text-white sm:text-5xl">
-                  Start with one account, one proxy, and one campaign.
+                  Help shape the AI operating layer for LinkedIn growth.
                 </h2>
                 <p className="mt-5 max-w-xl text-lg leading-8 text-slate-400">
-                  Confirm the guardrails, watch the activity, then decide when to add more volume.
-                  Vectra keeps the risk signals visible while you build the motion.
+                  Every user joining now is treated as a beta tester. Use the full product, test the
+                  AI workflows, and help us tune the path from idea to campaign to post.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3 lg:flex-col">
                 <Link href="/signup" className="btn-accent">
-                  Create account
+                  Join beta free
                 </Link>
                 <Link
                   href="/login"
@@ -748,13 +749,13 @@ export default function LandingPage() {
               <span>
                 <span className="block text-sm font-semibold text-white">Vectra</span>
                 <span className="block text-xs font-medium uppercase tracking-[0.14em] text-teal-400">
-                  Outreach automation
+                  AI LinkedIn growth workspace
                 </span>
               </span>
             </Link>
             <p className="mt-3 max-w-sm text-xs leading-5 text-slate-500">
-              LinkedIn outreach control center for account health, signal-based personalization,
-              proxy discipline, and queue visibility.
+              AI-assisted LinkedIn growth workspace for campaign strategy, content generation,
+              lead analysis, account health, and controlled execution.
             </p>
           </div>
           <div className="flex flex-wrap gap-5 text-sm font-medium text-slate-500">

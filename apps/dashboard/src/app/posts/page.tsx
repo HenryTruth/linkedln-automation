@@ -836,12 +836,12 @@ export default function PostsPage() {
                 </td>
                 <td className="table-cell text-slate-400">{post.media.length}</td>
                 <td className="table-cell">
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={() => editPost(post)} className="btn-secondary px-3 py-1.5">Edit</button>
-                    <button onClick={() => markPublished(post)} disabled={busy === post.id || post.status === "PUBLISHED"} className="btn-secondary px-3 py-1.5">
+                  <div className="flex flex-nowrap items-center gap-1.5">
+                    <button onClick={() => editPost(post)} className="btn-secondary whitespace-nowrap px-2.5 py-1 text-xs">Edit</button>
+                    <button onClick={() => markPublished(post)} disabled={busy === post.id || post.status === "PUBLISHED"} className="btn-secondary whitespace-nowrap px-2.5 py-1 text-xs">
                       Publish
                     </button>
-                    <button onClick={() => deletePost(post)} disabled={busy === post.id} className="btn-danger px-3 py-1.5">
+                    <button onClick={() => deletePost(post)} disabled={busy === post.id} className="btn-danger whitespace-nowrap px-2.5 py-1 text-xs">
                       Delete
                     </button>
                   </div>

@@ -197,6 +197,32 @@ function JobStatusBadge({ status, error }: { status: CampaignLeadJobStatus; erro
   );
 }
 
+function AiFitCell({ lead }: { lead: Lead }) {
+  if (typeof lead.aiFitScore !== "number") {
+    return <span className="text-xs text-slate-500">Not analyzed</span>;
+  }
+
+  const color =
+    lead.aiFit === "GOOD"
+      ? "bg-emerald-500/10 text-emerald-300"
+      : lead.aiFit === "REJECT"
+        ? "bg-red-500/10 text-red-300"
+        : "bg-amber-500/10 text-amber-300";
+
+  return (
+    <div>
+      <span className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${color}`}>
+        {lead.aiFit ?? "FIT"} {lead.aiFitScore}
+      </span>
+      {lead.aiSummary && (
+        <p className="mt-1 max-w-xs line-clamp-2 text-xs leading-5 text-slate-500">
+          {lead.aiSummary}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // Warning shown after adding a lead whose status doesn't match the campaign type
 function statusMismatchWarning(
   campaignType: string,
@@ -278,6 +304,8 @@ export default function CampaignDetailPage() {
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [removingBulk, setRemovingBulk] = useState(false);
   const [confirmBulkRemove, setConfirmBulkRemove] = useState(false);
+  const [analyzingLeads, setAnalyzingLeads] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<{ done: number; total: number } | null>(null);
 
   // Add search URL form (SCRAPE only)
   const [searchUrl, setSearchUrl] = useState("");
@@ -575,6 +603,35 @@ export default function CampaignDetailPage() {
       toast.error((e as Error).message);
     } finally {
       setRemovingBulk(false);
+    }
+  }
+
+  async function handleAnalyzeCampaignLeads(scope: "selected" | "visible") {
+    if (!campaign) return;
+    const leadIds = scope === "selected" ? selectedLeadIds : campaign.leads.map((cl) => cl.leadId);
+    const uniqueLeadIds = Array.from(new Set(leadIds));
+    if (uniqueLeadIds.length === 0) {
+      toast.error("Choose at least one lead to analyze.");
+      return;
+    }
+
+    setAnalyzingLeads(true);
+    setAnalysisProgress({ done: 0, total: uniqueLeadIds.length });
+    try {
+      let analyzed = 0;
+      for (const leadId of uniqueLeadIds) {
+        await api.ai.analyzeLead(leadId, { campaignId: id });
+        analyzed += 1;
+        setAnalysisProgress({ done: analyzed, total: uniqueLeadIds.length });
+      }
+      toast.success(`Analyzed ${uniqueLeadIds.length} lead${uniqueLeadIds.length === 1 ? "" : "s"}`);
+      await reload();
+    } catch (e) {
+      toast.error((e as Error).message);
+      await reload().catch(() => {});
+    } finally {
+      setAnalyzingLeads(false);
+      setAnalysisProgress(null);
     }
   }
 
@@ -1132,6 +1189,16 @@ export default function CampaignDetailPage() {
                 : isScrape
                 ? "+ Add Profile URL"
                 : "Add Lead"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAnalyzeCampaignLeads("visible")}
+              disabled={analyzingLeads || campaign.leads.length === 0}
+              className="btn-secondary px-3 py-1.5 text-sky-400"
+            >
+              {analyzingLeads && analysisProgress
+                ? `Analyzing ${analysisProgress.done}/${analysisProgress.total}`
+                : "Analyze visible"}
             </button>
           </div>
         </div>
@@ -1707,11 +1774,21 @@ export default function CampaignDetailPage() {
         )}
 
         {selectedLeadIds.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-slate-900/60 p-3">
             <span className="text-sm font-medium text-red-300">
               {selectedLeadIds.length} lead{selectedLeadIds.length === 1 ? "" : "s"} selected
             </span>
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleAnalyzeCampaignLeads("selected")}
+                disabled={analyzingLeads}
+                className="btn-secondary px-3 py-1.5 text-xs text-sky-400"
+              >
+                {analyzingLeads && analysisProgress
+                  ? `Analyzing ${analysisProgress.done}/${analysisProgress.total}`
+                  : "Analyze selected"}
+              </button>
               <button
                 type="button"
                 onClick={() => setSelectedLeadIds([])}
@@ -1747,8 +1824,8 @@ export default function CampaignDetailPage() {
                   />
                 </th>
                 {(isScrape
-                  ? ["Profile URL", "Name", "Company", "Title", "Status", "Actions"]
-                  : ["Name", "Company", "Connection", "Stage", "Replied", "Last Action", "Status", "Actions"]
+                  ? ["Profile URL", "Name", "Company", "Title", "AI Fit", "Status", "Actions"]
+                  : ["Name", "Company", "AI Fit", "Connection", "Stage", "Replied", "Last Action", "Status", "Actions"]
                 ).map((h) => (
                   <th
                     key={h}
@@ -1763,7 +1840,7 @@ export default function CampaignDetailPage() {
               {leadTotal === 0 && (
                 <tr>
                   <td
-                    colSpan={isScrape ? 7 : 9}
+                    colSpan={isScrape ? 8 : 10}
                     className="px-6 py-10 text-center text-sm text-slate-400"
                   >
                     {isScrape
@@ -1813,6 +1890,9 @@ export default function CampaignDetailPage() {
                         {cl.lead.title ?? <span className="italic text-slate-300">pending</span>}
                       </td>
                       <td className="table-cell">
+                        <AiFitCell lead={cl.lead} />
+                      </td>
+                      <td className="table-cell">
                         <JobStatusBadge status={cl.jobStatus} error={cl.lastJobError} />
                       </td>
                     </>
@@ -1832,6 +1912,9 @@ export default function CampaignDetailPage() {
                       </td>
                       <td className="table-cell text-slate-400">
                         {cl.lead.company ?? "-"}
+                      </td>
+                      <td className="table-cell">
+                        <AiFitCell lead={cl.lead} />
                       </td>
                       <td className="table-cell">
                         <Badge value={cl.lead.connectionStatus} />
@@ -1904,7 +1987,7 @@ export default function CampaignDetailPage() {
               {isContentSignal && campaign.leads.map((cl) =>
                 cl.postSignal ? (
                   <tr key={`${cl.id}-signal`} className="bg-teal-500/[0.04]">
-                    <td colSpan={9} className="px-6 py-2">
+                    <td colSpan={10} className="px-6 py-2">
                       <div className="flex items-start gap-2 rounded-2xl border border-teal-500/20 bg-teal-500/5 p-3 text-xs text-teal-300">
                         <span className="shrink-0 font-medium">Post:</span>
                         <span className="italic line-clamp-2">&quot;{cl.postSignal.excerpt}&quot;</span>

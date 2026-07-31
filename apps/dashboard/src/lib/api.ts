@@ -465,6 +465,27 @@ export interface GeneratedPostAsset {
   description: string;
 }
 
+export interface NicheOptions {
+  path: string[];
+  depth: number;
+  options: Array<{
+    label: string;
+    rationale: string;
+  }>;
+  customPromptHint: string;
+  readyForTopics: boolean;
+}
+
+export interface TopicIdeas {
+  niche: string;
+  topics: Array<{
+    title: string;
+    angle: string;
+    audience: string;
+    format: "TEXT" | "IMAGE" | "DOCUMENT" | "ARTICLE" | "VIDEO";
+  }>;
+}
+
 export interface SearchScrapeCampaignJob {
   id?: string;
   name: string;
@@ -628,6 +649,26 @@ export const api = {
       context?: string | null;
     }) =>
       apiFetch<GeneratedPostDraft & { angle: string }>("/ai/posts/refine", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    nicheOptions: (data: {
+      path: string[];
+      audience?: string | null;
+      context?: string | null;
+      customSeed?: string | null;
+    }) =>
+      apiFetch<NicheOptions>("/ai/posts/niche-options", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    topicIdeas: (data: {
+      path: string[];
+      audience?: string | null;
+      context?: string | null;
+      customSeed?: string | null;
+    }) =>
+      apiFetch<TopicIdeas>("/ai/posts/topic-ideas", {
         method: "POST",
         body: JSON.stringify(data),
       }),

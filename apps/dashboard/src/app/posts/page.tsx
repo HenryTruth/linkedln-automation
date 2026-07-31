@@ -9,6 +9,8 @@ import {
   type LinkedInPostStatus,
   type PostMediaType,
   type GeneratedPostDraft,
+  type NicheOptions,
+  type TopicIdeas,
 } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
@@ -50,6 +52,11 @@ export default function PostsPage() {
   const [tone, setTone] = useState("professional");
   const [audience, setAudience] = useState("founders and operators");
   const [callToAction, setCallToAction] = useState("");
+  const [ideaContext, setIdeaContext] = useState("");
+  const [customNiche, setCustomNiche] = useState("");
+  const [nichePath, setNichePath] = useState<string[]>([]);
+  const [nicheOptions, setNicheOptions] = useState<NicheOptions | null>(null);
+  const [topicIdeas, setTopicIdeas] = useState<TopicIdeas | null>(null);
   const [refineInstruction, setRefineInstruction] = useState("");
   const [refineAngle, setRefineAngle] = useState("make it more practical");
   const [assetPrompt, setAssetPrompt] = useState("");
@@ -90,6 +97,11 @@ export default function PostsPage() {
     setBody("");
     setTopic("");
     setCallToAction("");
+    setIdeaContext("");
+    setCustomNiche("");
+    setNichePath([]);
+    setNicheOptions(null);
+    setTopicIdeas(null);
     setRefineInstruction("");
     setAssetPrompt("");
     setScheduledFor("");
@@ -116,6 +128,83 @@ export default function PostsPage() {
       }))
     );
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function loadNicheOptions(nextPath = nichePath, customSeed?: string | null) {
+    setBusy("niche");
+    try {
+      const options = await api.ai.nicheOptions({
+        path: nextPath,
+        audience,
+        context: ideaContext || topic || null,
+        customSeed: customSeed || null,
+      });
+      setNichePath(options.path);
+      setNicheOptions(options);
+      setTopicIdeas(null);
+      toast.success(nextPath.length > 0 || customSeed ? "Niche refined" : "Idea options generated");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function selectNiche(label: string) {
+    void loadNicheOptions([...nichePath, label]);
+  }
+
+  function stepBackNiche() {
+    const nextPath = nichePath.slice(0, -1);
+    void loadNicheOptions(nextPath);
+  }
+
+  function resetNiche() {
+    setNichePath([]);
+    setNicheOptions(null);
+    setTopicIdeas(null);
+    setCustomNiche("");
+  }
+
+  function addCustomNiche() {
+    const value = customNiche.trim();
+    if (!value) {
+      toast.error("Add a custom niche first.");
+      return;
+    }
+    setCustomNiche("");
+    void loadNicheOptions([...nichePath, value]);
+  }
+
+  async function generateTopics() {
+    if (nichePath.length === 0 && !ideaContext.trim() && !customNiche.trim()) {
+      toast.error("Select or enter a niche first.");
+      return;
+    }
+    setBusy("topics");
+    try {
+      const ideas = await api.ai.topicIdeas({
+        path: nichePath,
+        audience,
+        context: ideaContext || topic || null,
+        customSeed: customNiche || null,
+      });
+      setTopicIdeas(ideas);
+      toast.success("Topic ideas generated");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function useTopicIdea(idea: TopicIdeas["topics"][number]) {
+    setTopic(`${idea.title}\n\nAngle: ${idea.angle}\nAudience: ${idea.audience}`);
+    setAudience(idea.audience);
+    if (idea.format === "IMAGE" || idea.format === "DOCUMENT") {
+      setAssetPrompt(`${idea.format === "IMAGE" ? "Create a visual framework for" : "Create a short checklist PDF for"}: ${idea.title}. Angle: ${idea.angle}`);
+    }
+    toast.success("Topic added to draft brief");
   }
 
   async function generateDraft() {
@@ -331,6 +420,135 @@ export default function PostsPage() {
       </section>
 
       <form onSubmit={savePost} className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="app-panel p-5 lg:col-span-2">
+          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-300">
+                AI idea cascade
+              </p>
+              <h2 className="mt-2 text-lg font-semibold text-white">Find a niche before writing</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Start broad, pick the most useful branch, then keep narrowing until the idea feels specific enough to publish.
+              </p>
+              <div className="mt-4 space-y-3">
+                <label className="block text-sm font-medium text-slate-300">
+                  Content lane
+                  <input
+                    className="field mt-1 w-full"
+                    value={ideaContext}
+                    onChange={(e) => setIdeaContext(e.target.value)}
+                    placeholder="AI sales workflows, founder lessons, compliance-led outreach..."
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => loadNicheOptions([])}
+                    disabled={busy === "niche"}
+                    className="btn-accent"
+                  >
+                    {busy === "niche" && nichePath.length === 0 ? "Thinking..." : "Generate Options"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stepBackNiche}
+                    disabled={busy === "niche" || nichePath.length === 0}
+                    className="btn-secondary"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetNiche}
+                    disabled={busy === "niche" || (nichePath.length === 0 && !nicheOptions)}
+                    className="btn-secondary"
+                  >
+                    Reset
+                  </button>
+                </div>
+                {nichePath.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {nichePath.map((item, index) => (
+                      <span
+                        key={`${item}-${index}`}
+                        className="rounded-full border border-teal-400/30 bg-teal-400/10 px-3 py-1 text-xs font-semibold text-teal-200"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <input
+                    className="field w-full"
+                    value={customNiche}
+                    onChange={(e) => setCustomNiche(e.target.value)}
+                    placeholder={nicheOptions?.customPromptHint ?? "Or enter your own niche, audience, pain point, or angle"}
+                  />
+                  <button type="button" onClick={addCustomNiche} disabled={busy === "niche"} className="btn-secondary">
+                    Use Custom
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={generateTopics}
+                  disabled={busy === "topics" || (nichePath.length === 0 && !ideaContext.trim() && !customNiche.trim())}
+                  className="btn-primary w-full"
+                >
+                  {busy === "topics" ? "Generating Topics..." : nicheOptions?.readyForTopics ? "Generate Topics" : "Generate Topics From Here"}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(nicheOptions?.options ?? []).map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() => selectNiche(option.label)}
+                    disabled={busy === "niche"}
+                    className="rounded-xl border border-white/[0.08] bg-slate-950/40 p-4 text-left transition hover:border-teal-400/50 hover:bg-teal-400/10"
+                  >
+                    <span className="block text-sm font-semibold text-white">{option.label}</span>
+                    <span className="mt-2 block text-xs leading-5 text-slate-400">{option.rationale}</span>
+                  </button>
+                ))}
+                {!nicheOptions && (
+                  <div className="rounded-xl border border-dashed border-white/[0.12] bg-slate-950/30 p-5 text-sm leading-6 text-slate-400 sm:col-span-2">
+                    Generate options to let AI suggest the first branches, or type a custom starting niche and keep narrowing from there.
+                  </div>
+                )}
+              </div>
+
+              {topicIdeas && (
+                <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-white">Topics for {topicIdeas.niche}</p>
+                    <span className="text-xs font-semibold text-teal-200">{topicIdeas.topics.length} ideas</span>
+                  </div>
+                  <div className="mt-3 grid gap-3">
+                    {topicIdeas.topics.map((idea) => (
+                      <button
+                        key={`${idea.title}-${idea.format}`}
+                        type="button"
+                        onClick={() => useTopicIdea(idea)}
+                        className="rounded-lg border border-white/[0.08] bg-slate-950/50 p-3 text-left hover:border-teal-400/40"
+                      >
+                        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-teal-200">
+                          {idea.format}
+                        </span>
+                        <span className="mt-2 block text-sm font-semibold text-white">{idea.title}</span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-400">{idea.angle}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
         <section className="app-panel p-5">
           <h2 className="text-lg font-semibold text-white">AI draft brief</h2>
           <div className="mt-4 space-y-4">

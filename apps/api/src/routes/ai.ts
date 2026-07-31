@@ -5,8 +5,10 @@ import {
   generateCampaignStrategy,
   generateDocumentPlan,
   generateImageBytes,
+  generateNicheOptions,
   qualifyLead,
   refinePostDraft,
+  generateTopicIdeas,
   reviewCampaignPreflight,
 } from "../lib/ai.js";
 import { renderDocumentPdf } from "../lib/pdf.js";
@@ -36,6 +38,13 @@ const AssetPostSchema = z.object({
   body: z.string().min(1).max(5000),
   prompt: z.string().max(1200).optional().nullable(),
   audience: z.string().max(160).optional().nullable(),
+});
+
+const NicheCascadeSchema = z.object({
+  path: z.array(z.string().min(1).max(120)).max(8).default([]),
+  audience: z.string().max(160).optional().nullable(),
+  context: z.string().max(600).optional().nullable(),
+  customSeed: z.string().max(160).optional().nullable(),
 });
 
 function assetPublicUrl(req: Request, id: string, filename: string) {
@@ -96,6 +105,26 @@ aiRouter.post("/posts/refine", async (req, res, next) => {
     const data = RefinePostSchema.parse(req.body);
     const draft = await refinePostDraft(data);
     res.json(draft);
+  } catch (err) {
+    next(err);
+  }
+});
+
+aiRouter.post("/posts/niche-options", async (req, res, next) => {
+  try {
+    const data = NicheCascadeSchema.parse(req.body ?? {});
+    const options = await generateNicheOptions(data);
+    res.json(options);
+  } catch (err) {
+    next(err);
+  }
+});
+
+aiRouter.post("/posts/topic-ideas", async (req, res, next) => {
+  try {
+    const data = NicheCascadeSchema.parse(req.body ?? {});
+    const ideas = await generateTopicIdeas(data);
+    res.json(ideas);
   } catch (err) {
     next(err);
   }

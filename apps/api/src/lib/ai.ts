@@ -82,6 +82,29 @@ export type DocumentPlan = {
   }>;
 };
 
+export type NicheOption = {
+  label: string;
+  rationale: string;
+};
+
+export type NicheOptions = {
+  path: string[];
+  depth: number;
+  options: NicheOption[];
+  customPromptHint: string;
+  readyForTopics: boolean;
+};
+
+export type TopicIdeas = {
+  niche: string;
+  topics: Array<{
+    title: string;
+    angle: string;
+    audience: string;
+    format: "TEXT" | "IMAGE" | "DOCUMENT" | "ARTICLE" | "VIDEO";
+  }>;
+};
+
 type ChatMessage = {
   role: "system" | "user";
   content: string;
@@ -426,6 +449,134 @@ export async function generateDocumentPlan(input: {
         content: JSON.stringify({
           task: "Turn this post into a short LinkedIn document plan using the expected JSON shape.",
           expectedShape: fallback,
+          input,
+        }),
+      },
+    ],
+    fallback
+  );
+}
+
+export function fallbackNicheOptions(input: {
+  path: string[];
+  audience?: string | null;
+  context?: string | null;
+  customSeed?: string | null;
+}) {
+  const path = [...input.path, input.customSeed ?? ""].map((item) => item.trim()).filter(Boolean);
+  const base = path.at(-1) || input.context?.trim() || input.audience?.trim() || "LinkedIn growth";
+  const depth = path.length;
+  const suffixes =
+    depth === 0
+      ? ["operator workflows", "founder lessons", "sales systems", "AI adoption", "content-led outreach", "risk controls"]
+      : depth === 1
+        ? ["for small teams", "for agencies", "for B2B founders", "with low-volume execution", "using recent buyer signals", "without spammy automation"]
+        : ["mistakes", "checklists", "before-and-after examples", "decision frameworks", "weekly operating routines", "metrics to review"];
+  return {
+    path,
+    depth,
+    options: suffixes.map((suffix) => ({
+      label: depth === 0 ? suffix : `${base} ${suffix}`,
+      rationale: `Narrows the idea toward ${suffix}.`,
+    })),
+    customPromptHint: "Add your own audience, industry, pain point, or point of view.",
+    readyForTopics: depth >= 2,
+  } satisfies NicheOptions;
+}
+
+export async function generateNicheOptions(input: {
+  path: string[];
+  audience?: string | null;
+  context?: string | null;
+  customSeed?: string | null;
+}) {
+  const fallback = fallbackNicheOptions(input);
+  return callOpenAIJson<NicheOptions>(
+    [
+      {
+        role: "system",
+        content:
+          "You are Vectra's LinkedIn content strategist. Return only valid JSON. Generate useful niche-down options based on the selected path. Each option must be meaningfully narrower than the previous path and suitable for B2B LinkedIn posts.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          task: "Generate the next cascade options for niching down a LinkedIn content idea.",
+          expectedShape: fallback,
+          constraints: [
+            "Return 6 options.",
+            "Avoid generic categories once depth is greater than 0.",
+            "Make options specific enough that the next selection can become post topics.",
+            "Set readyForTopics true when the path is narrow enough to generate strong topics.",
+          ],
+          input,
+        }),
+      },
+    ],
+    fallback
+  );
+}
+
+export function fallbackTopicIdeas(input: {
+  path: string[];
+  audience?: string | null;
+  context?: string | null;
+  customSeed?: string | null;
+}) {
+  const path = [...input.path, input.customSeed ?? ""].map((item) => item.trim()).filter(Boolean);
+  const niche = path.join(" > ") || input.context || "LinkedIn growth";
+  const audience = input.audience?.trim() || "founders and operators";
+  const finalNiche = path.at(-1) || "LinkedIn outreach";
+  return {
+    niche,
+    topics: [
+      {
+        title: `The quiet mistake ${audience} make with ${finalNiche}`,
+        angle: "A practical warning post with a simple fix.",
+        audience,
+        format: "TEXT",
+      },
+      {
+        title: `A simple checklist for ${finalNiche}`,
+        angle: "Turn the niche into an operator checklist.",
+        audience,
+        format: "DOCUMENT",
+      },
+      {
+        title: `What to review before scaling ${finalNiche}`,
+        angle: "Safety-first preflight framework.",
+        audience,
+        format: "IMAGE",
+      },
+    ],
+  } satisfies TopicIdeas;
+}
+
+export async function generateTopicIdeas(input: {
+  path: string[];
+  audience?: string | null;
+  context?: string | null;
+  customSeed?: string | null;
+}) {
+  const fallback = fallbackTopicIdeas(input);
+  return callOpenAIJson<TopicIdeas>(
+    [
+      {
+        role: "system",
+        content:
+          "You generate specific LinkedIn post topics from a narrowed niche. Return only valid JSON. Topics must be concrete, non-clickbait, and useful for B2B operators.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          task: "Generate topic ideas from this niche path using the expected JSON shape.",
+          expectedShape: fallback,
+          constraints: [
+            "Return 6 topics.",
+            "Each topic should be publishable as a LinkedIn post brief.",
+            "Vary format suggestions across TEXT, DOCUMENT, IMAGE, ARTICLE, and VIDEO when useful.",
+            "Avoid fabricated data or overpromising.",
+          ],
           input,
         }),
       },

@@ -150,6 +150,55 @@ function compactName(value: string) {
   return firstSentence(value).replace(/\s+/g, " ").slice(0, 72);
 }
 
+function callToActionFromIntent(value: string | null | undefined, topic: string) {
+  const intent = value?.trim();
+  if (!intent) return "What would you add?";
+
+  const normalized = intent.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const topicLabel = compactName(topic).toLowerCase();
+
+  if (/\bdm\b|direct message|message me|inbox/.test(normalized)) {
+    return `If this is on your roadmap, send me a DM and I can share a practical starting point for ${topicLabel}.`;
+  }
+  if (/comment|reply|thought|discuss|let s talk|lets talk/.test(normalized)) {
+    return `What would you add from your own experience with ${topicLabel}?`;
+  }
+  if (/book|call|demo|meeting|chat/.test(normalized)) {
+    return `If you are working through this now, I am happy to compare notes on a short call.`;
+  }
+  if (/learn|guide|resource|checklist|download/.test(normalized)) {
+    return `If a practical checklist would help, let me know and I can share one.`;
+  }
+
+  return intent.endsWith(".") || intent.endsWith("?") || intent.endsWith("!")
+    ? intent
+    : `${intent}.`;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function polishDraftCallToAction(draft: PostDraft, input: { topic: string; callToAction?: string | null }) {
+  const rawCta = input.callToAction?.trim();
+  if (!rawCta) return draft;
+
+  const polishedCta = callToActionFromIntent(rawCta, input.topic);
+  const rawLine = new RegExp(`(^|\\n)\\s*${escapeRegExp(rawCta)}\\s*($|\\n)`, "i");
+  const body = rawLine.test(draft.body)
+    ? draft.body.replace(rawLine, `$1${polishedCta}$2`)
+    : draft.body;
+
+  return {
+    ...draft,
+    body,
+    callToAction:
+      draft.callToAction?.trim().toLowerCase() === rawCta.toLowerCase()
+        ? polishedCta
+        : draft.callToAction,
+  };
+}
+
 export function fallbackCampaignStrategy(input: {
   goal: string;
   targetAudience: string;
@@ -259,7 +308,7 @@ export function fallbackPostDraft(input: {
 }): PostDraft {
   const topic = input.topic.trim();
   const audience = input.audience.trim() || "LinkedIn operators";
-  const cta = input.callToAction?.trim() || "What would you add?";
+  const cta = callToActionFromIntent(input.callToAction, topic);
   const hook =
     input.tone.toLowerCase().includes("casual")
       ? `A quick thought on ${topic}:`
@@ -305,17 +354,19 @@ export async function generatePostDraft(input: {
   callToAction?: string | null;
 }) {
   const fallback = fallbackPostDraft(input);
-  return callOpenAIJson<PostDraft>(
+  const draft = await callOpenAIJson<PostDraft>(
     [
       {
         role: "system",
         content:
-          "You write useful LinkedIn posts for B2B operators. Return only valid JSON. Avoid hype, fake metrics, fabricated claims, and engagement-bait. Keep the post publish-ready.",
+          "You write useful LinkedIn posts for B2B operators. Return only valid JSON. Avoid hype, fake metrics, fabricated claims, and engagement-bait. Keep the post publish-ready. Treat callToAction as intent, not final wording: rewrite terse inputs like 'Invite DM', 'book call', 'comment', or 'download guide' into one natural sentence that flows with the post context. The body must include that rewritten CTA, never the raw CTA label.",
       },
       {
         role: "user",
         content: JSON.stringify({
           task: "Generate a LinkedIn post draft and media suggestions using the expected JSON shape.",
+          ctaGuidance:
+            "Return callToAction as polished copy. If the user gives a CTA category or instruction, adapt it to the topic and audience instead of copying it verbatim.",
           expectedShape: fallback,
           input,
         }),
@@ -323,6 +374,7 @@ export async function generatePostDraft(input: {
     ],
     fallback
   );
+  return polishDraftCallToAction(draft, input);
 }
 
 export async function refinePostDraft(input: {

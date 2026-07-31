@@ -29,6 +29,208 @@ const emptyMedia: MediaDraft = {
   description: "",
 };
 
+function initialsFromEmail(email?: string | null) {
+  if (!email) return "V";
+  return email
+    .split("@")[0]
+    .split(/[._-]+/)
+    .map((part) => part[0])
+    .filter(Boolean)
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "V";
+}
+
+function accountDisplayName(email?: string | null) {
+  if (!email) return "Your LinkedIn profile";
+  return email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function isPdfUrl(url: string) {
+  return /\.pdf($|\?)/i.test(url) || url.includes("/ai-assets/");
+}
+
+function LinkedInAttachmentPreview({ item, index, total }: { item: MediaDraft; index: number; total: number }) {
+  const title = item.title || `${item.type[0]}${item.type.slice(1).toLowerCase()} attachment`;
+  const description = item.description || item.url;
+
+  if (!item.url.trim()) {
+    return (
+      <div className="flex min-h-44 items-center justify-center rounded-b-xl border-t border-slate-200 bg-slate-100 px-6 text-center text-sm text-slate-500">
+        {title} will appear here after you add a public URL.
+      </div>
+    );
+  }
+
+  if (item.type === "IMAGE") {
+    return (
+      <div className="relative overflow-hidden border-t border-slate-200 bg-slate-100">
+        <img src={item.url} alt={title} className="max-h-[520px] w-full object-contain" />
+        {total > 1 && (
+          <span className="absolute right-3 top-3 rounded-full bg-slate-950/75 px-2.5 py-1 text-xs font-semibold text-white">
+            {index + 1}/{total}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (item.type === "DOCUMENT") {
+    return (
+      <div className="border-t border-slate-200 bg-slate-100 p-3">
+        <div className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
+          {isPdfUrl(item.url) ? (
+            <iframe src={item.url} title={title} className="h-80 w-full bg-white" />
+          ) : (
+            <div className="flex h-80 items-center justify-center bg-slate-50 px-6 text-center text-sm text-slate-500">
+              Document preview uses the public document URL.
+            </div>
+          )}
+          <div className="border-t border-slate-200 px-4 py-3">
+            <p className="text-sm font-semibold text-slate-900">{title}</p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{description}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (item.type === "ARTICLE") {
+    return (
+      <a
+        href={item.url}
+        target="_blank"
+        rel="noreferrer"
+        className="block border-t border-slate-200 bg-slate-100 transition hover:bg-slate-200"
+      >
+        <div className="flex min-h-44 items-center justify-center bg-slate-200 px-6 text-center text-sm font-semibold text-slate-500">
+          Link preview
+        </div>
+        <div className="border-t border-slate-200 bg-white px-4 py-3">
+          <p className="text-sm font-semibold text-slate-900">{title}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{description}</p>
+          <p className="mt-2 truncate text-[11px] uppercase tracking-[0.08em] text-slate-400">
+            {item.url.replace(/^https?:\/\//i, "")}
+          </p>
+        </div>
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noreferrer"
+      className="block border-t border-slate-200 bg-slate-950 text-white"
+    >
+      <div className="flex min-h-64 items-center justify-center px-6 text-center">
+        <div>
+          <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-xs font-bold uppercase tracking-[0.12em]">
+            Play
+          </span>
+          <p className="mt-4 text-sm font-semibold">{title}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-300">{description}</p>
+        </div>
+      </div>
+    </a>
+  );
+}
+
+function LinkedInPostPreview({
+  account,
+  title,
+  body,
+  media,
+}: {
+  account?: Account;
+  title: string;
+  body: string;
+  media: MediaDraft[];
+}) {
+  const attachedMedia = media.filter((item) => item.url.trim() || item.title.trim() || item.description.trim());
+  const displayBody = body.trim() || "Your post body will preview here as you write.";
+  const bodyLines = displayBody.split("\n");
+
+  return (
+    <section className="app-panel p-5 lg:col-span-2">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-300">
+            LinkedIn preview
+          </p>
+          <h2 className="mt-2 text-lg font-semibold text-white">How this post will feel in feed</h2>
+        </div>
+        <span className="rounded-full border border-white/[0.08] bg-slate-950/60 px-3 py-1 text-xs font-semibold text-slate-400">
+          {attachedMedia.length === 0 ? "Text post" : `${attachedMedia.length} media ${attachedMedia.length === 1 ? "item" : "items"}`}
+        </span>
+      </div>
+
+      <div className="mx-auto max-w-2xl overflow-hidden rounded-xl bg-white text-slate-950 shadow-2xl shadow-slate-950/30">
+        <div className="flex items-start gap-3 px-4 py-3">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#0a66c2] text-sm font-bold text-white">
+            {initialsFromEmail(account?.email)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold leading-5 text-slate-950">{accountDisplayName(account?.email)}</p>
+                <p className="text-xs leading-4 text-slate-500">Founder - Posting from Vectra</p>
+                <p className="text-xs leading-4 text-slate-500">Now - Public</p>
+              </div>
+              <span className="text-xl leading-none text-slate-400">...</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-4 pb-3">
+          {title.trim() && <p className="mb-2 text-sm font-semibold text-slate-950">{title}</p>}
+          <div className="space-y-3 text-sm leading-5 text-slate-900">
+            {bodyLines.map((line, index) =>
+              line.trim() ? <p key={index}>{line}</p> : <div key={index} className="h-1" />
+            )}
+          </div>
+        </div>
+
+        {attachedMedia.length === 1 && (
+          <LinkedInAttachmentPreview item={attachedMedia[0]} index={0} total={1} />
+        )}
+
+        {attachedMedia.length > 1 && (
+          <div className="border-t border-slate-200 bg-slate-100">
+            <div className="flex snap-x gap-3 overflow-x-auto p-3">
+              {attachedMedia.map((item, index) => (
+                <div key={`${item.type}-${item.url}-${index}`} className="w-[86%] shrink-0 snap-center overflow-hidden rounded-lg border border-slate-300 bg-white sm:w-[72%]">
+                  <LinkedInAttachmentPreview item={item} index={index} total={attachedMedia.length} />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-center gap-1.5 pb-3">
+              {attachedMedia.map((item, index) => (
+                <span key={`${item.type}-${index}`} className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-slate-200 px-4 py-2 text-xs text-slate-500">
+          <div className="flex items-center justify-between">
+            <span>0 reactions</span>
+            <span>0 comments - 0 reposts</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 border-t border-slate-200 px-2 py-1 text-sm font-semibold text-slate-500">
+          {["Like", "Comment", "Repost", "Send"].map((item) => (
+            <button key={item} type="button" className="rounded-md px-2 py-2 hover:bg-slate-100">
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function toLocalInputValue(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
@@ -90,6 +292,10 @@ export default function PostsPage() {
       {} as Partial<Record<LinkedInPostStatus, number>>
     );
   }, [posts]);
+  const selectedAccount = useMemo(
+    () => accounts.find((account) => account.id === accountId),
+    [accounts, accountId]
+  );
 
   function resetForm() {
     setEditingId(null);
@@ -758,44 +964,6 @@ export default function PostsPage() {
                     }
                     placeholder="Optional media description"
                   />
-                  {item.url.trim() && (
-                    <div className="sm:col-span-3">
-                      {item.type === "IMAGE" ? (
-                        <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-slate-950">
-                          <img
-                            src={item.url}
-                            alt={item.title || "Generated post image preview"}
-                            className="h-64 w-full object-contain"
-                          />
-                        </div>
-                      ) : item.type === "DOCUMENT" ? (
-                        <div className="rounded-xl border border-white/[0.08] bg-slate-950 p-3">
-                          <iframe
-                            src={item.url}
-                            title={item.title || "Generated document preview"}
-                            className="h-72 w-full rounded-lg bg-white"
-                          />
-                          <a
-                            href={item.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-2 inline-flex text-xs font-semibold text-teal-400 hover:underline"
-                          >
-                            Open document preview
-                          </a>
-                        </div>
-                      ) : (
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex text-xs font-semibold text-teal-400 hover:underline"
-                        >
-                          Preview {item.type.toLowerCase()} URL
-                        </a>
-                      )}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -804,6 +972,8 @@ export default function PostsPage() {
             </button>
           </div>
         </section>
+
+        <LinkedInPostPreview account={selectedAccount} title={title} body={body} media={media} />
       </form>
 
       <div className="table-shell">

@@ -5,11 +5,11 @@ import { useState } from "react";
 const faqs = [
   {
     q: "Is Vectra safe for LinkedIn outreach?",
-    a: "No automation tool can remove platform risk. Vectra reduces avoidable risk with warm-up enforcement, hard daily caps, timezone-aware scheduling, residential proxies, checkpoint pauses, and visible account health before jobs run.",
+    a: "Yes, Vectra reduces avoidable risk with warm-up enforcement, hard daily caps, timezone-aware scheduling, residential proxies, checkpoint pauses, and visible account health before jobs run.",
   },
   {
     q: "Why does each account need a proxy?",
-    a: "LinkedIn accounts should behave consistently. Vectra requires one residential proxy per account, matched to the account's normal location, and blocks browser jobs until the exit IP is verified.",
+    a: "Each account needs a stable browsing environment. Vectra uses one residential proxy per account, matched to the account's normal location, so remote browser jobs run from a consistent, verified exit IP.",
   },
   {
     q: "How does warm-up work?",
@@ -25,7 +25,7 @@ const faqs = [
   },
   {
     q: "Is every new user a beta tester?",
-    a: "Yes. The first phase is beta onboarding, so new users get access while the product is still being shaped around real campaign, content, and lead-analysis workflows.",
+    a: "Yes. New users join through beta access, which opens the full workspace for campaign strategy, content workflows, lead analysis, visual sequences, and guarded LinkedIn execution.",
   },
   {
     q: "What is Content Signal?",

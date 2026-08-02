@@ -61,9 +61,10 @@ const productAreas = [
   { title: "AI campaign builder", text: "Turn a goal, audience, offer, and tone into campaign structure, limits, notes, messages, rationale, and safety checks.", href: "/campaigns/new" },
   { title: "AI content studio", text: "Generate cascading topic niches, post drafts, refinements, image previews, and PDF documents for LinkedIn posts.", href: "/posts" },
   { title: "AI lead analysis", text: "Score campaign leads, summarize fit, flag risks, and suggest a recommended outreach angle from the campaign context.", href: "/leads" },
+  { title: "Visual sequence builder", text: "Build branching LinkedIn flows with acceptance paths, timeout paths, waits, messages, InMail, withdrawals, and AI preflight review.", href: "/campaigns" },
   { title: "Account health", text: "Warm-up phase, proxy assignment, cap usage, checkpoints, browser session state, and posting API connection per account.", href: "/accounts" },
   { title: "Signal campaigns", text: "Find people from search URLs or recent LinkedIn posts, then save the context next to each lead.", href: "/campaigns" },
-  { title: "Queue visibility", text: "Live job state, failed job reasons, retry history, worker diagnostics, and audit logs before problems compound.", href: "/jobs" },
+  { title: "Hosted browser execution", text: "Run guarded remote browser jobs with live job state, failed job reasons, retry history, diagnostics, and audit logs.", href: "/jobs" },
 ];
 
 const operatorProof = [
@@ -214,6 +215,85 @@ function ContentSignalPreview() {
         <p className="mt-3 text-[11px] text-slate-500">
           Post excerpt stored against lead · Available in conversation view
         </p>
+      </div>
+    </div>
+  );
+}
+
+function SequenceBuilderPreview() {
+  const nodes = [
+    { label: "Visit profile", sub: "Hosted browser", x: "8%", y: "42%", tone: "border-blue-400/40 bg-blue-500/10 text-blue-100" },
+    { label: "Connect request", sub: "AI note checked", x: "34%", y: "42%", tone: "border-teal-400/50 bg-teal-500/10 text-teal-100" },
+    { label: "Accepted", sub: "Send message", x: "64%", y: "20%", tone: "border-emerald-400/50 bg-emerald-500/10 text-emerald-100" },
+    { label: "Timed out", sub: "Withdraw invite", x: "64%", y: "64%", tone: "border-amber-400/50 bg-amber-500/10 text-amber-100" },
+  ];
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-950 shadow-2xl shadow-slate-200">
+      <div className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-300">
+            Sequence graph
+          </p>
+          <p className="mt-1 text-sm font-semibold text-white">Founder outbound · 4 steps</p>
+        </div>
+        <span className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold text-emerald-200">
+          Preflight passed
+        </span>
+      </div>
+
+      <div className="grid gap-0 lg:grid-cols-[1fr_13rem]">
+        <div className="relative min-h-[340px] overflow-hidden bg-[linear-gradient(rgba(148,163,184,0.09)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.09)_1px,transparent_1px)] bg-[length:28px_28px] p-5">
+          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 640 340" fill="none" aria-hidden>
+            <path d="M132 169 C188 169 198 169 248 169" stroke="rgba(45,212,191,0.65)" strokeWidth="2.5" />
+            <path d="M360 160 C410 110 432 84 494 84" stroke="rgba(52,211,153,0.7)" strokeWidth="2.5" />
+            <path d="M360 184 C410 232 432 252 494 252" stroke="rgba(251,191,36,0.72)" strokeWidth="2.5" />
+            <circle cx="248" cy="169" r="4" fill="rgb(45,212,191)" />
+            <circle cx="494" cy="84" r="4" fill="rgb(52,211,153)" />
+            <circle cx="494" cy="252" r="4" fill="rgb(251,191,36)" />
+          </svg>
+
+          {nodes.map((node) => (
+            <div
+              key={node.label}
+              className={`absolute w-[8.5rem] rounded-lg border px-3 py-2.5 shadow-lg shadow-black/20 ${node.tone}`}
+              style={{ left: node.x, top: node.y }}
+            >
+              <p className="text-xs font-semibold leading-4">{node.label}</p>
+              <p className="mt-1 text-[10px] leading-4 text-slate-400">{node.sub}</p>
+            </div>
+          ))}
+
+          <div className="absolute left-[51%] top-[43%] rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-300">
+            Branch on result
+          </div>
+        </div>
+
+        <div className="border-t border-white/10 bg-slate-900/80 p-4 lg:border-l lg:border-t-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            Run controls
+          </p>
+          <div className="mt-4 space-y-3">
+            {[
+              ["Daily cap", "9 / 15"],
+              ["Proxy", "Verified"],
+              ["Window", "In timezone"],
+              ["Checkpoint", "Clear"],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                <span className="text-[11px] font-medium text-slate-400">{label}</span>
+                <span className="text-[11px] font-semibold text-white">{value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 rounded-lg border border-teal-400/20 bg-teal-400/10 p-3">
+            <p className="text-[11px] font-semibold text-teal-100">AI preflight</p>
+            <p className="mt-1 text-[11px] leading-5 text-slate-300">
+              Message is personalized, caps are available, and the account is ready for a remote
+              browser session.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -439,8 +519,8 @@ export default function LandingPage() {
               className="animate-fade-up mt-6 max-w-xl text-lg leading-8 text-slate-300 sm:text-xl sm:leading-9"
               style={{ animationDelay: "0.16s" }}
             >
-              Vectra helps beta users generate campaign strategy, discover content ideas, draft
-              posts with media, analyze leads, and run LinkedIn workflows with account safety visible
+              Vectra helps generate campaign strategy, discover content ideas, draft posts with
+              media, analyze leads, and run LinkedIn automated outreach with account safety visible
               at every step.
             </p>
 
@@ -498,9 +578,8 @@ export default function LandingPage() {
               Vectra is becoming the AI operating layer for LinkedIn growth.
             </h2>
             <p className="mt-5 text-base leading-7 text-slate-600">
-              The first phase is beta onboarding. New users get full access so we can learn how
-              founders, operators, and sales teams move from idea to campaign to published content
-              without juggling separate tools.
+              Beta access gives founders, operators, and sales teams the full workspace for moving
+              from idea to campaign to published content without juggling separate tools.
             </p>
           </AnimateIn>
 
@@ -530,9 +609,9 @@ export default function LandingPage() {
                 Go from audience signal to post, asset, and outreach angle.
               </h2>
               <p className="mt-6 text-lg leading-8 text-slate-300">
-                Vectra now helps users narrow content niches, generate topics, draft and refine
-                posts, create image or PDF assets, and connect those ideas back to the campaign and
-                lead context.
+                Vectra helps users narrow content niches, generate topics, draft and refine posts,
+                create image or PDF assets, and connect those ideas back to the campaign and lead
+                context.
               </p>
               <div className="mt-8 space-y-4">
                 {[
@@ -648,6 +727,39 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Sequence Builder ─────────────────────────────────────────────────── */}
+      <section className="border-b border-slate-200 bg-white">
+        <div className="mx-auto grid max-w-7xl gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:px-8">
+          <AnimateIn from="left">
+            <p className="page-kicker">Visual sequence builder</p>
+            <h2 className="mt-3 text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
+              Branch outreach by what actually happens next.
+            </h2>
+            <p className="mt-5 text-base leading-7 text-slate-600">
+              Build LinkedIn sequences as a visual flow: visit profiles, send connection requests,
+              wait for acceptance, branch follow-ups, or withdraw stale invites with guardrails
+              checked before each step runs.
+            </p>
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              {[
+                "Accepted and timeout paths",
+                "AI preflight review",
+                "Hosted remote browser runs",
+                "Caps and checkpoints visible",
+              ].map((item) => (
+                <div key={item} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </AnimateIn>
+
+          <AnimateIn from="right">
+            <SequenceBuilderPreview />
+          </AnimateIn>
+        </div>
+      </section>
+
       {/* ── Product Surface ───────────────────────────────────────────────────── */}
       <section className="bg-white">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
@@ -660,7 +772,8 @@ export default function LandingPage() {
                 </h2>
                 <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
                   Each area removes a different kind of friction: deciding what to say, who to
-                  target, what to publish, what to review, and when to stop.
+                  target, what to publish, how to branch the outreach, what to review, and when to
+                  stop.
                 </p>
               </div>
               <Link href="/dashboard" className="btn-primary shrink-0">
@@ -718,8 +831,9 @@ export default function LandingPage() {
                   Help shape the AI operating layer for LinkedIn growth.
                 </h2>
                 <p className="mt-5 max-w-xl text-lg leading-8 text-slate-400">
-                  Every user joining now is treated as a beta tester. Use the full product, test the
-                  AI workflows, and help us tune the path from idea to campaign to post.
+                  Every user joining now gets beta access to the full product: AI campaign strategy,
+                  content workflows, lead analysis, visual sequences, and guarded LinkedIn
+                  execution.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3 lg:flex-col">

@@ -7,6 +7,11 @@ import { api, setAuthToken } from "@/lib/api";
 import { useAuth } from "@/contexts/auth";
 import { toast } from "sonner";
 
+function safeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  return value;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { setUser } = useAuth();
@@ -14,11 +19,14 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setNeedsVerification(false);
 
     if (!email.trim()) { setError("Email is required."); return; }
     if (!password) { setError("Password is required."); return; }
@@ -28,12 +36,31 @@ export default function LoginPage() {
       const { user, token } = await api.auth.login({ email: email.trim(), password });
       setAuthToken(token);
       setUser(user);
-      router.replace("/dashboard");
+      const params = new URLSearchParams(window.location.search);
+      router.replace(safeNextPath(params.get("next")));
     } catch (err) {
       const raw = (err as Error).message.replace(/^API \d+: /, "");
-      setError(raw.includes("401") || raw.includes("Invalid") ? "Invalid email or password." : raw);
+      if (/verify your email/i.test(raw)) {
+        setNeedsVerification(true);
+        setError("Please verify your email before signing in.");
+      } else {
+        setError(raw.includes("401") || raw.includes("Invalid") ? "Invalid email or password." : raw);
+      }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (!email.trim()) { setError("Enter your email first."); return; }
+    setResending(true);
+    try {
+      await api.auth.resendVerification({ email: email.trim() });
+      toast.success("Verification email sent.");
+    } catch (err) {
+      toast.error((err as Error).message.replace(/^API \d+: /, ""));
+    } finally {
+      setResending(false);
     }
   }
 
@@ -67,6 +94,16 @@ export default function LoginPage() {
           {error && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
               {error}
+              {needsVerification && (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resending}
+                  className="mt-3 block font-semibold text-red-200 underline underline-offset-4"
+                >
+                  {resending ? "Sending..." : "Resend verification email"}
+                </button>
+              )}
             </div>
           )}
 

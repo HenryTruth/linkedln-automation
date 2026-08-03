@@ -27,7 +27,11 @@ HEADLESS=false
 ALLOWED_ORIGINS=https://your-dashboard.example.com
 START_WORKERS=false
 BROWSER_ARTIFACT_DIR=/tmp/linkedin-automation-artifacts
+ADMIN_EMAIL=you@example.com
 ```
+
+`ADMIN_EMAIL` is the operator account allowed to access `/admin/*` on the API
+and the dashboard's Admin section. Must match `NEXT_PUBLIC_ADMIN_EMAIL` below.
 
 Optional AI copilot variables for campaign strategy and post drafting:
 
@@ -37,6 +41,18 @@ OPENAI_MODEL=gpt-4o-mini
 OPENAI_IMAGE_MODEL=gpt-image-1
 API_PUBLIC_URL=https://your-api.example.com
 ```
+
+Email verification uses Resend from the API service:
+
+```text
+RESEND_API_KEY=re_...
+EMAIL_FROM=Vectra <verify@your-domain.example>
+DASHBOARD_PUBLIC_URL=https://your-dashboard.onrender.com
+```
+
+`DASHBOARD_PUBLIC_URL` must be the public Render dashboard origin so verification
+links open the deployed app. If `RESEND_API_KEY` is omitted, verification links
+are printed to API logs for local development only.
 
 For the worker service:
 
@@ -54,11 +70,17 @@ pnpm --filter @linkedin-automation/queue workers
 
 ```text
 NEXT_PUBLIC_API_URL=https://your-api.example.com
+NEXT_PUBLIC_ADMIN_EMAIL=you@example.com
 ```
 
 `NEXT_PUBLIC_API_URL` is compiled into the browser bundle during `next build`.
 If the API URL changes, update the Render environment variable and redeploy the
 dashboard.
+
+`NEXT_PUBLIC_ADMIN_EMAIL` must match the API's `ADMIN_EMAIL` and controls only
+whether the Admin nav link/section is shown — the API enforces access
+independently, so a mismatch just hides or shows the link without changing
+who can actually reach `/admin/*`.
 
 ### Alerts
 
@@ -121,10 +143,11 @@ plan by default; upgrade the service plan later if cold starts become annoying.
 2. In Render, create a new Blueprint from the repository.
 3. Render will read `render.yaml` and create
    `linkedin-automation-dashboard`.
-4. Set the required environment variable:
+4. Set the required environment variables:
 
    ```text
    NEXT_PUBLIC_API_URL=https://your-api.up.railway.app
+   NEXT_PUBLIC_ADMIN_EMAIL=you@example.com
    ```
 
 5. Deploy the service.

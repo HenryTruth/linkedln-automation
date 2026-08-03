@@ -26,7 +26,16 @@ export async function requireAuth(
       where: { tokenHash: hashToken(token) },
       select: {
         expiresAt: true,
-        user: { select: { id: true, email: true, plan: true } },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            plan: true,
+            emailVerifiedAt: true,
+            suspendedAt: true,
+            isAdmin: true,
+          },
+        },
       },
     });
 
@@ -34,8 +43,21 @@ export async function requireAuth(
       res.status(401).json({ error: "Invalid or expired session" });
       return;
     }
+    if (!session.user.emailVerifiedAt) {
+      res.status(403).json({ error: "Please verify your email before continuing." });
+      return;
+    }
+    if (session.user.suspendedAt) {
+      res.status(403).json({ error: "Your account has been suspended. Contact support." });
+      return;
+    }
 
-    req.user = session.user;
+    req.user = {
+      id: session.user.id,
+      email: session.user.email,
+      plan: session.user.plan,
+      isAdmin: session.user.isAdmin,
+    };
     next();
   } catch (err) {
     next(err);

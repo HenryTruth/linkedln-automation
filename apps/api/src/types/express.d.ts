@@ -4,6 +4,7 @@ declare global {
       id: string;
       email: string;
       plan: string;
+      isAdmin: boolean;
     }
 
     interface Request {

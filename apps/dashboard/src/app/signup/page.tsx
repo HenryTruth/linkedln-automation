@@ -3,18 +3,18 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, setAuthToken } from "@/lib/api";
-import { useAuth } from "@/contexts/auth";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { setUser } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [successEmail, setSuccessEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,10 +25,9 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
-      const { user, token } = await api.auth.signup({ email: email.trim(), password });
-      setAuthToken(token);
-      setUser(user);
-      router.replace("/dashboard");
+      await api.auth.signup({ email: email.trim(), password });
+      setSuccessEmail(email.trim());
+      setPassword("");
     } catch (err) {
       const raw = (err as Error).message.replace(/^API \d+: /, "");
       setError(
@@ -36,6 +35,19 @@ export default function SignupPage() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (!successEmail) return;
+    setResending(true);
+    try {
+      await api.auth.resendVerification({ email: successEmail });
+      toast.success("Verification email sent.");
+    } catch (err) {
+      toast.error((err as Error).message.replace(/^API \d+: /, ""));
+    } finally {
+      setResending(false);
     }
   }
 
@@ -66,6 +78,32 @@ export default function SignupPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="app-panel p-6 space-y-4">
+          {successEmail && (
+            <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 p-4 text-sm text-teal-200">
+              <p className="font-semibold text-white">Check your inbox</p>
+              <p className="mt-1 text-slate-300">
+                We sent a verification link to {successEmail}. Verify your email, then you can sign in.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resending}
+                  className="btn-secondary px-3 py-1.5 text-xs"
+                >
+                  {resending ? "Sending..." : "Resend email"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push("/login")}
+                  className="btn-primary px-3 py-1.5 text-xs"
+                >
+                  Go to sign in
+                </button>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
               {error}

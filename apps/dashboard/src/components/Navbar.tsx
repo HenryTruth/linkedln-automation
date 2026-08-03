@@ -18,6 +18,15 @@ const links = [
   { href: "/settings", label: "Settings" },
 ];
 
+function isAdminUser(user: ReturnType<typeof useAuth>["user"]) {
+  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase();
+  return Boolean(
+    user &&
+      (user.isAdmin ||
+        (adminEmail && user.email.toLowerCase() === adminEmail))
+  );
+}
+
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -27,6 +36,11 @@ export function Navbar() {
     await logout();
     router.push("/");
   }
+
+  const navLinks =
+    isAdminUser(user)
+      ? [...links, { href: "/admin", label: "Admin" }]
+      : links;
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-slate-950/80 backdrop-blur-xl">
@@ -49,7 +63,7 @@ export function Navbar() {
           {user ? (
             <div className="flex flex-wrap items-center gap-2">
               <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-white/[0.07] bg-slate-900/70 p-1">
-                {links.map((l) => {
+                {navLinks.map((l) => {
                   const active = pathname.startsWith(l.href);
                   return (
                     <Link

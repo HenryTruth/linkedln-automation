@@ -78,6 +78,12 @@ const { prisma, queues } = vi.hoisted(() => {
         findUnique: vi.fn(),
         deleteMany: vi.fn(),
       },
+      emailVerificationToken: {
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+        deleteMany: vi.fn(),
+      },
       account: {
         findMany: vi.fn(),
         findFirstOrThrow: vi.fn(),
@@ -188,6 +194,8 @@ const TEST_USER = {
   id: "user_1",
   email: "owner@example.com",
   plan: "FREE_FOREVER",
+  isAdmin: false,
+  emailVerifiedAt: new Date("2026-01-01T00:00:00.000Z"),
 };
 
 async function createApp(): Promise<Express> {
@@ -284,6 +292,10 @@ beforeEach(() => {
   prisma.authSession.create.mockReset();
   prisma.authSession.findUnique.mockReset();
   prisma.authSession.deleteMany.mockReset();
+  prisma.emailVerificationToken.create.mockReset();
+  prisma.emailVerificationToken.findUnique.mockReset();
+  prisma.emailVerificationToken.update.mockReset();
+  prisma.emailVerificationToken.deleteMany.mockReset();
 });
 
 afterEach(() => {
@@ -291,11 +303,11 @@ afterEach(() => {
 });
 
 describe("API route integration", () => {
-  it("signs up a new user and returns a public user plus session token", async () => {
+  it("signs up a new user and sends email verification before login", async () => {
     const app = await createApp();
     prisma.user.findUnique.mockResolvedValue(null);
-    prisma.user.create.mockResolvedValue(TEST_USER);
-    prisma.authSession.create.mockResolvedValue({});
+    prisma.user.create.mockResolvedValue({ ...TEST_USER, emailVerifiedAt: null });
+    prisma.emailVerificationToken.create.mockResolvedValue({});
 
     const res = await request(app, "/auth/signup", {
       method: "POST",
@@ -307,15 +319,25 @@ describe("API route integration", () => {
       id: TEST_USER.id,
       email: TEST_USER.email,
       hasAllFeatures: true,
+      emailVerified: false,
+      isAdmin: false,
     });
-    expect(res.body.token).toEqual(expect.any(String));
+    expect(res.body.token).toBeUndefined();
+    expect(res.body.message).toMatch(/verification/i);
     expect(prisma.user.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         email: TEST_USER.email,
         plan: "FREE_FOREVER",
         passwordHash: expect.stringMatching(/^[a-f0-9]+:[a-f0-9]+$/),
       }),
-      select: { id: true, email: true, plan: true },
+      select: { id: true, email: true, plan: true, emailVerifiedAt: true, isAdmin: true },
+    });
+    expect(prisma.emailVerificationToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: TEST_USER.id,
+        tokenHash: expect.any(String),
+        expiresAt: expect.any(Date),
+      }),
     });
   });
 

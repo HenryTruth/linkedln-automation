@@ -107,9 +107,13 @@ enum PostMediaType {
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
+  emailVerifiedAt DateTime?
   passwordHash String
   plan         String        @default("FREE_FOREVER")
+  isAdmin      Boolean       @default(false)
+  suspendedAt  DateTime?
   sessions     AuthSession[]
+  emailVerificationTokens EmailVerificationToken[]
   accounts     Account[]
   proxies      Proxy[]
   leads        Lead[]
@@ -117,6 +121,19 @@ model User {
   aiGeneratedAssets AiGeneratedAsset[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model AuthSession {

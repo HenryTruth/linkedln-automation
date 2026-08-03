@@ -15,9 +15,11 @@ import { aiAssetsRouter } from "./routes/aiAssets.js";
 import { settingsRouter } from "./routes/settings.js";
 import { authRouter } from "./routes/auth.js";
 import { jobsRouter } from "./routes/jobs.js";
+import { adminRouter } from "./routes/admin.js";
 import { browserSessionsRouter } from "./routes/browserSessions.js";
 import { errorMiddleware } from "./middleware/error.js";
 import { requireAuth } from "./middleware/auth.js";
+import { requireAdmin } from "./middleware/adminAuth.js";
 import { apiRateLimit } from "./middleware/rateLimit.js";
 import { prisma } from "@linkedin-automation/db";
 import {
@@ -86,6 +88,7 @@ app.use("/posts", postsRouter);
 app.use("/ai", aiRouter);
 app.use("/settings", settingsRouter);
 app.use("/jobs", jobsRouter);
+app.use("/admin", requireAdmin, adminRouter);
 
 app.use(errorMiddleware);
 

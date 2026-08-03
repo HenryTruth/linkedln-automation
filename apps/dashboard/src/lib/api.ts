@@ -36,7 +36,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // Keep the raw response text for non-JSON errors.
     }
-    throw new Error(message);
+    throw new Error(`API ${res.status}: ${message}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -570,7 +570,9 @@ export interface AuthUser {
   id: string;
   email: string;
   plan: "FREE_FOREVER" | string;
+  emailVerified: boolean;
   hasAllFeatures: boolean;
+  isAdmin?: boolean;
 }
 
 export type JobState = "failed" | "waiting" | "active" | "delayed" | "completed";
@@ -596,12 +598,107 @@ export interface JobsPage {
   counts: Record<JobState, number>;
 }
 
+export interface AdminUserSummary {
+  id: string;
+  email: string;
+  plan: string;
+  emailVerifiedAt: string | null;
+  suspendedAt: string | null;
+  createdAt: string;
+  accountCount: number;
+  campaignCount: number;
+}
+
+export interface AdminUserDetail {
+  id: string;
+  email: string;
+  plan: string;
+  emailVerifiedAt: string | null;
+  suspendedAt: string | null;
+  createdAt: string;
+  accounts: {
+    id: string;
+    email: string;
+    status: "ACTIVE" | "PAUSED" | "RESTRICTED";
+    warmUpPhase: string;
+    createdAt: string;
+    campaigns: {
+      id: string;
+      name: string;
+      type: string;
+      status: "ACTIVE" | "PAUSED" | "COMPLETED";
+      createdAt: string;
+    }[];
+  }[];
+}
+
+export interface AdminQueueJob {
+  id?: string;
+  queue: string;
+  name: string;
+  attemptsMade: number;
+  failedReason: string | null;
+  timestamp: number;
+  finishedOn: number | null;
+  data: Record<string, unknown>;
+}
+
+export interface AdminQueueHealth {
+  totals: Record<JobState, number>;
+  byQueue: Record<string, Record<JobState, number>>;
+  recentFailures: AdminQueueJob[];
+}
+
+export interface AdminCheckpoint {
+  id: string;
+  accountId: string;
+  detectedAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  account: { email: string; user: { email: string } };
+}
+
+export interface AdminProxy {
+  id: string;
+  host: string;
+  port: number;
+  country: string;
+  healthStatus: "HEALTHY" | "DEGRADED" | "DEAD";
+  currentExitIp: string | null;
+  lastUsed: string | null;
+  updatedAt: string;
+  user: { email: string };
+}
+
+export interface AdminAccountBreakdown {
+  byStatus: { status: string; _count: number }[];
+  byWarmUp: { warmUpPhase: string; _count: number }[];
+  accounts: {
+    id: string;
+    email: string;
+    status: "ACTIVE" | "PAUSED" | "RESTRICTED";
+    warmUpPhase: string;
+    createdAt: string;
+    user: { email: string };
+  }[];
+}
+
 // ─── API functions ─────────────────────────────────────────────────────────────
 
 export const api = {
   auth: {
     signup: (data: { email: string; password: string }) =>
-      apiFetch<{ user: AuthUser; token: string; expiresAt: string }>("/auth/signup", {
+      apiFetch<{ user: AuthUser; message: string }>("/auth/signup", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    resendVerification: (data: { email: string }) =>
+      apiFetch<{ ok: boolean }>("/auth/resend-verification", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    verifyEmail: (data: { token: string }) =>
+      apiFetch<{ user: AuthUser; token: string; expiresAt: string }>("/auth/verify-email", {
         method: "POST",
         body: JSON.stringify(data),
       }),
@@ -1196,5 +1293,29 @@ export const api = {
       return apiFetch<JobsPage>(`/jobs?${q}`);
     },
     clearFailed: () => apiFetch<{ ok: boolean }>("/jobs/failed", { method: "DELETE" }),
+  },
+
+  admin: {
+    users: {
+      list: () => apiFetch<AdminUserSummary[]>("/admin/users"),
+      get: (id: string) => apiFetch<AdminUserDetail>(`/admin/users/${id}`),
+      resendVerification: (id: string) =>
+        apiFetch<{ ok: boolean }>(`/admin/users/${id}/resend-verification`, { method: "POST" }),
+      suspend: (id: string) =>
+        apiFetch<{ id: string; email: string; suspendedAt: string }>(`/admin/users/${id}/suspend`, {
+          method: "POST",
+        }),
+      unsuspend: (id: string) =>
+        apiFetch<{ id: string; email: string; suspendedAt: string | null }>(
+          `/admin/users/${id}/unsuspend`,
+          { method: "POST" }
+        ),
+      remove: (id: string) => apiFetch<{ ok: boolean }>(`/admin/users/${id}`, { method: "DELETE" }),
+    },
+    queues: () => apiFetch<AdminQueueHealth>("/admin/queues"),
+    checkpoints: (unresolved = true) =>
+      apiFetch<AdminCheckpoint[]>(`/admin/checkpoints?unresolved=${unresolved}`),
+    proxies: () => apiFetch<AdminProxy[]>("/admin/proxies"),
+    accounts: () => apiFetch<AdminAccountBreakdown>("/admin/accounts"),
   },
 };

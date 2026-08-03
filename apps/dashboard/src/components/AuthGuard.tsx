@@ -4,7 +4,12 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 
-const PUBLIC_PATHS = ["/", "/login", "/signup"];
+const PUBLIC_PATHS = ["/", "/login", "/signup", "/verify-email"];
+
+function safeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  return value;
+}
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -15,10 +20,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && !user && !isPublic) {
-      router.replace("/login");
+      const currentPath = `${pathname}${window.location.search}`;
+      router.replace(`/login?next=${encodeURIComponent(currentPath)}`);
     }
     if (!loading && user && (pathname === "/login" || pathname === "/signup")) {
-      router.replace("/dashboard");
+      const params = new URLSearchParams(window.location.search);
+      router.replace(safeNextPath(params.get("next")));
     }
   }, [user, loading, isPublic, pathname, router]);
 

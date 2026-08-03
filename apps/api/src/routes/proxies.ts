@@ -16,7 +16,7 @@ import {
 
 export const proxiesRouter: IRouter = Router();
 
-function publicProxy<T extends { password?: string }>(proxy: T): Omit<T, "password"> {
+export function publicProxy<T extends { password?: string }>(proxy: T): Omit<T, "password"> {
   const { password: _password, ...safeProxy } = proxy;
   return safeProxy;
 }

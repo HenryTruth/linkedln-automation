@@ -53,8 +53,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cached = window.localStorage.getItem(USER_CACHE_KEY);
     if (cached) {
       try {
-        setUserState(JSON.parse(cached) as AuthUser);
-        setLoading(false);
+        const cachedUser = JSON.parse(cached) as AuthUser;
+        setUserState(cachedUser);
+        if (typeof cachedUser.isAdmin === "boolean") {
+          setLoading(false);
+        }
       } catch {
         window.localStorage.removeItem(USER_CACHE_KEY);
       }

@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
+import { track, EVENTS } from "@/lib/analytics";
 
 type MediaDraft = {
   type: PostMediaType;
@@ -431,6 +432,7 @@ export default function PostsPage() {
       setBody(draft.body);
       setCallToAction(draft.callToAction ?? "");
       setMediaSuggestions(draft.mediaSuggestions ?? []);
+      track(EVENTS.GENERATED_AI_POST, { topic });
       toast.success("Draft generated");
     } catch (e) {
       toast.error((e as Error).message);
@@ -459,6 +461,7 @@ export default function PostsPage() {
       setBody(draft.body);
       setCallToAction(draft.callToAction ?? "");
       setMediaSuggestions(draft.mediaSuggestions ?? []);
+      track(EVENTS.REFINED_POST, { instruction: refineInstruction });
       toast.success("Draft refined");
     } catch (e) {
       toast.error((e as Error).message);
@@ -497,6 +500,7 @@ export default function PostsPage() {
           description: asset.description,
         },
       ]);
+      if (asset.type === "IMAGE") track(EVENTS.GENERATED_IMAGE);
       toast.success(`${asset.type === "IMAGE" ? "Image" : "Document"} generated and attached`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -534,6 +538,10 @@ export default function PostsPage() {
       const saved = editingId
         ? await api.posts.update(editingId, payload)
         : await api.posts.create({ accountId, ...payload });
+      if (!editingId) {
+        track(EVENTS.CREATED_POST, { has_media: cleanMedia.length > 0 });
+        if (payload.scheduledFor) track(EVENTS.SCHEDULED_POST);
+      }
       setPosts((prev) => {
         const existing = prev.some((post) => post.id === saved.id);
         return existing
@@ -553,6 +561,7 @@ export default function PostsPage() {
     setBusy(post.id);
     try {
       const updated = await api.posts.publish(post.id);
+      track(EVENTS.PUBLISHED_POST, { post_id: post.id });
       setPosts((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
       toast.success("Post published to LinkedIn");
     } catch (e) {

@@ -10,6 +10,7 @@ import { ContentSignalPanel } from "@/components/ContentSignalPanel";
 import { Skeleton, SkeletonTableRows } from "@/components/Skeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
+import { track, EVENTS } from "@/lib/analytics";
 
 const SEARCH_LOCATIONS: { label: string; geoUrn: string }[] = [
   // Americas
@@ -401,6 +402,10 @@ export default function CampaignDetailPage() {
   }, [id, leadPage]);
 
   useEffect(() => {
+    track(EVENTS.VIEWED_CAMPAIGN, { campaign_id: id });
+  }, [id]);
+
+  useEffect(() => {
     api.campaigns.list().then(setCampaigns).catch(() => {});
   }, []);
 
@@ -484,6 +489,7 @@ export default function CampaignDetailPage() {
       const updated = await api.campaigns.update(id, {
         status: campaign.status === "PAUSED" ? "ACTIVE" : "PAUSED",
       });
+      if (updated.status === "PAUSED") track(EVENTS.PAUSED_CAMPAIGN, { campaign_id: id });
       setCampaign((prev) => prev && { ...prev, status: updated.status });
     } catch (e) {
       toast.error((e as Error).message);
@@ -497,6 +503,7 @@ export default function CampaignDetailPage() {
     setStartResult(null);
     try {
       const result = await api.campaigns.start(id);
+      track(EVENTS.LAUNCHED_CAMPAIGN, { campaign_id: id, dispatched: result.dispatched });
       setStartResult({
         ok: true,
         msg: `Dispatched ${result.dispatched} job${result.dispatched !== 1 ? "s" : ""} to the queue`,
@@ -535,6 +542,8 @@ export default function CampaignDetailPage() {
         company: leadCompany || undefined,
         title: leadTitle || undefined,
       });
+
+      track(EVENTS.ADDED_LEAD, { campaign_id: id, source: "manual" });
 
       const warning = statusMismatchWarning(campaign!.type, added.lead);
       if (warning) setLeadWarning(warning);
@@ -684,6 +693,7 @@ export default function CampaignDetailPage() {
     setSearchNotice(null);
     try {
       const result = await api.campaigns.addSearchUrl(id, searchUrl, searchSource, searchLeadLimit);
+      track(EVENTS.SCRAPED_LEADS, { campaign_id: id, source: searchSource, lead_limit: searchLeadLimit });
       setSearchNotice(
         result.warning ??
           `Search URL accepted and queued${result.jobId ? ` as job ${result.jobId}` : ""} for up to ${searchLeadLimit} leads. It starts automatically when the search worker is available and account guardrails allow it.`
@@ -727,6 +737,7 @@ export default function CampaignDetailPage() {
       const result = await api.leads.importCsv({ csvText, campaignId: id });
       setCsvResult(result);
       if (result.imported > 0) {
+        track(EVENTS.IMPORTED_CSV, { campaign_id: id, imported: result.imported });
         setCsvText("");
         await reload();
       }

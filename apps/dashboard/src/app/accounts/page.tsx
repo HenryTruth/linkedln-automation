@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { HealthScore } from "@/components/HealthScore";
+import { track, EVENTS } from "@/lib/analytics";
 
 const CAP_KEYS: CapKey[] = ["connection", "message", "inmail", "profileView", "searchPage"];
 
@@ -465,6 +466,7 @@ export default function AccountsPage() {
           message: "LinkedIn posting API connected. You can now publish text posts from Posts.",
         },
       }));
+      track(EVENTS.CONNECTED_OAUTH);
       reload().catch(() => {});
     }
     if (result === "error") {
@@ -540,6 +542,7 @@ export default function AccountsPage() {
         salesNavigatorEnabled: newSalesNavigatorEnabled,
         inMailMonthlyLimit: newInMailMonthlyLimit,
       });
+      if (newProxyId) track(EVENTS.CONNECTED_PROXY);
       setNewEmail("");
       setNewProxyId("");
       setNewSalesNavigatorEnabled(false);
@@ -723,6 +726,7 @@ export default function AccountsPage() {
       setCookieConsent((prev) => ({ ...prev, [id]: false }));
       setShowCookieFor(null);
       await reload();
+      track(EVENTS.IMPORTED_LINKEDIN_COOKIES);
       setAccountNotice(
         id,
         "success",

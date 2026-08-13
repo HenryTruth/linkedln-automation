@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api, type Lead, type Campaign, type Account, type SearchScrapeCampaignJob } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { SkeletonTableRows } from "@/components/Skeleton";
+import { track, EVENTS } from "@/lib/analytics";
 
 const STATUS_OPTIONS = ["", "NONE", "PENDING", "CONNECTED", "WITHDRAWN"];
 const LIMIT_OPTIONS = [25, 50, 100];
@@ -195,6 +196,10 @@ export default function LeadsPage() {
   }, []);
 
   useEffect(() => {
+    track(EVENTS.VIEWED_LEADS);
+  }, []);
+
+  useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
 
@@ -250,6 +255,7 @@ export default function LeadsPage() {
         source: searchSource,
         leadLimit: searchLeadLimit,
       });
+      track(EVENTS.SCRAPED_LEADS, { source: searchSource, lead_limit: searchLeadLimit });
       setSearchNotice(
         result.warning ??
           `Search URL accepted and queued${result.jobId ? ` as job ${result.jobId}` : ""} for up to ${searchLeadLimit} leads. Discovered profiles are saved as leads directly — no campaign needed.`
@@ -277,6 +283,7 @@ export default function LeadsPage() {
         title: sTitle || undefined,
         campaignId: sCampaign || undefined,
       });
+      track(EVENTS.ADDED_LEAD, { source: "manual" });
       setSUrl("");
       setSFirst("");
       setSLast("");
@@ -330,6 +337,7 @@ export default function LeadsPage() {
         csvText,
         campaignId: csvCampaign || undefined,
       });
+      track(EVENTS.IMPORTED_CSV, { imported: result.imported });
       setCsvText("");
       setCsvParsed([]);
       setImportErrors(result.errors);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import { api, setAuthToken } from "@/lib/api";
+import { track, EVENTS } from "@/lib/analytics";
 
 type VerifyState = "checking" | "verified" | "error";
 
@@ -28,6 +29,7 @@ function VerifyEmailContent() {
       .then(({ user, token: sessionToken }) => {
         setAuthToken(sessionToken);
         setUser(user);
+        track(EVENTS.EMAIL_VERIFIED);
         setState("verified");
         setMessage("Your email is verified. Taking you to your dashboard...");
         window.setTimeout(() => router.replace("/dashboard"), 900);

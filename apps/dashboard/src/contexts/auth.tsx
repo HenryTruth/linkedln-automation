@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, type AuthUser, clearAuthToken } from "@/lib/api";
+import { identifyUser, resetAnalytics } from "@/lib/analytics";
 
 const USER_CACHE_KEY = "linkedin_auto_user";
 
@@ -25,6 +26,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function setUser(next: AuthUser | null) {
     setUserState(next);
+    if (next) {
+      identifyUser(next);
+    } else {
+      resetAnalytics();
+    }
     if (typeof window === "undefined") return;
     if (next) {
       window.localStorage.setItem(USER_CACHE_KEY, JSON.stringify(next));

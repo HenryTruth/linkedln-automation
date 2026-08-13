@@ -6,6 +6,7 @@ import { api, type Stats, type ActivityLog, type Checkpoint } from "@/lib/api";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/Badge";
 import { Skeleton, SkeletonStatCard, SkeletonTableRows } from "@/components/Skeleton";
+import { track, EVENTS } from "@/lib/analytics";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -35,6 +36,10 @@ export default function DashboardPage() {
       fetchAll().catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    track(EVENTS.VIEWED_DASHBOARD);
   }, []);
 
   if (loading)

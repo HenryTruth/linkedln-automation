@@ -3,6 +3,7 @@ import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { AuthProvider } from "@/contexts/auth";
 import { AuthGuard } from "@/components/AuthGuard";
+import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
@@ -18,13 +19,15 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen antialiased">
-        <AuthProvider>
-          <Navbar />
-          <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-            <AuthGuard>{children}</AuthGuard>
-          </main>
-          <Toaster theme="dark" position="bottom-right" richColors />
-        </AuthProvider>
+        <AnalyticsProvider>
+          <AuthProvider>
+            <Navbar />
+            <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+              <AuthGuard>{children}</AuthGuard>
+            </main>
+            <Toaster theme="dark" position="bottom-right" richColors />
+          </AuthProvider>
+        </AnalyticsProvider>
       </body>
     </html>
   );

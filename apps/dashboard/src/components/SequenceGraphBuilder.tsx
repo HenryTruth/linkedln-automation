@@ -34,6 +34,7 @@ import {
   type SequenceStep,
   type SequenceEdge,
 } from "@/lib/api";
+import { track, EVENTS } from "@/lib/analytics";
 
 type StepNodeData = {
   type: StepType;
@@ -582,6 +583,7 @@ function Builder({ campaignId, campaignStatus, initialSteps, initialEdges }: Seq
         condition: conditionForHandle(e.sourceHandle),
       }));
       const saved = await api.sequences.graph.save(campaignId, { steps, edges: edgePayload });
+      track(EVENTS.BUILT_SEQUENCE, { campaign_id: campaignId, step_count: steps.length });
       applyGraph(saved);
       toast.success("Graph saved");
     } catch (e) {

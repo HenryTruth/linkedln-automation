@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { track, EVENTS } from "@/lib/analytics";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -24,8 +25,10 @@ export default function SignupPage() {
     if (!password) { setError("Password is required."); return; }
 
     setLoading(true);
+    track(EVENTS.SIGNUP_STARTED);
     try {
       await api.auth.signup({ email: email.trim(), password });
+      track(EVENTS.SIGNUP_COMPLETED);
       setSuccessEmail(email.trim());
       setPassword("");
     } catch (err) {

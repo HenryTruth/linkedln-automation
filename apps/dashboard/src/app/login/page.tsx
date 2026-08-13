@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { api, setAuthToken } from "@/lib/api";
 import { useAuth } from "@/contexts/auth";
 import { toast } from "sonner";
+import { track, EVENTS } from "@/lib/analytics";
 
 function safeNextPath(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
@@ -36,6 +37,7 @@ export default function LoginPage() {
       const { user, token } = await api.auth.login({ email: email.trim(), password });
       setAuthToken(token);
       setUser(user);
+      track(EVENTS.LOGIN);
       const params = new URLSearchParams(window.location.search);
       router.replace(safeNextPath(params.get("next")));
     } catch (err) {

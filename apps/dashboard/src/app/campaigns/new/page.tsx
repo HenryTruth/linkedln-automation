@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { api, type Account, type CampaignStrategy } from "@/lib/api";
+import { track, EVENTS } from "@/lib/analytics";
 
 const TIMEZONES = [
   "America/New_York",
@@ -83,6 +84,7 @@ export default function NewCampaignPage() {
         targetTimezone: next.targetTimezone,
         connectionNoteTemplate: next.connectionNoteTemplate ?? "",
       }));
+      track(EVENTS.GENERATED_AI_CAMPAIGN, { campaign_type: next.type });
       toast.success("Strategy drafted");
     } catch (err) {
       setError((err as Error).message);
@@ -126,6 +128,7 @@ export default function NewCampaignPage() {
         ...form,
         connectionNoteTemplate: form.connectionNoteTemplate.trim() || null,
       });
+      track(EVENTS.CREATED_CAMPAIGN, { campaign_type: campaign.type, from_ai_strategy: Boolean(strategy) });
       await applyStrategySetup(campaign.id, campaign.type);
       router.push(`/campaigns/${campaign.id}`);
     } catch (err) {

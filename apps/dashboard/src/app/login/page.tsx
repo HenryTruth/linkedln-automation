@@ -7,6 +7,7 @@ import { api, setAuthToken } from "@/lib/api";
 import { useAuth } from "@/contexts/auth";
 import { toast } from "sonner";
 import { track, EVENTS } from "@/lib/analytics";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 function safeNextPath(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
@@ -66,8 +67,21 @@ export default function LoginPage() {
     }
   }
 
-  function handleGooglePlaceholder() {
-    toast.info("Google sign-in is coming soon. Use email and password for now.");
+  async function handleGoogleCredential(credential: string) {
+    setError(null);
+    setLoading(true);
+    try {
+      const { user, token } = await api.auth.google({ credential });
+      setAuthToken(token);
+      setUser(user);
+      track(EVENTS.LOGIN);
+      const params = new URLSearchParams(window.location.search);
+      router.replace(safeNextPath(params.get("next")));
+    } catch (err) {
+      setError((err as Error).message.replace(/^API \d+: /, ""));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -109,16 +123,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleGooglePlaceholder}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
-          >
-            <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-xs font-bold text-slate-950">
-              G
-            </span>
-            Continue with Google
-          </button>
+          <GoogleSignInButton text="signin_with" onCredential={handleGoogleCredential} />
 
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-white/[0.08]" />

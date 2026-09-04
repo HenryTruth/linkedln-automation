@@ -707,6 +707,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    google: (data: { credential: string }) =>
+      apiFetch<{ user: AuthUser; token: string; expiresAt: string }>("/auth/google", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     me: () => apiFetch<{ user: AuthUser; expiresAt: string }>("/auth/me"),
     logout: () => apiFetch<{ ok: boolean }>("/auth/logout", { method: "POST" }),
   },

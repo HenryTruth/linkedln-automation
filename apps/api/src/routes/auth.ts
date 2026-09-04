@@ -2,11 +2,16 @@ import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash } fr
 import { promisify } from "node:util";
 import { Router, type IRouter } from "express";
 import { z } from "zod";
+import { OAuth2Client } from "google-auth-library";
 import { prisma } from "@linkedin-automation/db";
 import {
   getDashboardPublicUrl,
   sendVerificationEmail,
 } from "../lib/emailVerification.js";
+
+const googleClient = process.env.GOOGLE_CLIENT_ID
+  ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
+  : null;
 
 const scrypt = promisify(scryptCallback);
 const SESSION_DAYS = 30;
@@ -190,7 +195,7 @@ authRouter.post("/login", async (req, res, next) => {
   try {
     const { email, password } = CredentialsSchema.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+    if (!user || !user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
@@ -214,6 +219,61 @@ authRouter.post("/login", async (req, res, next) => {
       }),
       ...session,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+authRouter.post("/google", async (req, res, next) => {
+  try {
+    if (!googleClient) {
+      res.status(500).json({ error: "Google sign-in is not configured." });
+      return;
+    }
+    const { credential } = z.object({ credential: z.string().min(1) }).parse(req.body);
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email || !payload.email_verified) {
+      res.status(401).json({ error: "Google account has no verified email." });
+      return;
+    }
+    const email = payload.email.toLowerCase();
+    const googleId = payload.sub;
+
+    let user = await prisma.user.findUnique({ where: { googleId } });
+    if (!user) {
+      user = await prisma.user.findUnique({ where: { email } });
+      if (user) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            googleId,
+            emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+          },
+        });
+      } else {
+        user = await prisma.user.create({
+          data: {
+            email,
+            googleId,
+            emailVerifiedAt: new Date(),
+            plan: "FREE_FOREVER",
+          },
+        });
+      }
+    }
+
+    if (user.suspendedAt) {
+      res.status(403).json({ error: "Your account has been suspended. Contact support." });
+      return;
+    }
+
+    const session = await createSession(user.id);
+    res.json({ user: publicUser(user), ...session });
   } catch (err) {
     next(err);
   }

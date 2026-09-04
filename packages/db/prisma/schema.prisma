@@ -108,7 +108,8 @@ model User {
   id           String        @id @default(cuid())
   email        String        @unique
   emailVerifiedAt DateTime?
-  passwordHash String
+  passwordHash String?
+  googleId     String?       @unique
   plan         String        @default("FREE_FOREVER")
   isAdmin      Boolean       @default(false)
   suspendedAt  DateTime?

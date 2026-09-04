@@ -3,12 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, setAuthToken } from "@/lib/api";
 import { toast } from "sonner";
 import { track, EVENTS } from "@/lib/analytics";
+import { useAuth } from "@/contexts/auth";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 export default function SignupPage() {
   const router = useRouter();
+  const { setUser } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,8 +57,21 @@ export default function SignupPage() {
     }
   }
 
-  function handleGooglePlaceholder() {
-    toast.info("Google sign-in is coming soon. Sign up with email and password for now.");
+  async function handleGoogleCredential(credential: string) {
+    setError(null);
+    setLoading(true);
+    track(EVENTS.SIGNUP_STARTED);
+    try {
+      const { user, token } = await api.auth.google({ credential });
+      setAuthToken(token);
+      setUser(user);
+      track(EVENTS.SIGNUP_COMPLETED);
+      router.replace("/dashboard");
+    } catch (err) {
+      setError((err as Error).message.replace(/^API \d+: /, ""));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -117,16 +133,7 @@ export default function SignupPage() {
             <span className="font-semibold">Beta access</span> — every new user is a beta tester with full access for now, no credit card required.
           </div>
 
-          <button
-            type="button"
-            onClick={handleGooglePlaceholder}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
-          >
-            <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-xs font-bold text-slate-950">
-              G
-            </span>
-            Continue with Google
-          </button>
+          <GoogleSignInButton text="signup_with" onCredential={handleGoogleCredential} />
 
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-white/[0.08]" />

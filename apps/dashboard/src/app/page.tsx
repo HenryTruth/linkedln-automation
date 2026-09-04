@@ -344,11 +344,11 @@ function FullDashboardMock() {
                 </p>
               </div>
             </div>
-            <nav className="flex items-center gap-0.5 rounded-2xl border border-white/[0.07] bg-slate-900/70 p-1">
+            <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-2xl border border-white/[0.07] bg-slate-900/70 p-1">
               {navLinks.map((item, i) => (
                 <span
                   key={item}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
+                  className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold ${
                     i === 0 ? "bg-white/10 text-white" : "text-slate-500"
                   }`}
                 >
@@ -356,7 +356,7 @@ function FullDashboardMock() {
                 </span>
               ))}
             </nav>
-            <span className="rounded-xl border border-white/[0.07] bg-slate-900/70 px-3 py-1.5 text-xs text-slate-500">
+            <span className="hidden shrink-0 rounded-xl border border-white/[0.07] bg-slate-900/70 px-3 py-1.5 text-xs text-slate-500 sm:inline-flex">
               user@company.com
             </span>
           </div>
@@ -415,14 +415,14 @@ function FullDashboardMock() {
           </div>
 
           {/* Stat cards */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {statCards.map((s) => (
-              <div key={s.title} className="rounded-2xl border border-white/[0.08] bg-slate-900 p-4">
+              <div key={s.title} className="rounded-2xl border border-white/[0.08] bg-slate-900 p-3 sm:p-4">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-xs font-semibold text-slate-400">{s.title}</p>
-                  <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${s.dot}`} />
                 </div>
-                <p className={`mt-3 inline-flex rounded-xl px-2.5 py-0.5 text-2xl font-semibold ${s.color}`}>
+                <p className={`mt-3 inline-flex rounded-xl px-2.5 py-0.5 text-xl font-semibold sm:text-2xl ${s.color}`}>
                   {s.value}
                 </p>
                 <p className="mt-1.5 text-xs text-slate-500">{s.sub}</p>
@@ -438,36 +438,38 @@ function FullDashboardMock() {
               </p>
               <p className="mt-0.5 text-sm font-semibold text-white">Recent activity</p>
             </div>
-            <table className="min-w-full">
-              <thead>
-                <tr className="bg-slate-800/80 text-left">
-                  {["Action", "Target", "Result", "Time"].map((h) => (
-                    <th
-                      key={h}
-                      className="px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.06]">
-                {rows.map((row, i) => (
-                  <tr key={i}>
-                    <td className="px-5 py-3">
-                      <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${row.badge}`}>
-                        {row.action}
-                      </span>
-                    </td>
-                    <td className="max-w-[220px] truncate px-5 py-3 text-xs text-slate-400">
-                      {row.target}
-                    </td>
-                    <td className="px-5 py-3 text-xs text-slate-400">{row.result}</td>
-                    <td className="px-5 py-3 text-xs text-slate-500">{row.time}</td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="bg-slate-800/80 text-left">
+                    {["Action", "Target", "Result", "Time"].map((h) => (
+                      <th
+                        key={h}
+                        className="whitespace-nowrap px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400"
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-white/[0.06]">
+                  {rows.map((row, i) => (
+                    <tr key={i}>
+                      <td className="whitespace-nowrap px-5 py-3">
+                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${row.badge}`}>
+                          {row.action}
+                        </span>
+                      </td>
+                      <td className="max-w-[220px] truncate px-5 py-3 text-xs text-slate-400">
+                        {row.target}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-3 text-xs text-slate-400">{row.result}</td>
+                      <td className="whitespace-nowrap px-5 py-3 text-xs text-slate-500">{row.time}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

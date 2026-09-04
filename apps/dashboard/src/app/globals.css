@@ -78,7 +78,7 @@
   }
 
   .table-shell {
-    @apply overflow-hidden rounded-2xl border border-white/[0.08] bg-slate-900 shadow-sm;
+    @apply overflow-x-auto rounded-2xl border border-white/[0.08] bg-slate-900 shadow-sm;
   }
 
   .table-head {

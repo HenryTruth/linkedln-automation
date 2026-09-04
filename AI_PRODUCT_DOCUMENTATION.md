@@ -1,8 +1,8 @@
-# AI Product Documentation: Vectra Control Outreach
+# AI Product Documentation: Vectra Control
 
 ## 1. Product Summary
 
-Vectra Control Outreach is a safety-first LinkedIn automation platform for managing outreach operations across LinkedIn accounts, proxies, leads, campaigns, browser sessions, queue jobs, checkpoints, and activity logs.
+Vectra Control is a safety-first LinkedIn automation platform for managing outreach operations across LinkedIn accounts, proxies, leads, campaigns, browser sessions, queue jobs, checkpoints, and activity logs.
 
 The product is designed for operators who need controlled LinkedIn prospecting workflows without blindly maximizing volume. Its core promise is not "send as much as possible"; it is "run LinkedIn outreach with account protection, visibility, and conservative guardrails."
 
@@ -29,7 +29,7 @@ Important safety note: this product automates LinkedIn interactions. It should o
 
 ## 2. Product Name and Positioning
 
-The repository is named `linkedin-automation`, but the product-facing name in the user manual and dashboard copy is `Vectra Control Outreach`.
+The repository is named `linkedin-automation`, but the product-facing name in the user manual and dashboard copy is `Vectra Control`.
 
 Positioning:
 
@@ -870,4 +870,4 @@ Ticker: Scheduled process that periodically scans the database and queues due wo
 
 ## 14. One-Paragraph Brief for an AI
 
-Vectra Control Outreach is a TypeScript monorepo for safety-first LinkedIn outreach automation. It has a Next.js dashboard, Express API, Prisma/PostgreSQL database, BullMQ/Redis workers, Playwright browser automation, and shared guard packages. Users manage LinkedIn accounts, residential proxies, saved cookie sessions, leads, campaigns, sequence graphs, content-signal scraping, post records, jobs, rate limits, checkpoints, and alerts. The system must protect accounts through warm-up phases, hard daily caps, active-hour scheduling, checkpoint pauses, stable proxy requirements, session validation, message deduplication, anomaly detection, and visible job/activity logs. Any AI modifying the product should preserve those constraints and prefer additive changes that reuse existing route, queue, guard, and browser-action patterns.
+Vectra Control is a TypeScript monorepo for safety-first LinkedIn outreach automation. It has a Next.js dashboard, Express API, Prisma/PostgreSQL database, BullMQ/Redis workers, Playwright browser automation, and shared guard packages. Users manage LinkedIn accounts, residential proxies, saved cookie sessions, leads, campaigns, sequence graphs, content-signal scraping, post records, jobs, rate limits, checkpoints, and alerts. The system must protect accounts through warm-up phases, hard daily caps, active-hour scheduling, checkpoint pauses, stable proxy requirements, session validation, message deduplication, anomaly detection, and visible job/activity logs. Any AI modifying the product should preserve those constraints and prefer additive changes that reuse existing route, queue, guard, and browser-action patterns.

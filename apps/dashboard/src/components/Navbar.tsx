@@ -55,7 +55,7 @@ export function Navbar() {
                 Vectra
               </span>
               <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-teal-400">
-                Outreach control
+                Control
               </span>
             </span>
           </Link>

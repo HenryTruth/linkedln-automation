@@ -1,6 +1,6 @@
-# Vectra Control Outreach User Manual
+# Vectra Control User Manual
 
-Vectra Control Outreach is a safety-first LinkedIn outreach dashboard. It helps you manage LinkedIn accounts, proxies, saved sessions, leads, scraping campaigns, connection requests, follow-up messages, Sales Navigator InMail workflows, checkpoints, activity logs, and queue jobs.
+Vectra Control is a safety-first LinkedIn outreach dashboard. It helps you manage LinkedIn accounts, proxies, saved sessions, leads, scraping campaigns, connection requests, follow-up messages, Sales Navigator InMail workflows, checkpoints, activity logs, and queue jobs.
 
 Use Vectra only with LinkedIn accounts you control and keep limits conservative. The app includes guardrails, but it does not remove LinkedIn platform risk.
 

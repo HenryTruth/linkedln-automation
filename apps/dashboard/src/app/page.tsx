@@ -324,7 +324,7 @@ function FullDashboardMock() {
           <span className="h-3 w-3 rounded-full bg-white/15" />
         </div>
         <div className="flex-1 rounded-md bg-white/5 px-3 py-1 text-center font-mono text-xs text-slate-500">
-          vectra.app/dashboard
+          vectracontrol.app/dashboard
         </div>
       </div>
 
@@ -340,7 +340,7 @@ function FullDashboardMock() {
               <div>
                 <p className="text-sm font-semibold leading-none text-white">Vectra</p>
                 <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-teal-400">
-                  Outreach control
+                  Control
                 </p>
               </div>
             </div>

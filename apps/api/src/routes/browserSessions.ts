@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { prisma } from "@linkedin-automation/db";
 import { BrowserWorker, clearBrowserProfile } from "@linkedin-automation/browser";
+import { PostingOnlyAccountError } from "@linkedin-automation/guards";
 
 export const browserSessionsRouter: IRouter = Router();
 
@@ -42,10 +43,14 @@ async function closeSession(sessionKey: string): Promise<void> {
 }
 
 async function assertAccountOwner(userId: string, accountId: string) {
-  return prisma.account.findFirstOrThrow({
+  const account = await prisma.account.findFirstOrThrow({
     where: { id: accountId, userId },
-    select: { id: true },
+    select: { id: true, automationMode: true },
   });
+  if (account.automationMode === "POSTING_ONLY") {
+    throw new PostingOnlyAccountError(accountId);
+  }
+  return account;
 }
 
 function normalizeSearchUrlForQualification(value: string): string {

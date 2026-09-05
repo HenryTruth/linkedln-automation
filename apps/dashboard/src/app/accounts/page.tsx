@@ -262,8 +262,9 @@ function sessionBadge(account: Account, openCheckpoints: number) {
   }
   if (!account.proxy) {
     return {
-      label: "Proxy required",
-      detail: "Assign a matching residential proxy before connecting LinkedIn.",
+      label: "Proxy required for browser automation",
+      detail:
+        "Needed for the hosted browser, connections/messages, and scraping. Not required to post through the LinkedIn API.",
       className: "border-amber-500/30 bg-amber-500/10 text-amber-300",
     };
   }
@@ -384,6 +385,7 @@ export default function AccountsPage() {
   const [editEmail, setEditEmail] = useState("");
   const [editTimezone, setEditTimezone] = useState("America/New_York");
   const [editProxyId, setEditProxyId] = useState("");
+  const [editAutomationMode, setEditAutomationMode] = useState<"FULL" | "POSTING_ONLY">("FULL");
   const [editSalesNavigatorEnabled, setEditSalesNavigatorEnabled] = useState(false);
   const [editInMailMonthlyLimit, setEditInMailMonthlyLimit] = useState(50);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -393,6 +395,7 @@ export default function AccountsPage() {
   const [newEmail, setNewEmail] = useState("");
   const [newTimezone, setNewTimezone] = useState("America/New_York");
   const [newProxyId, setNewProxyId] = useState("");
+  const [newAutomationMode, setNewAutomationMode] = useState<"FULL" | "POSTING_ONLY">("FULL");
   const [newSalesNavigatorEnabled, setNewSalesNavigatorEnabled] = useState(false);
   const [newInMailMonthlyLimit, setNewInMailMonthlyLimit] = useState(50);
   const [adding, setAdding] = useState(false);
@@ -539,12 +542,14 @@ export default function AccountsPage() {
         email: newEmail,
         timezone: newTimezone,
         proxyId: newProxyId || undefined,
-        salesNavigatorEnabled: newSalesNavigatorEnabled,
+        automationMode: newAutomationMode,
+        salesNavigatorEnabled: newAutomationMode === "FULL" ? newSalesNavigatorEnabled : false,
         inMailMonthlyLimit: newInMailMonthlyLimit,
       });
       if (newProxyId) track(EVENTS.CONNECTED_PROXY);
       setNewEmail("");
       setNewProxyId("");
+      setNewAutomationMode("FULL");
       setNewSalesNavigatorEnabled(false);
       setNewInMailMonthlyLimit(50);
       setShowForm(false);
@@ -558,6 +563,7 @@ export default function AccountsPage() {
         setShowForm(false);
         setNewEmail("");
         setNewProxyId("");
+        setNewAutomationMode("FULL");
         setNewSalesNavigatorEnabled(false);
         setNewInMailMonthlyLimit(50);
         setAddError(null);
@@ -620,6 +626,7 @@ export default function AccountsPage() {
     setEditEmail(account.email);
     setEditTimezone(account.timezone);
     setEditProxyId(account.proxy?.id ?? "");
+    setEditAutomationMode(account.automationMode ?? "FULL");
     setEditSalesNavigatorEnabled(account.salesNavigatorEnabled);
     setEditInMailMonthlyLimit(account.inMailMonthlyLimit);
     setShowEditFor(account.id);
@@ -633,7 +640,8 @@ export default function AccountsPage() {
         email: editEmail,
         timezone: editTimezone,
         proxyId: editProxyId || null,
-        salesNavigatorEnabled: editSalesNavigatorEnabled,
+        automationMode: editAutomationMode,
+        salesNavigatorEnabled: editAutomationMode === "FULL" ? editSalesNavigatorEnabled : false,
         inMailMonthlyLimit: editInMailMonthlyLimit,
       });
       setShowEditFor(null);
@@ -1115,85 +1123,134 @@ export default function AccountsPage() {
 
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-300">
-              Timezone (determines active hours 8am-7pm)
+              What will this account do?
             </label>
-            <select
-              value={newTimezone}
-              onChange={(e) => setNewTimezone(e.target.value)}
-              className="field w-full"
-            >
-              {TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setNewAutomationMode("FULL")}
+                className={`rounded-xl border p-3 text-left transition ${
+                  newAutomationMode === "FULL"
+                    ? "border-teal-400/60 bg-teal-500/10 ring-2 ring-teal-500/30"
+                    : "border-white/10 bg-slate-800 hover:border-teal-500/30"
+                }`}
+              >
+                <p className="text-sm font-semibold text-slate-100">Full automation</p>
+                <p className="mt-1 text-xs leading-5 text-slate-400">
+                  Hosted browser for scraping, connections, and messages. Requires a residential proxy.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewAutomationMode("POSTING_ONLY")}
+                className={`rounded-xl border p-3 text-left transition ${
+                  newAutomationMode === "POSTING_ONLY"
+                    ? "border-teal-400/60 bg-teal-500/10 ring-2 ring-teal-500/30"
+                    : "border-white/10 bg-slate-800 hover:border-teal-500/30"
+                }`}
+              >
+                <p className="text-sm font-semibold text-slate-100">Posting only</p>
+                <p className="mt-1 text-xs leading-5 text-slate-400">
+                  Publish through LinkedIn&apos;s official API. No proxy or hosted browser needed.
+                </p>
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-300">
-              Proxy (required before automation starts)
-            </label>
-            <select
-              value={newProxyId}
-              onChange={(e) => setNewProxyId(e.target.value)}
-              className="field w-full"
-            >
-              <option value="">No proxy yet</option>
-              {proxies.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.country}
-                  {p.city ? ` - ${p.city}` : ""} - {p.host}:{p.port} [
-                  {p.healthStatus}]
-                </option>
-              ))}
-            </select>
-            {newProxyId ? (
-              selectedProxyLocationWarning ? (
-                <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-                  {selectedProxyLocationWarning}
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-slate-500">
-                  Proxy location matches the selected timezone. Still use the
-                  location this account normally logs in from.
-                </p>
-              )
-            ) : (
-              <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-                You can save the account now, but jobs will not run until a
-                stable residential proxy is assigned.
-              </p>
-            )}
-          </div>
+          {newAutomationMode === "FULL" && (
+            <>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-300">
+                  Timezone (determines active hours 8am-7pm)
+                </label>
+                <select
+                  value={newTimezone}
+                  onChange={(e) => setNewTimezone(e.target.value)}
+                  className="field w-full"
+                >
+                  {TIMEZONES.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
-            <label className="flex items-start gap-3 text-sm font-semibold text-slate-200">
-              <input
-                type="checkbox"
-                checked={newSalesNavigatorEnabled}
-                onChange={(e) => setNewSalesNavigatorEnabled(e.target.checked)}
-                className="mt-1"
-              />
-              <span>
-                Sales Navigator enabled
-                <span className="mt-1 block text-xs font-normal leading-5 text-slate-400">
-                  Required for Sales Navigator search/list scraping and InMail campaigns.
-                </span>
-              </span>
-            </label>
-            <label className="mt-3 block text-xs font-semibold text-slate-300">
-              Monthly InMail limit
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={500}
-              value={newInMailMonthlyLimit}
-              onChange={(e) => setNewInMailMonthlyLimit(Number(e.target.value))}
-              className="field mt-1 w-full"
-            />
-          </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-300">
+                  Proxy (required for the hosted browser and scraping)
+                </label>
+                <select
+                  value={newProxyId}
+                  onChange={(e) => setNewProxyId(e.target.value)}
+                  className="field w-full"
+                >
+                  <option value="">No proxy yet</option>
+                  {proxies.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.country}
+                      {p.city ? ` - ${p.city}` : ""} - {p.host}:{p.port} [
+                      {p.healthStatus}]
+                    </option>
+                  ))}
+                </select>
+                {newProxyId ? (
+                  selectedProxyLocationWarning ? (
+                    <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                      {selectedProxyLocationWarning}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Proxy location matches the selected timezone. Still use the
+                      location this account normally logs in from.
+                    </p>
+                  )
+                ) : (
+                  <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                    You can save the account now, but the hosted browser,
+                    connections/messages, and scraping will not run until a
+                    stable residential proxy is assigned.
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+                <label className="flex items-start gap-3 text-sm font-semibold text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={newSalesNavigatorEnabled}
+                    onChange={(e) => setNewSalesNavigatorEnabled(e.target.checked)}
+                    className="mt-1"
+                  />
+                  <span>
+                    Sales Navigator enabled
+                    <span className="mt-1 block text-xs font-normal leading-5 text-slate-400">
+                      Required for Sales Navigator search/list scraping and InMail campaigns.
+                    </span>
+                  </span>
+                </label>
+                <label className="mt-3 block text-xs font-semibold text-slate-300">
+                  Monthly InMail limit
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={newInMailMonthlyLimit}
+                  onChange={(e) => setNewInMailMonthlyLimit(Number(e.target.value))}
+                  className="field mt-1 w-full"
+                />
+              </div>
+            </>
+          )}
+
+          {newAutomationMode === "POSTING_ONLY" && (
+            <p className="rounded-xl border border-teal-500/30 bg-teal-500/5 px-3 py-2 text-xs leading-5 text-teal-300">
+              No proxy or hosted browser setup needed. After saving, use
+              &quot;Connect posting API&quot; on the account card to authorize
+              LinkedIn and start publishing.
+            </p>
+          )}
 
           <button
             type="submit"
@@ -1262,6 +1319,7 @@ export default function AccountsPage() {
           const canResume =
             account.status === "PAUSED" || account.status === "RESTRICTED";
           const isRestricted = account.status === "RESTRICTED";
+          const isPostingOnly = account.automationMode === "POSTING_ONLY";
           const accountProxyWarning = account.proxy
             ? locationMismatchMessage(account.proxy, account.timezone)
             : null;
@@ -1302,7 +1360,13 @@ export default function AccountsPage() {
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <Badge value={account.status} />
-                    <Badge value={account.warmUpPhase} />
+                    {isPostingOnly ? (
+                      <span className="rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-teal-300">
+                        Posting only
+                      </span>
+                    ) : (
+                      <Badge value={account.warmUpPhase} />
+                    )}
                   </div>
                   {openCount > 0 && (
                     <p className="mt-2 text-xs font-semibold text-red-400">
@@ -1344,6 +1408,32 @@ export default function AccountsPage() {
                 </div>
               )}
 
+              {isPostingOnly ? (
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Posting-only account
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-white">
+                      Publishes through LinkedIn&apos;s official API
+                    </p>
+                    <p className="mt-2 max-w-md text-xs leading-5 text-slate-400">
+                      No proxy or hosted browser is used for this account. Switch to
+                      full automation mode via Edit if you also want scraping,
+                      connections, or messages.
+                    </p>
+                  </div>
+                  <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                    account.hasLinkedInApiConnection
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                      : "border-white/10 bg-slate-900 text-slate-400"
+                  }`}>
+                    Posting API {account.hasLinkedInApiConnection ? "connected" : "not connected"}
+                  </span>
+                </div>
+              </div>
+              ) : (
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
                   <div>
@@ -1439,7 +1529,9 @@ export default function AccountsPage() {
 
                 {!account.proxy && (
                   <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                    Assign a residential proxy before opening the hosted browser.
+                    Assign a residential proxy before opening the hosted browser
+                    or scraping. If you only plan to post through the LinkedIn
+                    API, no proxy is needed — use &quot;Connect posting API&quot; below instead.
                   </p>
                 )}
 
@@ -1588,6 +1680,7 @@ export default function AccountsPage() {
                   </div>
                 )}
               </div>
+              )}
 
               {showEditFor === account.id && (
                 <div className="space-y-3 rounded-2xl border border-slate-500/30 bg-slate-500/5 p-4">
@@ -1605,73 +1698,114 @@ export default function AccountsPage() {
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-400">
-                      Timezone (active hours 8am–7pm)
+                      Automation mode
                     </label>
-                    <select
-                      value={editTimezone}
-                      onChange={(e) => setEditTimezone(e.target.value)}
-                      className="field w-full"
-                    >
-                      {TIMEZONES.map((tz) => (
-                        <option key={tz} value={tz}>{tz}</option>
-                      ))}
-                    </select>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditAutomationMode("FULL")}
+                        className={`rounded-xl border p-2.5 text-left text-xs transition ${
+                          editAutomationMode === "FULL"
+                            ? "border-teal-400/60 bg-teal-500/10 ring-2 ring-teal-500/30"
+                            : "border-white/10 bg-slate-800 hover:border-teal-500/30"
+                        }`}
+                      >
+                        <span className="block font-semibold text-slate-100">Full automation</span>
+                        <span className="mt-0.5 block text-slate-400">Hosted browser, scraping, campaigns. Needs a proxy.</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditAutomationMode("POSTING_ONLY")}
+                        className={`rounded-xl border p-2.5 text-left text-xs transition ${
+                          editAutomationMode === "POSTING_ONLY"
+                            ? "border-teal-400/60 bg-teal-500/10 ring-2 ring-teal-500/30"
+                            : "border-white/10 bg-slate-800 hover:border-teal-500/30"
+                        }`}
+                      >
+                        <span className="block font-semibold text-slate-100">Posting only</span>
+                        <span className="mt-0.5 block text-slate-400">LinkedIn API publishing. No proxy needed.</span>
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-400">
-                      Proxy
-                    </label>
-                    <select
-                      value={editProxyId}
-                      onChange={(e) => setEditProxyId(e.target.value)}
-                      className="field w-full"
-                    >
-                      <option value="">No proxy</option>
-                      {proxies.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.country}{p.city ? ` - ${p.city}` : ""} — {p.host}:{p.port} [{p.healthStatus}]
-                        </option>
-                      ))}
-                    </select>
-                    {editProxyId && (() => {
-                      const warn = locationMismatchMessage(
-                        proxies.find((p) => p.id === editProxyId) ?? null,
-                        editTimezone
-                      );
-                      return warn ? (
-                        <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-                          {warn}
-                        </p>
-                      ) : null;
-                    })()}
-                  </div>
-                  <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
-                    <label className="flex items-start gap-3 text-sm font-semibold text-slate-200">
-                      <input
-                        type="checkbox"
-                        checked={editSalesNavigatorEnabled}
-                        onChange={(e) => setEditSalesNavigatorEnabled(e.target.checked)}
-                        className="mt-1"
-                      />
-                      <span>
-                        Sales Navigator enabled
-                        <span className="mt-1 block text-xs font-normal leading-5 text-slate-400">
-                          Allows Sales Navigator search/list scraping and InMail campaigns for this account.
-                        </span>
-                      </span>
-                    </label>
-                    <label className="mt-3 block text-xs font-semibold text-slate-400">
-                      Monthly InMail limit
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={500}
-                      value={editInMailMonthlyLimit}
-                      onChange={(e) => setEditInMailMonthlyLimit(Number(e.target.value))}
-                      className="field mt-1 w-full"
-                    />
-                  </div>
+                  {editAutomationMode === "FULL" && (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-400">
+                          Timezone (active hours 8am–7pm)
+                        </label>
+                        <select
+                          value={editTimezone}
+                          onChange={(e) => setEditTimezone(e.target.value)}
+                          className="field w-full"
+                        >
+                          {TIMEZONES.map((tz) => (
+                            <option key={tz} value={tz}>{tz}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-400">
+                          Proxy
+                        </label>
+                        <select
+                          value={editProxyId}
+                          onChange={(e) => setEditProxyId(e.target.value)}
+                          className="field w-full"
+                        >
+                          <option value="">No proxy</option>
+                          {proxies.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.country}{p.city ? ` - ${p.city}` : ""} — {p.host}:{p.port} [{p.healthStatus}]
+                            </option>
+                          ))}
+                        </select>
+                        {editProxyId && (() => {
+                          const warn = locationMismatchMessage(
+                            proxies.find((p) => p.id === editProxyId) ?? null,
+                            editTimezone
+                          );
+                          return warn ? (
+                            <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                              {warn}
+                            </p>
+                          ) : null;
+                        })()}
+                      </div>
+                      <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+                        <label className="flex items-start gap-3 text-sm font-semibold text-slate-200">
+                          <input
+                            type="checkbox"
+                            checked={editSalesNavigatorEnabled}
+                            onChange={(e) => setEditSalesNavigatorEnabled(e.target.checked)}
+                            className="mt-1"
+                          />
+                          <span>
+                            Sales Navigator enabled
+                            <span className="mt-1 block text-xs font-normal leading-5 text-slate-400">
+                              Allows Sales Navigator search/list scraping and InMail campaigns for this account.
+                            </span>
+                          </span>
+                        </label>
+                        <label className="mt-3 block text-xs font-semibold text-slate-400">
+                          Monthly InMail limit
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={editInMailMonthlyLimit}
+                          onChange={(e) => setEditInMailMonthlyLimit(Number(e.target.value))}
+                          className="field mt-1 w-full"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {editAutomationMode === "POSTING_ONLY" && (
+                    <p className="rounded-xl border border-teal-500/30 bg-teal-500/5 px-3 py-2 text-xs leading-5 text-teal-300">
+                      No proxy or hosted browser needed in this mode. Existing
+                      proxy assignment and warm-up state are kept but unused.
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleEditAccount(account)}
@@ -1690,7 +1824,9 @@ export default function AccountsPage() {
                       Account actions
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      Control automation, warm-up, limits, and LinkedIn session access.
+                      {isPostingOnly
+                        ? "Manage the LinkedIn Posting API connection for this account."
+                        : "Control automation, warm-up, limits, and LinkedIn session access."}
                     </p>
                   </div>
                   {accountBusy && (
@@ -1701,7 +1837,7 @@ export default function AccountsPage() {
                 </div>
 
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {canResume ? (
+                  {!isPostingOnly && (canResume ? (
                     <AccountActionButton
                       title={isRestricted ? "Review required" : "Resume automation"}
                       description={
@@ -1728,79 +1864,83 @@ export default function AccountsPage() {
                       onClick={() => handlePause(account)}
                       disabled={accountBusy}
                     />
+                  ))}
+
+                  {!isPostingOnly && (
+                    <>
+                      <AccountActionButton
+                        title={confirmingWarmup ? "Confirm warm-up" : "Advance warm-up"}
+                        description={
+                          account.warmUpPhase === "FULL"
+                            ? "This account is already at the full operating phase."
+                            : confirmingWarmup
+                            ? "Confirm only after the account has stayed healthy at this phase."
+                            : "Move to the next sending volume phase."
+                        }
+                        detail={
+                          account.warmUpPhase === "FULL"
+                            ? "Complete"
+                            : confirmingWarmup
+                            ? "Confirmation needed"
+                            : account.warmUpPhase
+                        }
+                        tone={confirmingWarmup ? "amber" : "violet"}
+                        active={confirmingWarmup}
+                        onClick={() => handleAdvanceWarmup(account)}
+                        disabled={accountBusy || account.warmUpPhase === "FULL"}
+                      />
+
+                      <AccountActionButton
+                        title={confirmingDowngrade ? "Confirm downgrade" : "De-advance warm-up"}
+                        description={
+                          account.warmUpPhase === "MANUAL"
+                            ? "This account is already at the minimum warm-up phase."
+                            : confirmingDowngrade
+                            ? "This will reduce the daily sending caps. Confirm to proceed."
+                            : "Roll back to the previous sending volume phase."
+                        }
+                        detail={
+                          account.warmUpPhase === "MANUAL"
+                            ? "Minimum"
+                            : confirmingDowngrade
+                            ? "Confirmation needed"
+                            : account.warmUpPhase
+                        }
+                        tone={confirmingDowngrade ? "amber" : "slate"}
+                        active={confirmingDowngrade}
+                        onClick={() => handleDowngradeWarmup(account)}
+                        disabled={accountBusy || account.warmUpPhase === "MANUAL"}
+                      />
+
+                      <AccountActionButton
+                        title={showCapsFor === account.id ? "Close limits" : "Edit daily limits"}
+                        description="Tune connection, message, profile view, and search caps."
+                        detail="Guardrails"
+                        tone="violet"
+                        active={showCapsFor === account.id}
+                        onClick={() => toggleCapsPanel(account)}
+                      />
+
+                      <AccountActionButton
+                        title={
+                          showCookieFor === account.id
+                            ? "Close session"
+                            : account.hasSession
+                            ? "Refresh LinkedIn"
+                            : "Connect LinkedIn"
+                        }
+                        description={
+                          account.hasSession
+                            ? "Update the saved login if LinkedIn expires or challenges it."
+                            : "Save a LinkedIn login session before campaigns run."
+                        }
+                        detail={account.hasSession ? "Session saved" : "Required"}
+                        tone="teal"
+                        active={showCookieFor === account.id}
+                        onClick={() => toggleCookiePanel(account.id)}
+                      />
+                    </>
                   )}
-
-                  <AccountActionButton
-                    title={confirmingWarmup ? "Confirm warm-up" : "Advance warm-up"}
-                    description={
-                      account.warmUpPhase === "FULL"
-                        ? "This account is already at the full operating phase."
-                        : confirmingWarmup
-                        ? "Confirm only after the account has stayed healthy at this phase."
-                        : "Move to the next sending volume phase."
-                    }
-                    detail={
-                      account.warmUpPhase === "FULL"
-                        ? "Complete"
-                        : confirmingWarmup
-                        ? "Confirmation needed"
-                        : account.warmUpPhase
-                    }
-                    tone={confirmingWarmup ? "amber" : "violet"}
-                    active={confirmingWarmup}
-                    onClick={() => handleAdvanceWarmup(account)}
-                    disabled={accountBusy || account.warmUpPhase === "FULL"}
-                  />
-
-                  <AccountActionButton
-                    title={confirmingDowngrade ? "Confirm downgrade" : "De-advance warm-up"}
-                    description={
-                      account.warmUpPhase === "MANUAL"
-                        ? "This account is already at the minimum warm-up phase."
-                        : confirmingDowngrade
-                        ? "This will reduce the daily sending caps. Confirm to proceed."
-                        : "Roll back to the previous sending volume phase."
-                    }
-                    detail={
-                      account.warmUpPhase === "MANUAL"
-                        ? "Minimum"
-                        : confirmingDowngrade
-                        ? "Confirmation needed"
-                        : account.warmUpPhase
-                    }
-                    tone={confirmingDowngrade ? "amber" : "slate"}
-                    active={confirmingDowngrade}
-                    onClick={() => handleDowngradeWarmup(account)}
-                    disabled={accountBusy || account.warmUpPhase === "MANUAL"}
-                  />
-
-                  <AccountActionButton
-                    title={showCapsFor === account.id ? "Close limits" : "Edit daily limits"}
-                    description="Tune connection, message, profile view, and search caps."
-                    detail="Guardrails"
-                    tone="violet"
-                    active={showCapsFor === account.id}
-                    onClick={() => toggleCapsPanel(account)}
-                  />
-
-                  <AccountActionButton
-                    title={
-                      showCookieFor === account.id
-                        ? "Close session"
-                        : account.hasSession
-                        ? "Refresh LinkedIn"
-                        : "Connect LinkedIn"
-                    }
-                    description={
-                      account.hasSession
-                        ? "Update the saved login if LinkedIn expires or challenges it."
-                        : "Save a LinkedIn login session before campaigns run."
-                    }
-                    detail={account.hasSession ? "Session saved" : "Required"}
-                    tone="teal"
-                    active={showCookieFor === account.id}
-                    onClick={() => toggleCookiePanel(account.id)}
-                  />
 
                   <AccountActionButton
                     title={
@@ -2086,69 +2226,74 @@ export default function AccountsPage() {
                 )}
               </div>
 
-              {/* Session row */}
-              <div className={`rounded-2xl border px-4 py-3 text-sm ${session.className}`}>
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="font-semibold">{session.label}</span>
-                  <span className="text-xs opacity-90">{session.detail}</span>
-                </div>
-              </div>
+              {!isPostingOnly && (
+                <>
+                  {/* Session row */}
+                  <div className={`rounded-2xl border px-4 py-3 text-sm ${session.className}`}>
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="font-semibold">{session.label}</span>
+                      <span className="text-xs opacity-90">{session.detail}</span>
+                    </div>
+                  </div>
 
-              {/* Proxy row */}
-              <div className="flex items-center gap-2 rounded-2xl bg-slate-800/50 px-4 py-3 text-sm">
-                <span className="w-16 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                  Proxy
-                </span>
-                {account.proxy ? (
-                  <>
-                    <span className="text-slate-300">
-                      {account.proxy.country}
-                      {account.proxy.city ? ` - ${account.proxy.city}` : ""}
+                  {/* Proxy row */}
+                  <div className="flex items-center gap-2 rounded-2xl bg-slate-800/50 px-4 py-3 text-sm">
+                    <span className="w-16 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Proxy
                     </span>
-                    <Badge value={account.proxy.healthStatus} />
-                    {accountProxyWarning && (
-                      <span className="text-xs font-medium text-amber-400">
-                        Location mismatch
+                    {account.proxy ? (
+                      <>
+                        <span className="text-slate-300">
+                          {account.proxy.country}
+                          {account.proxy.city ? ` - ${account.proxy.city}` : ""}
+                        </span>
+                        <Badge value={account.proxy.healthStatus} />
+                        {accountProxyWarning && (
+                          <span className="text-xs font-medium text-amber-400">
+                            Location mismatch
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-xs italic text-slate-400">
+                        No proxy assigned - the hosted browser, connection/message
+                        automation, and scraping are blocked until a residential
+                        IP is added. Posting through the LinkedIn API is unaffected.
                       </span>
                     )}
-                  </>
-                ) : (
-                  <span className="text-xs italic text-slate-400">
-                    No proxy assigned - jobs are blocked until a residential IP
-                    is added
-                  </span>
-                )}
-              </div>
-              {accountProxyWarning && (
-                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
-                  {accountProxyWarning}
-                </div>
+                  </div>
+                  {accountProxyWarning && (
+                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
+                      {accountProxyWarning}
+                    </div>
+                  )}
+
+                  {/* Timezone row */}
+                  <div className="flex items-center gap-2 rounded-2xl bg-slate-800/50 px-4 py-3 text-xs text-slate-400">
+                    <span className="w-16 font-semibold uppercase tracking-[0.12em] text-slate-500">TZ</span>
+                    <span>
+                      {account.timezone} - Actions fire 8am-7pm local time
+                    </span>
+                  </div>
+
+                  {/* Daily caps */}
+                  <div>
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Today&apos;s usage
+                    </p>
+                    <div className="space-y-2">
+                      {CAP_KEYS.map((key) => (
+                        <CapBar
+                          key={key}
+                          label={CAP_LABELS[key]}
+                          used={todayCaps[key] ?? 0}
+                          cap={effectiveCap(account, key)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
-
-              {/* Timezone row */}
-              <div className="flex items-center gap-2 rounded-2xl bg-slate-800/50 px-4 py-3 text-xs text-slate-400">
-                <span className="w-16 font-semibold uppercase tracking-[0.12em] text-slate-500">TZ</span>
-                <span>
-                  {account.timezone} - Actions fire 8am-7pm local time
-                </span>
-              </div>
-
-              {/* Daily caps */}
-              <div>
-                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Today&apos;s usage
-                </p>
-                <div className="space-y-2">
-                  {CAP_KEYS.map((key) => (
-                    <CapBar
-                      key={key}
-                      label={CAP_LABELS[key]}
-                      used={todayCaps[key] ?? 0}
-                      cap={effectiveCap(account, key)}
-                    />
-                  ))}
-                </div>
-              </div>
 
             </div>
           );

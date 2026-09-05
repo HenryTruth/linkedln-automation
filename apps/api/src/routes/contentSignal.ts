@@ -15,11 +15,15 @@ type CampaignReadyAccount = {
   cookiesEncrypted: string | null;
   browserProfileStatus?: string | null;
   proxyId: string | null;
+  automationMode?: string;
 };
 
 function campaignAccountReadinessError(account: CampaignReadyAccount): string | null {
   if (account.status !== "ACTIVE") {
     return "Account is paused or restricted. Resume the account before starting a campaign.";
+  }
+  if (account.automationMode === "POSTING_ONLY") {
+    return "This account is set to posting-only mode. Switch it to full automation mode before starting a campaign.";
   }
   if (!account.proxyId) {
     return "Proxy required. Assign a matching residential proxy to this account before starting a campaign.";
@@ -170,6 +174,7 @@ contentSignalRouter.post("/:campaignId/run", async (req, res, next) => {
             cookiesEncrypted: true,
             browserProfileStatus: true,
             proxyId: true,
+            automationMode: true,
           },
         },
       },

@@ -8,6 +8,7 @@ import {
   sendAlert,
   IpMismatchError,
   MissingProxyError,
+  PostingOnlyAccountError,
 } from "@linkedin-automation/guards";
 import { saveCookies, loadCookies } from "./session.js";
 import {
@@ -108,8 +109,13 @@ export class BrowserWorker {
         viewportHeight: true,
         timezone: true,
         status: true,
+        automationMode: true,
       },
     });
+
+    if (account.automationMode === "POSTING_ONLY") {
+      throw new PostingOnlyAccountError(this.accountId);
+    }
 
     if (account.status === AccountStatus.PAUSED && !this.options.allowPaused) {
       throw new Error(`Account ${this.accountId} is paused`);

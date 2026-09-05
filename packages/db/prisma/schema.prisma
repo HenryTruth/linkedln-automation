@@ -21,6 +21,11 @@ enum AccountStatus {
   RESTRICTED
 }
 
+enum AccountAutomationMode {
+  FULL
+  POSTING_ONLY
+}
+
 enum ProxyHealth {
   HEALTHY
   DEGRADED
@@ -163,6 +168,7 @@ model Account {
   timezone          String        @default("America/New_York")
   warmUpPhase       WarmUpPhase   @default(MANUAL)
   status            AccountStatus @default(ACTIVE)
+  automationMode    AccountAutomationMode @default(FULL)
   browserProfileStatus String      @default("UNKNOWN")
   browserProfileLastCheckedAt DateTime?
   browserProfileLastCheckError String? @db.Text

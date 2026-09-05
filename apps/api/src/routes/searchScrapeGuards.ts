@@ -23,11 +23,15 @@ export type ScrapeReadyAccount = {
   browserProfileStatus?: string | null;
   proxyId: string | null;
   salesNavigatorEnabled?: boolean;
+  automationMode?: string;
 };
 
 export function assertAccountReadyForScraping(account: ScrapeReadyAccount): string | null {
   if (account.status !== "ACTIVE") {
     return "Account is paused or restricted. Resume the account before scraping.";
+  }
+  if (account.automationMode === "POSTING_ONLY") {
+    return "This account is set to posting-only mode. Switch it to full automation mode before scraping.";
   }
   if (!account.proxyId) {
     return "Proxy required. Assign a matching residential proxy to this account before scraping.";

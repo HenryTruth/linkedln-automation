@@ -54,3 +54,12 @@ export class MissingProxyError extends Error {
     this.name = "MissingProxyError";
   }
 }
+
+export class PostingOnlyAccountError extends Error {
+  constructor(accountId: string) {
+    super(
+      `Account ${accountId} is set to posting-only mode. Switch it to full automation mode before using the hosted browser, scraping, or campaigns.`
+    );
+    this.name = "PostingOnlyAccountError";
+  }
+}

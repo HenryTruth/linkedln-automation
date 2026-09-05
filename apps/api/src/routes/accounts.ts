@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { prisma, AccountStatus, WarmUpPhase } from "@linkedin-automation/db";
+import { prisma, AccountStatus, WarmUpPhase, AccountAutomationMode } from "@linkedin-automation/db";
 import { scheduleWithdrawalForAccount } from "@linkedin-automation/queue";
 import { encrypt, SYSTEM_CAPS, HARD_CEILING } from "@linkedin-automation/guards";
 import {
@@ -51,6 +51,7 @@ const CreateAccountSchema = z.object({
   proxyId: z.string().optional(),
   timezone: z.string().default("America/New_York"),
   userAgent: z.string().optional(),
+  automationMode: z.nativeEnum(AccountAutomationMode).default(AccountAutomationMode.FULL),
   salesNavigatorEnabled: z.boolean().default(false),
   inMailMonthlyLimit: z.number().int().min(1).max(500).default(50),
 });
@@ -62,6 +63,7 @@ const UpdateAccountSchema = z.object({
   userAgent: z.string().nullable().optional(),
   viewportWidth: z.number().int().min(320).max(3840).optional(),
   viewportHeight: z.number().int().min(320).max(2160).optional(),
+  automationMode: z.nativeEnum(AccountAutomationMode).optional(),
   salesNavigatorEnabled: z.boolean().optional(),
   inMailMonthlyLimit: z.number().int().min(1).max(500).optional(),
   warmUpPhase: z.nativeEnum(WarmUpPhase).optional(),

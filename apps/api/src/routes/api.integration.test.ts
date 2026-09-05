@@ -132,6 +132,10 @@ vi.mock("@linkedin-automation/db", () => ({
     PAUSED: "PAUSED",
     RESTRICTED: "RESTRICTED",
   },
+  AccountAutomationMode: {
+    FULL: "FULL",
+    POSTING_ONLY: "POSTING_ONLY",
+  },
   CampaignStatus: {
     ACTIVE: "ACTIVE",
     PAUSED: "PAUSED",

@@ -14,6 +14,7 @@ export {
   MessageBodyDedupError,
   IpMismatchError,
   MissingProxyError,
+  PostingOnlyAccountError,
 } from "./errors.js";
 export {
   renderTemplate,

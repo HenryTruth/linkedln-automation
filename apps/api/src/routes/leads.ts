@@ -302,6 +302,7 @@ leadsRouter.post("/search-urls", async (req, res, next) => {
         proxyId: true,
         salesNavigatorEnabled: true,
         timezone: true,
+        automationMode: true,
       },
     });
 

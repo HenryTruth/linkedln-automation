@@ -112,6 +112,7 @@ export interface Account {
   id: string;
   email: string;
   status: "ACTIVE" | "PAUSED" | "RESTRICTED";
+  automationMode: "FULL" | "POSTING_ONLY";
   warmUpPhase: "MANUAL" | "WEEK2" | "WEEK3" | "WEEK4" | "FULL";
   dailyCaps: Record<string, Record<string, number>>;
   monthlyCaps: Record<string, number>;
@@ -802,6 +803,7 @@ export const api = {
       email: string;
       timezone?: string;
       proxyId?: string;
+      automationMode?: "FULL" | "POSTING_ONLY";
       salesNavigatorEnabled?: boolean;
       inMailMonthlyLimit?: number;
     }) =>
@@ -835,6 +837,7 @@ export const api = {
       email?: string;
       timezone?: string;
       proxyId?: string | null;
+      automationMode?: "FULL" | "POSTING_ONLY";
       salesNavigatorEnabled?: boolean;
       inMailMonthlyLimit?: number;
     }) =>

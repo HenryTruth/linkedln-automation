@@ -8,6 +8,7 @@ import {
   AccountPausedError,
   IpMismatchError,
   MissingProxyError,
+  PostingOnlyAccountError,
 } from "@linkedin-automation/guards";
 import { BrowserProfileInUseError, ProxyHealthError } from "@linkedin-automation/browser";
 
@@ -35,6 +36,7 @@ export function errorMiddleware(
     err instanceof AccountPausedError ||
     err instanceof IpMismatchError ||
     err instanceof MissingProxyError ||
+    err instanceof PostingOnlyAccountError ||
     err instanceof BrowserProfileInUseError ||
     err instanceof ProxyHealthError
   ) {

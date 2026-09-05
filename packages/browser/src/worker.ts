@@ -284,9 +284,10 @@ export class BrowserWorker {
   }
 
   private async handleIpMismatch(expected: string, actual: string): Promise<void> {
-    await prisma.account.update({
+    const account = await prisma.account.update({
       where: { id: this.accountId },
       data: { status: AccountStatus.PAUSED },
+      select: { userId: true },
     });
     await sendAlert(
       `Proxy IP mismatch — account ${this.accountId} paused`,
@@ -294,14 +295,16 @@ export class BrowserWorker {
         `The proxy appears to have rotated mid-session. The session has been killed and ` +
         `the account paused to prevent LinkedIn from seeing a sudden location change.\n\n` +
         `Action required: verify your proxy configuration, then re-activate the account:\n` +
-        `  PATCH /accounts/${this.accountId}  { "status": "ACTIVE" }`
+        `  PATCH /accounts/${this.accountId}  { "status": "ACTIVE" }`,
+      account.userId
     );
   }
 
   private async handleCheckpoint(): Promise<void> {
-    await prisma.account.update({
+    const account = await prisma.account.update({
       where: { id: this.accountId },
       data: { status: AccountStatus.PAUSED },
+      select: { userId: true },
     });
 
     await prisma.checkpoint.create({
@@ -313,7 +316,8 @@ export class BrowserWorker {
       `LinkedIn showed a security check or CAPTCHA for account ${this.accountId}.\n` +
         `The account has been paused automatically.\n\n` +
         `Action required: resolve the checkpoint manually on LinkedIn, then re-activate the account via the API:\n` +
-        `  PATCH /accounts/${this.accountId}  { "status": "ACTIVE" }`
+        `  PATCH /accounts/${this.accountId}  { "status": "ACTIVE" }`,
+      account.userId
     );
   }
 

@@ -85,12 +85,14 @@ export async function pauseAccountForAnomaly(
   accountId: string,
   reason: string
 ): Promise<void> {
-  await prisma.account.update({
+  const account = await prisma.account.update({
     where: { id: accountId },
     data: { status: AccountStatus.PAUSED },
+    select: { userId: true },
   });
   await sendAlert(
     `Account paused — anomaly detected`,
-    `Account: ${accountId}\nReason: ${reason}`
+    `Account: ${accountId}\nReason: ${reason}`,
+    account.userId
   );
 }

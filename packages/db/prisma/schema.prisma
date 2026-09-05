@@ -120,6 +120,7 @@ model User {
   leads        Lead[]
   linkedinPosts LinkedInPost[]
   aiGeneratedAssets AiGeneratedAsset[]
+  settings     UserSetting[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -407,6 +408,21 @@ model SystemSetting {
   key       String   @id
   value     String   @db.Text
   updatedAt DateTime @updatedAt
+}
+
+// Per-user alert preferences (alert_webhook_url, alert_email_to). Distinct from
+// SystemSetting, which holds instance-wide config (e.g. resend_api_key) shared
+// by every user — a per-user value must never live in that global table.
+model UserSetting {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId])
 }
 
 model PostSignal {

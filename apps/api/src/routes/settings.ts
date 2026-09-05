@@ -7,10 +7,12 @@ export const settingsRouter: IRouter = Router();
 
 const SETTING_KEYS = ["alert_webhook_url", "alert_email_to"] as const;
 
-// GET /settings — return all configurable settings
-settingsRouter.get("/", async (_req, res, next) => {
+// GET /settings — return the logged-in user's configurable settings
+settingsRouter.get("/", async (req, res, next) => {
   try {
-    const rows = await prisma.systemSetting.findMany();
+    const rows = await prisma.userSetting.findMany({
+      where: { userId: req.user.id },
+    });
     const map: Record<string, string | null> = {
       alert_webhook_url: null,
       alert_email_to: null,
@@ -26,7 +28,7 @@ settingsRouter.get("/", async (_req, res, next) => {
   }
 });
 
-// PUT /settings — upsert one or more settings
+// PUT /settings — upsert one or more settings for the logged-in user
 settingsRouter.put("/", async (req, res, next) => {
   try {
     const schema = z.object({
@@ -34,14 +36,15 @@ settingsRouter.put("/", async (req, res, next) => {
       alert_email_to: z.string().email().nullable().optional(),
     });
     const data = schema.parse(req.body);
+    const userId = req.user.id;
 
     for (const [key, value] of Object.entries(data)) {
       if (value === null || value === undefined) {
-        await prisma.systemSetting.deleteMany({ where: { key } });
+        await prisma.userSetting.deleteMany({ where: { userId, key } });
       } else {
-        await prisma.systemSetting.upsert({
-          where: { key },
-          create: { key, value },
+        await prisma.userSetting.upsert({
+          where: { userId_key: { userId, key } },
+          create: { userId, key, value },
           update: { value },
         });
       }
@@ -54,11 +57,12 @@ settingsRouter.put("/", async (req, res, next) => {
 });
 
 // POST /settings/test-alert — fire a test notification via webhook or email
-settingsRouter.post("/test-alert", async (_req, res, next) => {
+settingsRouter.post("/test-alert", async (req, res, next) => {
   try {
     await sendAlert(
       "Test alert",
-      "This is a test from your LinkedIn Automation dashboard. If you see this, your alert delivery is configured correctly."
+      "This is a test from your LinkedIn Automation dashboard. If you see this, your alert delivery is configured correctly.",
+      req.user.id
     );
     res.json({ ok: true });
   } catch (err) {

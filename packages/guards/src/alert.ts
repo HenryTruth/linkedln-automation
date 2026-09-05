@@ -3,10 +3,10 @@ import { request as httpRequest } from "http";
 import { URL } from "url";
 import { prisma } from "@linkedin-automation/db";
 
-async function getWebhookUrl(): Promise<string | undefined> {
+async function getWebhookUrl(userId: string): Promise<string | undefined> {
   try {
-    const setting = await prisma.systemSetting.findUnique({
-      where: { key: "alert_webhook_url" },
+    const setting = await prisma.userSetting.findUnique({
+      where: { userId_key: { userId, key: "alert_webhook_url" } },
     });
     if (setting?.value) return setting.value;
   } catch {
@@ -15,19 +15,28 @@ async function getWebhookUrl(): Promise<string | undefined> {
   return process.env.ALERT_WEBHOOK_URL;
 }
 
-async function getEmailConfig(): Promise<{ apiKey: string; to: string; from: string } | null> {
-  let apiKey: string | undefined;
+async function getEmailConfig(
+  userId: string
+): Promise<{ apiKey: string; to: string; from: string } | null> {
   let to: string | undefined;
   try {
-    const rows = await prisma.systemSetting.findMany({
-      where: { key: { in: ["resend_api_key", "alert_email_to"] } },
+    const setting = await prisma.userSetting.findUnique({
+      where: { userId_key: { userId, key: "alert_email_to" } },
     });
-    const map = Object.fromEntries(rows.map((r) => [r.key, r.value ?? ""]));
-    apiKey = map["resend_api_key"] || process.env.RESEND_API_KEY;
-    to = map["alert_email_to"] || process.env.ALERT_EMAIL_TO;
+    to = setting?.value || process.env.ALERT_EMAIL_TO;
+  } catch {
+    to = process.env.ALERT_EMAIL_TO;
+  }
+  // resend_api_key is instance-wide infra config (not a per-user preference),
+  // so it still lives in the global SystemSetting table.
+  let apiKey: string | undefined;
+  try {
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: "resend_api_key" },
+    });
+    apiKey = setting?.value || process.env.RESEND_API_KEY;
   } catch {
     apiKey = process.env.RESEND_API_KEY;
-    to = process.env.ALERT_EMAIL_TO;
   }
   if (!apiKey || !to) return null;
   const from = process.env.ALERT_EMAIL_FROM ?? "LinkedIn Auto Alerts <alerts@resend.dev>";
@@ -62,8 +71,8 @@ async function sendWebhook(webhookUrl: string, message: string): Promise<void> {
   });
 }
 
-async function sendEmail(subject: string, body: string): Promise<void> {
-  const cfg = await getEmailConfig();
+async function sendEmail(subject: string, body: string, userId: string): Promise<void> {
+  const cfg = await getEmailConfig(userId);
   if (!cfg) return;
 
   const { Resend } = await import("resend");
@@ -81,11 +90,15 @@ async function sendEmail(subject: string, body: string): Promise<void> {
   }
 }
 
-export async function sendAlert(subject: string, body: string): Promise<void> {
+export async function sendAlert(
+  subject: string,
+  body: string,
+  userId: string
+): Promise<void> {
   const message = `[LinkedIn Automation] ${subject}\n\n${body}`;
   console.error(`[ALERT] ${message}`);
 
-  const webhookUrl = await getWebhookUrl();
+  const webhookUrl = await getWebhookUrl(userId);
   if (webhookUrl) {
     try {
       await sendWebhook(webhookUrl, message);
@@ -97,7 +110,7 @@ export async function sendAlert(subject: string, body: string): Promise<void> {
 
   // No webhook configured — fall back to email via Resend
   try {
-    await sendEmail(subject, message);
+    await sendEmail(subject, message, userId);
   } catch (err) {
     console.error(`[ALERT] Email delivery failed: ${err}`);
   }

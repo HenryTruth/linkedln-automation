@@ -896,6 +896,18 @@ export default function AccountsPage() {
     queueBrowserText(accountId, text);
   }
 
+  function requireProxyThen(account: Account, action: () => void) {
+    if (!account.proxy) {
+      setAccountNotice(
+        account.id,
+        "error",
+        "Assign a proxy in Step 1 first to use the hosted browser."
+      );
+      return;
+    }
+    action();
+  }
+
   async function handleStartBrowser(account: Account, requestedUrl?: string) {
     const url = requestedUrl || browserPanels[account.id]?.url || LINKEDIN_FEED_URL;
     setBrowserBusy(account.id);
@@ -1644,16 +1656,16 @@ export default function AccountsPage() {
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => handleQuickNavigate(account, LINKEDIN_LOGIN_URL)}
-                          disabled={browserBusy === account.id || !account.proxy}
+                          onClick={() => requireProxyThen(account, () => handleQuickNavigate(account, LINKEDIN_LOGIN_URL))}
+                          disabled={browserBusy === account.id}
                           className="btn-primary text-xs"
                         >
                           Log in inside hosted browser
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleQuickNavigate(account, LINKEDIN_FEED_URL)}
-                          disabled={browserBusy === account.id || !account.proxy}
+                          onClick={() => requireProxyThen(account, () => handleQuickNavigate(account, LINKEDIN_FEED_URL))}
+                          disabled={browserBusy === account.id}
                           className="btn-secondary text-xs"
                         >
                           Open LinkedIn
@@ -1661,11 +1673,13 @@ export default function AccountsPage() {
                         <button
                           type="button"
                           onClick={() =>
-                            browserPanels[account.id]?.open
-                              ? refreshBrowser(account.id)
-                              : handleStartBrowser(account)
+                            requireProxyThen(account, () =>
+                              browserPanels[account.id]?.open
+                                ? refreshBrowser(account.id)
+                                : handleStartBrowser(account)
+                            )
                           }
-                          disabled={browserBusy === account.id || !account.proxy}
+                          disabled={browserBusy === account.id}
                           className="btn-secondary text-xs"
                         >
                           {browserPanels[account.id]?.open ? "Refresh" : "Open saved"}

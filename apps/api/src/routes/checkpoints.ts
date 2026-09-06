@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { prisma } from "@linkedin-automation/db";
+import { prisma, AccountStatus } from "@linkedin-automation/db";
 
 export const checkpointsRouter: IRouter = Router();
 
@@ -22,7 +22,27 @@ checkpointsRouter.post("/:id/resolve", async (req, res, next) => {
     const checkpoint = await prisma.checkpoint.findFirstOrThrow({
       where: { id: req.params.id, account: { userId: req.user.id } },
     });
-    res.json(checkpoint);
+
+    // Resolving the last open checkpoint on an account should resume it —
+    // otherwise the account stays PAUSED even though the UI tells the user
+    // this button resumes automation.
+    const remainingOpenCheckpoint = await prisma.checkpoint.findFirst({
+      where: { accountId: checkpoint.accountId, resolvedAt: null },
+    });
+    let accountResumed = false;
+    if (!remainingOpenCheckpoint) {
+      const resumed = await prisma.account.updateMany({
+        where: {
+          id: checkpoint.accountId,
+          userId: req.user.id,
+          status: AccountStatus.PAUSED,
+        },
+        data: { status: AccountStatus.ACTIVE },
+      });
+      accountResumed = resumed.count > 0;
+    }
+
+    res.json({ ...checkpoint, accountResumed });
   } catch (err) {
     next(err);
   }

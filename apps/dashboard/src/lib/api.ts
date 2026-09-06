@@ -286,6 +286,7 @@ export interface Checkpoint {
   resolvedAt?: string | null;
   resolvedBy?: string | null;
   account?: { email: string };
+  accountResumed?: boolean;
 }
 
 export interface ActivityLog {

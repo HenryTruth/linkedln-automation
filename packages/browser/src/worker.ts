@@ -300,8 +300,8 @@ export class BrowserWorker {
       `Expected exit IP: ${expected}\nActual exit IP: ${actual}\n\n` +
         `The proxy appears to have rotated mid-session. The session has been killed and ` +
         `the account paused to prevent LinkedIn from seeing a sudden location change.\n\n` +
-        `Action required: verify your proxy configuration, then re-activate the account:\n` +
-        `  PATCH /accounts/${this.accountId}  { "status": "ACTIVE" }`,
+        `Action required: fix your proxy configuration, then open the Accounts page in the ` +
+        `dashboard and click "Resume automation" on this account.`,
       account.userId
     );
   }
@@ -321,8 +321,9 @@ export class BrowserWorker {
       `Checkpoint detected — account ${this.accountId} paused`,
       `LinkedIn showed a security check or CAPTCHA for account ${this.accountId}.\n` +
         `The account has been paused automatically.\n\n` +
-        `Action required: resolve the checkpoint manually on LinkedIn, then re-activate the account via the API:\n` +
-        `  PATCH /accounts/${this.accountId}  { "status": "ACTIVE" }`,
+        `Action required: open the Checkpoints page in the dashboard, resolve the checkpoint manually ` +
+        `on LinkedIn, then click "Mark Resolved" — automation resumes automatically once every open ` +
+        `checkpoint on the account is cleared.`,
       account.userId
     );
   }

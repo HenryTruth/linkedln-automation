@@ -12,6 +12,8 @@ export default function CheckpointsPage() {
   const [showUnresolved, setShowUnresolved] = useState(false);
   const [resolving, setResolving] = useState<string | null>(null);
   const [resolvedBy, setResolvedBy] = useState("");
+  const [resolveTarget, setResolveTarget] = useState<Checkpoint | null>(null);
+  const [resolvedByInput, setResolvedByInput] = useState("");
 
   function reload() {
     return api.checkpoints
@@ -28,17 +30,26 @@ export default function CheckpointsPage() {
     return () => clearInterval(id);
   }, [showUnresolved]);
 
-  async function handleResolve(cp: Checkpoint) {
-    const who = prompt(
-      "Who resolved this checkpoint? (your name or 'human')",
-      resolvedBy || "human"
-    );
-    if (!who) return;
+  function openResolveDialog(cp: Checkpoint) {
+    setResolvedByInput(resolvedBy || "human");
+    setResolveTarget(cp);
+  }
+
+  async function confirmResolve() {
+    const cp = resolveTarget;
+    const who = resolvedByInput.trim();
+    if (!cp || !who) return;
     setResolvedBy(who);
+    setResolveTarget(null);
     setResolving(cp.id);
     try {
-      await api.checkpoints.resolve(cp.id, who);
+      const result = await api.checkpoints.resolve(cp.id, who);
       await reload();
+      toast.success(
+        result.accountResumed
+          ? "Checkpoint resolved — automation resumed."
+          : "Checkpoint resolved. Other open checkpoints on this account still need to be cleared before automation resumes."
+      );
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -124,7 +135,7 @@ export default function CheckpointsPage() {
                   </td>
                   <td className="px-6 py-4">
                     <button
-                      onClick={() => handleResolve(cp)}
+                      onClick={() => openResolveDialog(cp)}
                       disabled={resolving === cp.id}
                       className="btn-danger px-3 py-1.5"
                     >
@@ -157,7 +168,7 @@ export default function CheckpointsPage() {
               "Log in to LinkedIn manually on the affected account.",
               "Complete any CAPTCHA or identity verification shown.",
               "Confirm the account is accessible and not restricted.",
-              'Click "Mark Resolved" to resume automation.',
+              'Click "Mark Resolved" — automation resumes once every open checkpoint on that account is cleared.',
             ].map((step, index) => (
               <li key={step} className="rounded-xl bg-white/[0.05] p-3">
                 <span className="font-semibold">{index + 1}.</span> {step}
@@ -218,6 +229,48 @@ export default function CheckpointsPage() {
           View account health
         </Link>
       </p>
+
+      {resolveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+            <h2 className="text-sm font-semibold text-white">Mark checkpoint resolved</h2>
+            <p className="mt-1 text-xs text-slate-400">
+              {resolveTarget.account?.email ?? resolveTarget.accountId}
+            </p>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+              Resolved by
+            </label>
+            <input
+              autoFocus
+              value={resolvedByInput}
+              onChange={(e) => setResolvedByInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") confirmResolve();
+                if (e.key === "Escape") setResolveTarget(null);
+              }}
+              placeholder="Your name or 'human'"
+              className="field mt-2 w-full text-sm"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setResolveTarget(null)}
+                className="btn-secondary px-3 py-1.5 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmResolve}
+                disabled={!resolvedByInput.trim()}
+                className="btn-danger px-3 py-1.5 text-xs"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

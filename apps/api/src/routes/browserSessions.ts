@@ -344,10 +344,13 @@ browserSessionsRouter.post("/:id/browser-session/type", async (req, res, next) =
       res.status(404).json({ error: "No active browser session" });
       return;
     }
-    await session.page.keyboard.type(text, { delay: 30 });
-    await session.page.waitForTimeout(500);
+    // Insert the whole buffered string in one call instead of simulating
+    // per-character key events — faster, and handles IME/non-Latin text.
+    await session.page.keyboard.insertText(text);
     const summary = await summarize(session.page);
-    await persistBrowserSummary(req.params.id, summary);
+    // Typing into a field never changes login/checkpoint state, so skip the
+    // DB write that click/navigate/press need — it'd otherwise fire on every
+    // debounced keystroke batch for no benefit.
     res.json(summary);
   } catch (err) {
     next(err);
@@ -367,7 +370,11 @@ browserSessionsRouter.post("/:id/browser-session/press", async (req, res, next) 
       return;
     }
     await session.page.keyboard.press(keyName);
-    await session.page.waitForTimeout(1_000);
+    // Wait for an actual navigation to settle (e.g. Enter submitting a login
+    // form) instead of always blocking a full second regardless of the key.
+    await session.page
+      .waitForLoadState("domcontentloaded", { timeout: 1_200 })
+      .catch(() => {});
     const summary = await summarize(session.page);
     await persistBrowserSummary(req.params.id, summary);
     res.json(summary);

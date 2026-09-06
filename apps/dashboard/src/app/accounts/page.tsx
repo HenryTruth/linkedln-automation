@@ -852,7 +852,7 @@ export default function AccountsPage() {
     if (existingTimer) clearTimeout(existingTimer);
     browserTypeTimers.current[accountId] = setTimeout(() => {
       flushBrowserText(accountId);
-    }, 180);
+    }, 60);
   }
 
   function handleLiveBrowserKeyDown(
@@ -860,7 +860,22 @@ export default function AccountsPage() {
     event: React.KeyboardEvent<HTMLDivElement>
   ) {
     if (!browserPanels[accountId]?.open) return;
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      // Forward common text-editing shortcuts instead of silently dropping
+      // them — without this, correcting a typo requires deleting one
+      // character at a time.
+      const supportedCombos = new Set(["a", "Backspace", "Delete"]);
+      if (!supportedCombos.has(event.key)) return;
+      event.preventDefault();
+      flushBrowserText(accountId);
+      const modifier = event.metaKey ? "Meta" : "Control";
+      const key = event.key === "a" ? "A" : event.key;
+      enqueueBrowserKeyboard(accountId, () =>
+        api.browserSessions.press(accountId, `${modifier}+${key}`)
+      );
+      return;
+    }
 
     if (event.key.length === 1) {
       event.preventDefault();

@@ -252,38 +252,6 @@ function profileStatusClass(status: Account["browserProfileStatus"]) {
   return "border-white/10 bg-slate-900 text-slate-300";
 }
 
-function sessionBadge(account: Account, openCheckpoints: number) {
-  if (openCheckpoints > 0 || account.status === "RESTRICTED") {
-    return {
-      label: "Verification required",
-      detail: "Resolve the LinkedIn security prompt before this account can run.",
-      className: "border-red-500/30 bg-red-500/10 text-red-300",
-    };
-  }
-  if (!account.proxy) {
-    return {
-      label: "Proxy required for browser automation",
-      detail:
-        "Needed for the hosted browser, connections/messages, and scraping. Not required to post through the LinkedIn API.",
-      className: "border-amber-500/30 bg-amber-500/10 text-amber-300",
-    };
-  }
-  if (!account.hasSession) {
-    return {
-      label: "Session required",
-      detail: "Connect LinkedIn once so campaigns can reuse a saved login session.",
-      className: "border-amber-500/30 bg-amber-500/10 text-amber-300",
-    };
-  }
-  return {
-    label: "Session active",
-    detail: account.cookiesConsentAt
-      ? `Saved ${new Date(account.cookiesConsentAt).toLocaleString()}`
-      : "Saved login session is available for browser jobs.",
-    className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  };
-}
-
 function AccountActionButton({
   title,
   description,
@@ -343,6 +311,59 @@ function AccountActionButton({
   );
 }
 
+type SetupStepStatus = "done" | "needed" | "optional";
+
+function SetupStep({
+  number,
+  title,
+  status,
+  statusLabel,
+  children,
+}: {
+  number: number;
+  title: string;
+  status: SetupStepStatus;
+  statusLabel?: string;
+  children: React.ReactNode;
+}) {
+  const badgeClasses: Record<SetupStepStatus, string> = {
+    done: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    needed: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+    optional: "border-white/10 bg-slate-900 text-slate-400",
+  };
+  const dotClasses: Record<SetupStepStatus, string> = {
+    done: "bg-emerald-400 text-slate-950",
+    needed: "bg-amber-400 text-slate-950",
+    optional: "bg-slate-700 text-slate-300",
+  };
+  const defaultLabel: Record<SetupStepStatus, string> = {
+    done: "Done",
+    needed: "Needed",
+    optional: "Optional",
+  };
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <span
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${dotClasses[status]}`}
+          >
+            {number}
+          </span>
+          <p className="text-sm font-semibold text-white">{title}</p>
+        </div>
+        <span
+          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${badgeClasses[status]}`}
+        >
+          {statusLabel ?? defaultLabel[status]}
+        </span>
+      </div>
+      <div className="mt-3 space-y-3">{children}</div>
+    </div>
+  );
+}
+
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
@@ -360,8 +381,10 @@ export default function AccountsPage() {
   // LinkedIn session import state
   const [cookieInputs, setCookieInputs] = useState<Record<string, string>>({});
   const [cookieConsent, setCookieConsent] = useState<Record<string, boolean>>({});
-  const [showCookieFor, setShowCookieFor] = useState<string | null>(null);
   const [uploadingCookies, setUploadingCookies] = useState(false);
+  const [sessionMethod, setSessionMethod] = useState<Record<string, "browser" | "cookies">>({});
+  const [showAdvancedFor, setShowAdvancedFor] = useState<string | null>(null);
+  const [quickProxyBusy, setQuickProxyBusy] = useState<string | null>(null);
 
   // Hosted persistent browser session state
   const [browserPanels, setBrowserPanels] = useState<Record<string, BrowserPanelState>>({});
@@ -427,14 +450,30 @@ export default function AccountsPage() {
 
   function toggleCapsPanel(account: Account) {
     clearAccountNotice(account.id);
-    setShowCookieFor(null);
     openCapsEditor(account);
   }
 
-  function toggleCookiePanel(accountId: string) {
-    clearAccountNotice(accountId);
-    setShowCapsFor(null);
-    setShowCookieFor((v) => (v === accountId ? null : accountId));
+  function toggleAdvanced(accountId: string) {
+    setShowAdvancedFor((v) => (v === accountId ? null : accountId));
+  }
+
+  async function handleQuickAssignProxy(account: Account, proxyId: string) {
+    setQuickProxyBusy(account.id);
+    clearAccountNotice(account.id);
+    try {
+      await api.accounts.update(account.id, { proxyId: proxyId || null });
+      if (proxyId) track(EVENTS.CONNECTED_PROXY);
+      await reload();
+      setAccountNotice(
+        account.id,
+        "success",
+        proxyId ? "Proxy assigned." : "Proxy removed."
+      );
+    } catch (e) {
+      setAccountNotice(account.id, "error", (e as Error).message);
+    } finally {
+      setQuickProxyBusy(null);
+    }
   }
 
   function reload() {
@@ -732,7 +771,6 @@ export default function AccountsPage() {
       await api.accounts.uploadCookies(id, cookies, true);
       setCookieInputs((prev) => ({ ...prev, [id]: "" }));
       setCookieConsent((prev) => ({ ...prev, [id]: false }));
-      setShowCookieFor(null);
       await reload();
       track(EVENTS.IMPORTED_LINKEDIN_COOKIES);
       setAccountNotice(
@@ -1177,9 +1215,19 @@ export default function AccountsPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-300">
-                  Proxy (required for the hosted browser and scraping)
-                </label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Proxy (required for the hosted browser and scraping)
+                  </label>
+                  <a
+                    href="/proxies"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-teal-400 underline-offset-2 hover:underline"
+                  >
+                    Manage proxies →
+                  </a>
+                </div>
                 <select
                   value={newProxyId}
                   onChange={(e) => setNewProxyId(e.target.value)}
@@ -1323,7 +1371,6 @@ export default function AccountsPage() {
           const accountProxyWarning = account.proxy
             ? locationMismatchMessage(account.proxy, account.timezone)
             : null;
-          const session = sessionBadge(account, openCount);
 
           return (
             <div
@@ -1432,253 +1479,478 @@ export default function AccountsPage() {
                     Posting API {account.hasLinkedInApiConnection ? "connected" : "not connected"}
                   </span>
                 </div>
+                <div className="mt-3 sm:max-w-sm">
+                  <AccountActionButton
+                    title={
+                      account.hasLinkedInApiConnection
+                        ? "Reconnect posting API"
+                        : "Connect posting API"
+                    }
+                    description="Authorize Share on LinkedIn so saved posts can publish through the official API."
+                    detail={
+                      account.linkedinConnectedAt
+                        ? `Connected ${new Date(account.linkedinConnectedAt).toLocaleDateString()}`
+                        : "OAuth required"
+                    }
+                    tone="teal"
+                    onClick={() => handleConnectLinkedInApi(account)}
+                    disabled={accountBusy}
+                  />
+                </div>
               </div>
               ) : (
-              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                      LinkedIn profile connection
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-white">
-                      Persistent hosted browser
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-                      <span className={`rounded-full border px-3 py-1 ${profileStatusClass(account.browserProfileStatus)}`}>
-                        {profileStatusLabel(account.browserProfileStatus)}
-                      </span>
-                      <span className={`rounded-full border px-3 py-1 ${
-                        browserPanels[account.id]?.open
-                          ? "border-sky-500/30 bg-sky-500/10 text-sky-300"
-                          : "border-white/10 bg-slate-900 text-slate-400"
-                      }`}>
-                        Browser {browserPanels[account.id]?.open ? "open" : "closed"}
-                      </span>
-                      <span className={`rounded-full border px-3 py-1 ${
-                        account.lastSearchQualifiedAt
-                          ? "border-teal-500/30 bg-teal-500/10 text-teal-300"
-                          : "border-white/10 bg-slate-900 text-slate-400"
-                      }`}>
-                        Search {account.lastSearchQualifiedAt ? "qualified" : "unqualified"}
-                      </span>
-                      <span className={`rounded-full border px-3 py-1 ${
-                        account.hasLinkedInApiConnection
-                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                          : "border-white/10 bg-slate-900 text-slate-400"
-                      }`}>
-                        Posting API {account.hasLinkedInApiConnection ? "connected" : "not connected"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 lg:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickNavigate(account, LINKEDIN_LOGIN_URL)}
-                      disabled={browserBusy === account.id || !account.proxy}
-                      className="btn-primary text-xs"
-                    >
-                      Connect / Login
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickNavigate(account, LINKEDIN_FEED_URL)}
-                      disabled={browserBusy === account.id || !account.proxy}
-                      className="btn-secondary text-xs"
-                    >
-                      Open LinkedIn
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        browserPanels[account.id]?.open
-                          ? refreshBrowser(account.id)
-                          : handleStartBrowser(account)
+              <div className="space-y-4">
+                <div className="sm:max-w-xs">
+                  {canResume ? (
+                    <AccountActionButton
+                      title={isRestricted ? "Review required" : "Resume automation"}
+                      description={
+                        isRestricted
+                          ? "Resolve the account restriction before automation can run again."
+                          : "Restart queued work for this account."
                       }
-                      disabled={browserBusy === account.id || !account.proxy}
-                      className="btn-secondary text-xs"
+                      detail={isRestricted ? "Locked" : "Paused"}
+                      tone={isRestricted ? "red" : "teal"}
+                      onClick={() => handleResume(account)}
+                      disabled={accountBusy || account.status === "RESTRICTED"}
+                    />
+                  ) : (
+                    <AccountActionButton
+                      title={confirmingPause ? "Confirm pause" : "Pause automation"}
+                      description={
+                        confirmingPause
+                          ? "Confirm to stop queued work until you resume the account."
+                          : "Temporarily stop all automated work for this account."
+                      }
+                      detail={confirmingPause ? "Confirmation needed" : "Running"}
+                      tone={confirmingPause ? "amber" : "slate"}
+                      active={confirmingPause}
+                      onClick={() => handlePause(account)}
+                      disabled={accountBusy}
+                    />
+                  )}
+                </div>
+
+                <SetupStep
+                  number={1}
+                  title="Proxy"
+                  status={account.proxy ? "done" : "needed"}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={account.proxy?.id ?? ""}
+                      onChange={(e) => handleQuickAssignProxy(account, e.target.value)}
+                      disabled={quickProxyBusy === account.id}
+                      className="field min-w-[12rem] flex-1"
                     >
-                      {browserPanels[account.id]?.open ? "Refresh" : "Open saved"}
-                    </button>
-                    {browserPanels[account.id]?.open && (
-                      <button
-                        type="button"
-                        onClick={() => handleStopBrowser(account.id)}
-                        disabled={browserBusy === account.id}
-                        className="rounded-xl border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                      <option value="">No proxy</option>
+                      {proxies.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.country}{p.city ? ` - ${p.city}` : ""} — {p.host}:{p.port} [{p.healthStatus}]
+                        </option>
+                      ))}
+                    </select>
+                    {account.proxy && <Badge value={account.proxy.healthStatus} />}
+                    <a
+                      href="/proxies"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-teal-400 underline-offset-2 hover:underline"
+                    >
+                      Manage proxies →
+                    </a>
+                  </div>
+                  {accountProxyWarning && (
+                    <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                      {accountProxyWarning}
+                    </p>
+                  )}
+                  {!account.proxy && (
+                    <p className="text-xs leading-5 text-slate-400">
+                      Needed for the hosted browser, connections/messages, and
+                      scraping. Not required to post through the LinkedIn API —
+                      see Posting API below. No proxy yet?{" "}
+                      <a
+                        href="/proxies"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-teal-400 underline underline-offset-2 hover:text-teal-300"
                       >
-                        Stop
-                      </button>
-                    )}
+                        Add one on the Proxies page ↗
+                      </a>
+                    </p>
+                  )}
+                </SetupStep>
+
+                <SetupStep
+                  number={2}
+                  title="LinkedIn session"
+                  status={
+                    account.hasSession || account.browserProfileStatus === "AUTHENTICATED"
+                      ? "done"
+                      : "needed"
+                  }
+                >
+                  <p className="text-xs leading-5 text-slate-400">
+                    Both options below do the same thing — get LinkedIn signed in
+                    for automation. Pick whichever is easier.
+                  </p>
+                  <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => handleLogoutLinkedIn(account.id)}
-                      disabled={browserBusy === account.id}
-                      className="rounded-xl border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                      onClick={() => setSessionMethod((prev) => ({ ...prev, [account.id]: "browser" }))}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                        (sessionMethod[account.id] ?? (account.cookiesConsentAt ? "cookies" : "browser")) === "browser"
+                          ? "border-teal-400/60 bg-teal-500/10 text-teal-200"
+                          : "border-white/10 bg-slate-900 text-slate-400 hover:border-teal-500/30"
+                      }`}
                     >
-                      Log out LinkedIn
+                      Log in inside hosted browser
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSessionMethod((prev) => ({ ...prev, [account.id]: "cookies" }))}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                        (sessionMethod[account.id] ?? (account.cookiesConsentAt ? "cookies" : "browser")) === "cookies"
+                          ? "border-teal-400/60 bg-teal-500/10 text-teal-200"
+                          : "border-white/10 bg-slate-900 text-slate-400 hover:border-teal-500/30"
+                      }`}
+                    >
+                      Paste session cookies
                     </button>
                   </div>
-                </div>
 
-                <div className="mt-3 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs leading-5 text-sky-300">
-                  <span className="font-semibold">Automation reserves this account.</span>{" "}
-                  Users can stay logged into LinkedIn elsewhere, but should avoid
-                  manual searching, profile browsing, messaging, or connection
-                  actions while jobs are running.
-                </div>
-
-                {!account.proxy && (
-                  <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                    Assign a residential proxy before opening the hosted browser
-                    or scraping. If you only plan to post through the LinkedIn
-                    API, no proxy is needed — use &quot;Connect posting API&quot; below instead.
-                  </p>
-                )}
-
-                {browserPanels[account.id]?.open && (
-                  <div className="mt-4 space-y-4">
-                    <div className="grid gap-2 lg:grid-cols-[auto_auto_1fr_auto_auto]">
-                      <button
-                        type="button"
-                        onClick={() => handleQuickNavigate(account, LINKEDIN_LOGIN_URL)}
-                        disabled={browserBusy === account.id}
-                        className="btn-secondary text-xs"
-                      >
-                        Login
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleQuickNavigate(account, LINKEDIN_FEED_URL)}
-                        disabled={browserBusy === account.id}
-                        className="btn-secondary text-xs"
-                      >
-                        Feed
-                      </button>
-                      <input
-                        type="url"
-                        value={browserPanels[account.id]?.url ?? ""}
-                        onChange={(e) =>
-                          setBrowserPanel(account.id, { url: e.target.value })
-                        }
-                        className="field w-full text-xs"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleBrowserNavigate(account.id)}
-                        disabled={browserBusy === account.id}
-                        className="btn-secondary text-xs"
-                      >
-                        Go
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleQualifySearch(account.id)}
-                        disabled={browserBusy === account.id}
-                        className="btn-secondary text-xs text-emerald-300"
-                      >
-                        Qualify search
-                      </button>
-                    </div>
-
-                    {browserPanels[account.id]?.status && (
-                      <div className="grid gap-2 text-xs sm:grid-cols-4">
-                        <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
-                          <p className="text-slate-500">Auth</p>
-                          <p className="mt-1 font-semibold text-slate-200">
-                            {browserPanels[account.id]?.status?.authenticated
-                              ? "OK"
-                              : "Needs login"}
-                          </p>
-                        </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
-                          <p className="text-slate-500">Search</p>
-                          <p className="mt-1 font-semibold text-slate-200">
-                            {browserPanels[account.id]?.status?.searchQualified
-                              ? "Qualified"
-                              : "Not ready"}
-                          </p>
-                        </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
-                          <p className="text-slate-500">Links</p>
-                          <p className="mt-1 font-semibold text-slate-200">
-                            {browserPanels[account.id]?.status?.profileLinks ?? 0}
-                          </p>
-                        </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
-                          <p className="text-slate-500">Next</p>
-                          <p className="mt-1 font-semibold text-slate-200">
-                            {browserPanels[account.id]?.status?.nextButtons ?? 0}
-                          </p>
-                        </div>
+                  {(sessionMethod[account.id] ?? (account.cookiesConsentAt ? "cookies" : "browser")) === "browser" ? (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                        <span className={`rounded-full border px-3 py-1 ${profileStatusClass(account.browserProfileStatus)}`}>
+                          {profileStatusLabel(account.browserProfileStatus)}
+                        </span>
+                        <span className={`rounded-full border px-3 py-1 ${
+                          browserPanels[account.id]?.open
+                            ? "border-sky-500/30 bg-sky-500/10 text-sky-300"
+                            : "border-white/10 bg-slate-900 text-slate-400"
+                        }`}>
+                          Browser {browserPanels[account.id]?.open ? "open" : "closed"}
+                        </span>
+                        <span className={`rounded-full border px-3 py-1 ${
+                          account.lastSearchQualifiedAt
+                            ? "border-teal-500/30 bg-teal-500/10 text-teal-300"
+                            : "border-white/10 bg-slate-900 text-slate-400"
+                        }`}>
+                          Search {account.lastSearchQualifiedAt ? "qualified" : "unqualified"}
+                        </span>
                       </div>
-                    )}
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleQuickNavigate(account, LINKEDIN_LOGIN_URL)}
+                          disabled={browserBusy === account.id || !account.proxy}
+                          className="btn-primary text-xs"
+                        >
+                          Log in inside hosted browser
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickNavigate(account, LINKEDIN_FEED_URL)}
+                          disabled={browserBusy === account.id || !account.proxy}
+                          className="btn-secondary text-xs"
+                        >
+                          Open LinkedIn
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            browserPanels[account.id]?.open
+                              ? refreshBrowser(account.id)
+                              : handleStartBrowser(account)
+                          }
+                          disabled={browserBusy === account.id || !account.proxy}
+                          className="btn-secondary text-xs"
+                        >
+                          {browserPanels[account.id]?.open ? "Refresh" : "Open saved"}
+                        </button>
+                        {browserPanels[account.id]?.open && (
+                          <button
+                            type="button"
+                            onClick={() => handleStopBrowser(account.id)}
+                            disabled={browserBusy === account.id}
+                            className="rounded-xl border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                          >
+                            Stop
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleLogoutLinkedIn(account.id)}
+                          disabled={browserBusy === account.id}
+                          className="rounded-xl border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                        >
+                          Log out LinkedIn
+                        </button>
+                      </div>
 
-                    <div className="grid gap-2 text-xs sm:grid-cols-2">
-                      <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
-                        <p className="font-semibold text-slate-300">Browser profile</p>
-                        <p className="mt-1 text-slate-400">
-                          {account.browserProfileStatus}
-                          {account.browserProfileLastCheckedAt
-                            ? ` - checked ${new Date(account.browserProfileLastCheckedAt).toLocaleString()}`
-                            : ""}
+                      <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs leading-5 text-sky-300">
+                        <span className="font-semibold">Automation reserves this account.</span>{" "}
+                        Users can stay logged into LinkedIn elsewhere, but should avoid
+                        manual searching, profile browsing, messaging, or connection
+                        actions while jobs are running.
+                      </div>
+
+                      {!account.proxy && (
+                        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                          Assign a proxy in Step 1 first to use the hosted browser.
                         </p>
-                        {account.browserProfileLastCheckError && (
-                          <p className="mt-1 text-amber-300">
-                            {account.browserProfileLastCheckError}
-                          </p>
-                        )}
-                      </div>
-                      <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
-                        <p className="font-semibold text-slate-300">Search qualification</p>
-                        {account.lastSearchQualifiedAt ? (
-                          <>
-                            <p className="mt-1 text-slate-400">
-                              {account.lastSearchQualifiedSource ?? "LINKEDIN"} - {account.lastSearchQualifiedProfileLinks ?? 0} links, next {account.lastSearchQualifiedNextButtons ?? 0}
-                            </p>
-                            <p className="mt-1 break-all font-mono text-[11px] text-slate-500">
-                              {account.lastSearchQualifiedUrl}
-                            </p>
-                          </>
-                        ) : (
-                          <p className="mt-1 text-slate-400">
-                            No qualified multi-page search yet.
-                          </p>
-                        )}
-                        {account.lastSearchQualificationError && (
-                          <p className="mt-1 text-amber-300">
-                            {account.lastSearchQualificationError}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                      )}
 
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                        Remote browser
+                      {browserPanels[account.id]?.open && (
+                        <div className="space-y-4">
+                          <div className="grid gap-2 lg:grid-cols-[auto_auto_1fr_auto_auto]">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickNavigate(account, LINKEDIN_LOGIN_URL)}
+                              disabled={browserBusy === account.id}
+                              className="btn-secondary text-xs"
+                            >
+                              Login
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleQuickNavigate(account, LINKEDIN_FEED_URL)}
+                              disabled={browserBusy === account.id}
+                              className="btn-secondary text-xs"
+                            >
+                              Feed
+                            </button>
+                            <input
+                              type="url"
+                              value={browserPanels[account.id]?.url ?? ""}
+                              onChange={(e) =>
+                                setBrowserPanel(account.id, { url: e.target.value })
+                              }
+                              className="field w-full text-xs"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleBrowserNavigate(account.id)}
+                              disabled={browserBusy === account.id}
+                              className="btn-secondary text-xs"
+                            >
+                              Go
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleQualifySearch(account.id)}
+                              disabled={browserBusy === account.id}
+                              className="btn-secondary text-xs text-emerald-300"
+                            >
+                              Qualify search
+                            </button>
+                          </div>
+
+                          {browserPanels[account.id]?.status && (
+                            <div className="grid gap-2 text-xs sm:grid-cols-4">
+                              <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
+                                <p className="text-slate-500">Auth</p>
+                                <p className="mt-1 font-semibold text-slate-200">
+                                  {browserPanels[account.id]?.status?.authenticated
+                                    ? "OK"
+                                    : "Needs login"}
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
+                                <p className="text-slate-500">Search</p>
+                                <p className="mt-1 font-semibold text-slate-200">
+                                  {browserPanels[account.id]?.status?.searchQualified
+                                    ? "Qualified"
+                                    : "Not ready"}
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
+                                <p className="text-slate-500">Links</p>
+                                <p className="mt-1 font-semibold text-slate-200">
+                                  {browserPanels[account.id]?.status?.profileLinks ?? 0}
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
+                                <p className="text-slate-500">Next</p>
+                                <p className="mt-1 font-semibold text-slate-200">
+                                  {browserPanels[account.id]?.status?.nextButtons ?? 0}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="grid gap-2 text-xs sm:grid-cols-2">
+                            <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
+                              <p className="font-semibold text-slate-300">Browser profile</p>
+                              <p className="mt-1 text-slate-400">
+                                {account.browserProfileStatus}
+                                {account.browserProfileLastCheckedAt
+                                  ? ` - checked ${new Date(account.browserProfileLastCheckedAt).toLocaleString()}`
+                                  : ""}
+                              </p>
+                              {account.browserProfileLastCheckError && (
+                                <p className="mt-1 text-amber-300">
+                                  {account.browserProfileLastCheckError}
+                                </p>
+                              )}
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-slate-900 p-3">
+                              <p className="font-semibold text-slate-300">Search qualification</p>
+                              {account.lastSearchQualifiedAt ? (
+                                <>
+                                  <p className="mt-1 text-slate-400">
+                                    {account.lastSearchQualifiedSource ?? "LINKEDIN"} - {account.lastSearchQualifiedProfileLinks ?? 0} links, next {account.lastSearchQualifiedNextButtons ?? 0}
+                                  </p>
+                                  <p className="mt-1 break-all font-mono text-[11px] text-slate-500">
+                                    {account.lastSearchQualifiedUrl}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="mt-1 text-slate-400">
+                                  No qualified multi-page search yet.
+                                </p>
+                              )}
+                              {account.lastSearchQualificationError && (
+                                <p className="mt-1 text-amber-300">
+                                  {account.lastSearchQualificationError}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                              Remote browser
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setLargeBrowserFor(account.id)}
+                              disabled={browserBusy === account.id}
+                              className="btn-primary px-3 py-1.5 text-xs"
+                            >
+                              Open large browser
+                            </button>
+                          </div>
+
+                          <div className="overflow-hidden rounded-xl border border-white/10 bg-black shadow-2xl shadow-black/30">
+                            <img
+                              ref={(el) => {
+                                browserImageRefs.current[account.id] = el;
+                              }}
+                              src={browserScreenshotSrc(account.id)}
+                              alt="Hosted LinkedIn browser"
+                              onClick={(e) => handleBrowserClick(account.id, e)}
+                              className="block w-full cursor-crosshair"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-teal-300">
+                        {account.hasSession ? "Refresh LinkedIn session" : "Connect LinkedIn session"}
                       </p>
+                      <p className="text-xs leading-5 text-slate-400">
+                        Export your LinkedIn session cookies from the browser where you are already logged in, then paste them below. This is a one-time setup — Vectra reuses the saved session for all campaign runs.
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-4">
+                        {[
+                          {
+                            step: 1,
+                            title: "Install extension",
+                            body: "Cookie-Editor",
+                            href: "https://cookie-editor.com",
+                          },
+                          {
+                            step: 2,
+                            title: "Go to LinkedIn",
+                            body: "Make sure you are logged in to the correct account.",
+                            href: "https://www.linkedin.com",
+                          },
+                          {
+                            step: 3,
+                            title: "Export cookies",
+                            body: 'Click the Cookie-Editor icon → "Export" → copies to clipboard.',
+                            href: null,
+                          },
+                          {
+                            step: 4,
+                            title: "Paste below",
+                            body: "Paste the copied JSON into the field below and save.",
+                            href: null,
+                          },
+                        ].map(({ step, title, body, href }) => (
+                          <div
+                            key={step}
+                            className="rounded-xl border border-white/[0.06] bg-slate-800/60 p-3 text-xs leading-5 text-slate-300"
+                          >
+                            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-teal-300">
+                              Step {step}
+                            </span>
+                            <span className="font-medium text-slate-200">{title}</span>
+                            {href ? (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-1 block text-teal-400 underline underline-offset-2 hover:text-teal-300"
+                              >
+                                {body} ↗
+                              </a>
+                            ) : (
+                              <p className="mt-1 text-slate-400">{body}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <textarea
+                        rows={5}
+                        value={cookieInputs[account.id] ?? ""}
+                        onChange={(e) =>
+                          setCookieInputs((prev) => ({
+                            ...prev,
+                            [account.id]: e.target.value,
+                          }))
+                        }
+                        placeholder='Paste cookie JSON here — e.g. [{"name":"li_at","value":"...","domain":".linkedin.com",...}]'
+                        className="field w-full font-mono text-xs"
+                      />
+                      <label className="flex items-start gap-2 rounded-xl border border-white/[0.06] bg-slate-800/60 p-3 text-xs leading-5 text-teal-200">
+                        <input
+                          type="checkbox"
+                          checked={cookieConsent[account.id] ?? false}
+                          onChange={(e) =>
+                            setCookieConsent((prev) => ({
+                              ...prev,
+                              [account.id]: e.target.checked,
+                            }))
+                          }
+                          className="mt-1 h-4 w-4 rounded border-teal-300 text-teal-600"
+                        />
+                        <span>
+                          I authorize Vectra to store this encrypted LinkedIn session
+                          and use it only for automation on this account.
+                        </span>
+                      </label>
+                      {account.cookiesConsentAt && (
+                        <p className="text-[11px] text-teal-400">
+                          Last session consent recorded{" "}
+                          {new Date(account.cookiesConsentAt).toLocaleString()}.
+                        </p>
+                      )}
                       <button
-                        type="button"
-                        onClick={() => setLargeBrowserFor(account.id)}
-                        disabled={browserBusy === account.id}
-                        className="btn-primary px-3 py-1.5 text-xs"
+                        onClick={() => handleUploadCookies(account.id)}
+                        disabled={uploadingCookies || !(cookieInputs[account.id]?.trim())}
+                        className="btn-primary px-4 py-1.5"
                       >
-                        Open large browser
+                        {uploadingCookies ? "Saving..." : "Save session"}
                       </button>
                     </div>
-
-                    <div className="overflow-hidden rounded-xl border border-white/10 bg-black shadow-2xl shadow-black/30">
-                      <img
-                        ref={(el) => {
-                          browserImageRefs.current[account.id] = el;
-                        }}
-                        src={browserScreenshotSrc(account.id)}
-                        alt="Hosted LinkedIn browser"
-                        onClick={(e) => handleBrowserClick(account.id, e)}
-                        className="block w-full cursor-crosshair"
-                      />
-                    </div>
-                  </div>
-                )}
+                  )}
+                </SetupStep>
               </div>
               )}
 
@@ -1744,9 +2016,19 @@ export default function AccountsPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs font-semibold text-slate-400">
-                          Proxy
-                        </label>
+                        <div className="mb-1 flex items-center justify-between">
+                          <label className="block text-xs font-semibold text-slate-400">
+                            Proxy
+                          </label>
+                          <a
+                            href="/proxies"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold text-teal-400 underline-offset-2 hover:underline"
+                          >
+                            Manage proxies →
+                          </a>
+                        </div>
                         <select
                           value={editProxyId}
                           onChange={(e) => setEditProxyId(e.target.value)}
@@ -1817,16 +2099,17 @@ export default function AccountsPage() {
                 </div>
               )}
 
-              <div className="rounded-3xl border border-white/[0.06] bg-slate-950/40 p-3">
-                <div className="mb-2 flex items-center justify-between gap-3">
+              {!isPostingOnly && (
+              <>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                      Account actions
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Posting API
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {isPostingOnly
-                        ? "Manage the LinkedIn Posting API connection for this account."
-                        : "Control automation, warm-up, limits, and LinkedIn session access."}
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      Independent of the proxy/session setup above — works whether
+                      or not that setup is complete.
                     </p>
                   </div>
                   {accountBusy && (
@@ -1835,39 +2118,41 @@ export default function AccountsPage() {
                     </span>
                   )}
                 </div>
+                <div className="mt-3 sm:max-w-sm">
+                  <AccountActionButton
+                    title={
+                      account.hasLinkedInApiConnection
+                        ? "Reconnect posting API"
+                        : "Connect posting API"
+                    }
+                    description="Authorize Share on LinkedIn so saved posts can publish through the official API."
+                    detail={
+                      account.linkedinConnectedAt
+                        ? `Connected ${new Date(account.linkedinConnectedAt).toLocaleDateString()}`
+                        : "OAuth required"
+                    }
+                    tone="teal"
+                    onClick={() => handleConnectLinkedInApi(account)}
+                    disabled={accountBusy}
+                  />
+                </div>
+              </div>
 
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {!isPostingOnly && (canResume ? (
-                    <AccountActionButton
-                      title={isRestricted ? "Review required" : "Resume automation"}
-                      description={
-                        isRestricted
-                          ? "Resolve the account restriction before automation can run again."
-                          : "Restart queued work for this account."
-                      }
-                      detail={isRestricted ? "Locked" : "Paused"}
-                      tone={isRestricted ? "red" : "teal"}
-                      onClick={() => handleResume(account)}
-                      disabled={accountBusy || account.status === "RESTRICTED"}
-                    />
-                  ) : (
-                    <AccountActionButton
-                      title={confirmingPause ? "Confirm pause" : "Pause automation"}
-                      description={
-                        confirmingPause
-                          ? "Confirm to stop queued work until you resume the account."
-                          : "Temporarily stop all automated work for this account."
-                      }
-                      detail={confirmingPause ? "Confirmation needed" : "Running"}
-                      tone={confirmingPause ? "amber" : "slate"}
-                      active={confirmingPause}
-                      onClick={() => handlePause(account)}
-                      disabled={accountBusy}
-                    />
-                  ))}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => toggleAdvanced(account.id)}
+                  className="flex w-full items-center justify-between rounded-2xl border border-white/[0.06] bg-slate-950/40 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 transition hover:border-white/20 hover:text-slate-200"
+                >
+                  Advanced: warm-up & limits
+                  <span className="text-slate-500">
+                    {showAdvancedFor === account.id ? "Hide ▲" : "Show ▼"}
+                  </span>
+                </button>
 
-                  {!isPostingOnly && (
-                    <>
+                {showAdvancedFor === account.id && (
+                  <div className="mt-3 space-y-3 rounded-2xl border border-white/[0.06] bg-slate-950/40 p-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
                       <AccountActionButton
                         title={confirmingWarmup ? "Confirm warm-up" : "Advance warm-up"}
                         description={
@@ -1920,45 +2205,7 @@ export default function AccountsPage() {
                         active={showCapsFor === account.id}
                         onClick={() => toggleCapsPanel(account)}
                       />
-
-                      <AccountActionButton
-                        title={
-                          showCookieFor === account.id
-                            ? "Close session"
-                            : account.hasSession
-                            ? "Refresh LinkedIn"
-                            : "Connect LinkedIn"
-                        }
-                        description={
-                          account.hasSession
-                            ? "Update the saved login if LinkedIn expires or challenges it."
-                            : "Save a LinkedIn login session before campaigns run."
-                        }
-                        detail={account.hasSession ? "Session saved" : "Required"}
-                        tone="teal"
-                        active={showCookieFor === account.id}
-                        onClick={() => toggleCookiePanel(account.id)}
-                      />
-                    </>
-                  )}
-
-                  <AccountActionButton
-                    title={
-                      account.hasLinkedInApiConnection
-                        ? "Reconnect posting API"
-                        : "Connect posting API"
-                    }
-                    description="Authorize Share on LinkedIn so saved posts can publish through the official API."
-                    detail={
-                      account.linkedinConnectedAt
-                        ? `Connected ${new Date(account.linkedinConnectedAt).toLocaleDateString()}`
-                        : "OAuth required"
-                    }
-                    tone="teal"
-                    onClick={() => handleConnectLinkedInApi(account)}
-                    disabled={accountBusy}
-                  />
-                </div>
+                    </div>
 
                 {/* Cap editor panel */}
                 {showCapsFor === account.id && (
@@ -2119,182 +2366,35 @@ export default function AccountsPage() {
                   </div>
                 )}
 
-                {/* LinkedIn session panel */}
-                {showCookieFor === account.id && (
-                  <div className="mt-3 space-y-3 rounded-2xl border border-teal-500/30 bg-teal-500/5 p-4">
-                    <div>
-                      <p className="text-xs font-semibold text-teal-300">
-                        {account.hasSession ? "Refresh LinkedIn session" : "Connect LinkedIn session"}
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-teal-400">
-                        Export your LinkedIn session cookies from the browser where you are already logged in, then paste them below. This is a one-time setup — Vectra reuses the saved session for all campaign runs.
-                      </p>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-4">
-                      {[
-                        {
-                          step: 1,
-                          title: "Install extension",
-                          body: "Cookie-Editor",
-                          href: "https://cookie-editor.com",
-                        },
-                        {
-                          step: 2,
-                          title: "Go to LinkedIn",
-                          body: "Make sure you are logged in to the correct account.",
-                          href: "https://www.linkedin.com",
-                        },
-                        {
-                          step: 3,
-                          title: "Export cookies",
-                          body: 'Click the Cookie-Editor icon → "Export" → copies to clipboard.',
-                          href: null,
-                        },
-                        {
-                          step: 4,
-                          title: "Paste below",
-                          body: "Paste the copied JSON into the field below and save.",
-                          href: null,
-                        },
-                      ].map(({ step, title, body, href }) => (
-                        <div
-                          key={step}
-                          className="rounded-xl border border-white/[0.06] bg-slate-800/60 p-3 text-xs leading-5 text-slate-300"
-                        >
-                          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-teal-300">
-                            Step {step}
-                          </span>
-                          <span className="font-medium text-slate-200">{title}</span>
-                          {href ? (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-1 block text-teal-400 underline underline-offset-2 hover:text-teal-300"
-                            >
-                              {body} ↗
-                            </a>
-                          ) : (
-                            <p className="mt-1 text-slate-400">{body}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <textarea
-                      rows={5}
-                      value={cookieInputs[account.id] ?? ""}
-                      onChange={(e) =>
-                        setCookieInputs((prev) => ({
-                          ...prev,
-                          [account.id]: e.target.value,
-                        }))
-                      }
-                      placeholder='Paste cookie JSON here — e.g. [{"name":"li_at","value":"...","domain":".linkedin.com",...}]'
-                      className="field w-full font-mono text-xs"
-                    />
-                    <label className="flex items-start gap-2 rounded-xl border border-white/[0.06] bg-slate-800/60 p-3 text-xs leading-5 text-teal-200">
-                      <input
-                        type="checkbox"
-                        checked={cookieConsent[account.id] ?? false}
-                        onChange={(e) =>
-                          setCookieConsent((prev) => ({
-                            ...prev,
-                            [account.id]: e.target.checked,
-                          }))
-                        }
-                        className="mt-1 h-4 w-4 rounded border-teal-300 text-teal-600"
-                      />
+                    {/* Timezone */}
+                    <div className="flex items-center gap-2 rounded-xl bg-slate-800/50 px-4 py-3 text-xs text-slate-400">
+                      <span className="w-16 font-semibold uppercase tracking-[0.12em] text-slate-500">TZ</span>
                       <span>
-                        I authorize Vectra to store this encrypted LinkedIn session
-                        and use it only for automation on this account.
+                        {account.timezone} - Actions fire 8am-7pm local time
                       </span>
-                    </label>
-                    {account.cookiesConsentAt && (
-                      <p className="text-[11px] text-teal-400">
-                        Last session consent recorded{" "}
-                        {new Date(account.cookiesConsentAt).toLocaleString()}.
+                    </div>
+
+                    {/* Today's usage */}
+                    <div>
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Today&apos;s usage
                       </p>
-                    )}
-                    <button
-                      onClick={() => handleUploadCookies(account.id)}
-                      disabled={uploadingCookies || !(cookieInputs[account.id]?.trim())}
-                      className="btn-primary px-4 py-1.5"
-                    >
-                      {uploadingCookies ? "Saving..." : "Save session"}
-                    </button>
+                      <div className="space-y-2">
+                        {CAP_KEYS.map((key) => (
+                          <CapBar
+                            key={key}
+                            label={CAP_LABELS[key]}
+                            used={todayCaps[key] ?? 0}
+                            cap={effectiveCap(account, key)}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-
-              {!isPostingOnly && (
-                <>
-                  {/* Session row */}
-                  <div className={`rounded-2xl border px-4 py-3 text-sm ${session.className}`}>
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <span className="font-semibold">{session.label}</span>
-                      <span className="text-xs opacity-90">{session.detail}</span>
-                    </div>
-                  </div>
-
-                  {/* Proxy row */}
-                  <div className="flex items-center gap-2 rounded-2xl bg-slate-800/50 px-4 py-3 text-sm">
-                    <span className="w-16 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                      Proxy
-                    </span>
-                    {account.proxy ? (
-                      <>
-                        <span className="text-slate-300">
-                          {account.proxy.country}
-                          {account.proxy.city ? ` - ${account.proxy.city}` : ""}
-                        </span>
-                        <Badge value={account.proxy.healthStatus} />
-                        {accountProxyWarning && (
-                          <span className="text-xs font-medium text-amber-400">
-                            Location mismatch
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-xs italic text-slate-400">
-                        No proxy assigned - the hosted browser, connection/message
-                        automation, and scraping are blocked until a residential
-                        IP is added. Posting through the LinkedIn API is unaffected.
-                      </span>
-                    )}
-                  </div>
-                  {accountProxyWarning && (
-                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
-                      {accountProxyWarning}
-                    </div>
-                  )}
-
-                  {/* Timezone row */}
-                  <div className="flex items-center gap-2 rounded-2xl bg-slate-800/50 px-4 py-3 text-xs text-slate-400">
-                    <span className="w-16 font-semibold uppercase tracking-[0.12em] text-slate-500">TZ</span>
-                    <span>
-                      {account.timezone} - Actions fire 8am-7pm local time
-                    </span>
-                  </div>
-
-                  {/* Daily caps */}
-                  <div>
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                      Today&apos;s usage
-                    </p>
-                    <div className="space-y-2">
-                      {CAP_KEYS.map((key) => (
-                        <CapBar
-                          key={key}
-                          label={CAP_LABELS[key]}
-                          used={todayCaps[key] ?? 0}
-                          cap={effectiveCap(account, key)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </>
+              </>
               )}
-
             </div>
           );
         })}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Skeleton, SkeletonPageHeader } from "@/components/Skeleton";
 import {
   api,
@@ -898,11 +899,7 @@ export default function AccountsPage() {
 
   function requireProxyThen(account: Account, action: () => void) {
     if (!account.proxy) {
-      setAccountNotice(
-        account.id,
-        "error",
-        "Assign a proxy in Step 1 first to use the hosted browser."
-      );
+      toast.error("Assign a proxy in Step 1 first to use the hosted browser.");
       return;
     }
     action();

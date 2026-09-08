@@ -63,6 +63,35 @@ async function assertAccountOwner(accountId: string, userId: string) {
   return account;
 }
 
+const LINKEDIN_API_NOT_CONNECTED_ERROR =
+  "Connect this account with LinkedIn API access before scheduling. Use Accounts > Connect posting API.";
+const LINKEDIN_API_EXPIRED_ERROR =
+  "LinkedIn API access expired. Reconnect this account from the Accounts page.";
+
+async function getLinkedInApiConnectionError(
+  accountId: string,
+  userId: string
+): Promise<string | null> {
+  const account = await prisma.account.findFirst({
+    where: { id: accountId, userId },
+    select: {
+      linkedinAccessTokenEncrypted: true,
+      linkedinMemberUrn: true,
+      linkedinAccessTokenExpiresAt: true,
+    },
+  });
+  if (!account) {
+    throw new Error("Account not found");
+  }
+  if (!account.linkedinAccessTokenEncrypted || !account.linkedinMemberUrn) {
+    return LINKEDIN_API_NOT_CONNECTED_ERROR;
+  }
+  if (account.linkedinAccessTokenExpiresAt && account.linkedinAccessTokenExpiresAt < new Date()) {
+    return LINKEDIN_API_EXPIRED_ERROR;
+  }
+  return null;
+}
+
 postsRouter.get("/", async (req, res, next) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
@@ -98,6 +127,13 @@ postsRouter.post("/", async (req, res, next) => {
     const data = CreatePostSchema.parse(req.body);
     await assertAccountOwner(data.accountId, req.user.id);
     const status = data.scheduledFor ? LinkedInPostStatus.SCHEDULED : LinkedInPostStatus.DRAFT;
+    if (status === LinkedInPostStatus.SCHEDULED) {
+      const connectionError = await getLinkedInApiConnectionError(data.accountId, req.user.id);
+      if (connectionError) {
+        res.status(409).json({ error: connectionError });
+        return;
+      }
+    }
     const post = await prisma.linkedInPost.create({
       data: {
         userId: req.user.id,
@@ -135,10 +171,18 @@ postsRouter.get("/:id", async (req, res, next) => {
 postsRouter.put("/:id", async (req, res, next) => {
   try {
     const data = UpdatePostSchema.parse(req.body);
-    await prisma.linkedInPost.findFirstOrThrow({
+    const existing = await prisma.linkedInPost.findFirstOrThrow({
       where: { id: req.params.id, userId: req.user.id },
-      select: { id: true },
+      select: { id: true, accountId: true, status: true },
     });
+    const nextStatus = data.status ?? existing.status;
+    if (nextStatus === LinkedInPostStatus.SCHEDULED) {
+      const connectionError = await getLinkedInApiConnectionError(existing.accountId, req.user.id);
+      if (connectionError) {
+        res.status(409).json({ error: connectionError });
+        return;
+      }
+    }
     const post = await prisma.$transaction(async (tx) => {
       if (data.media) {
         await tx.postMedia.deleteMany({ where: { postId: req.params.id } });
@@ -172,6 +216,19 @@ postsRouter.put("/:id", async (req, res, next) => {
 postsRouter.post("/:id/schedule", async (req, res, next) => {
   try {
     const data = z.object({ scheduledFor: z.coerce.date() }).parse(req.body);
+    const existing = await prisma.linkedInPost.findFirst({
+      where: { id: req.params.id, userId: req.user.id },
+      select: { accountId: true },
+    });
+    if (!existing) {
+      res.status(404).json({ error: "Post not found" });
+      return;
+    }
+    const connectionError = await getLinkedInApiConnectionError(existing.accountId, req.user.id);
+    if (connectionError) {
+      res.status(409).json({ error: connectionError });
+      return;
+    }
     const post = await prisma.linkedInPost.updateMany({
       where: { id: req.params.id, userId: req.user.id },
       data: {

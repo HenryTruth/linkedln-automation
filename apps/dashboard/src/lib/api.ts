@@ -796,6 +796,28 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    uploadPostImage: async (file: File): Promise<GeneratedPostAsset> => {
+      const token = getAuthToken();
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${API_BASE}/ai/posts/assets/upload`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: form,
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        let message = body || res.statusText;
+        try {
+          const parsed = JSON.parse(body) as { error?: unknown };
+          if (typeof parsed.error === "string") message = parsed.error;
+        } catch {
+          // Keep the raw response text for non-JSON errors.
+        }
+        throw new Error(`API ${res.status}: ${message}`);
+      }
+      return res.json() as Promise<GeneratedPostAsset>;
+    },
   },
 
   accounts: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   api,
@@ -249,6 +249,7 @@ export default function PostsPage() {
   const [posts, setPosts] = useState<LinkedInPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState("");
   const [topic, setTopic] = useState("");
@@ -502,6 +503,27 @@ export default function PostsPage() {
       ]);
       if (asset.type === "IMAGE") track(EVENTS.GENERATED_IMAGE);
       toast.success(`${asset.type === "IMAGE" ? "Image" : "Document"} generated and attached`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function uploadImage(file: File) {
+    setBusy("upload");
+    try {
+      const asset = await api.ai.uploadPostImage(file);
+      setMedia((prev) => [
+        ...prev,
+        {
+          type: asset.type,
+          url: asset.url,
+          title: asset.title,
+          description: asset.description,
+        },
+      ]);
+      toast.success("Image uploaded and attached");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -928,9 +950,30 @@ export default function PostsPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-white">Media</h3>
-                <button type="button" className="btn-secondary px-3 py-1.5" onClick={() => setMedia((prev) => [...prev, { ...emptyMedia }])}>
-                  Add Media
-                </button>
+                <div className="flex gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void uploadImage(file);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary px-3 py-1.5"
+                    disabled={busy === "upload"}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {busy === "upload" ? "Uploading..." : "Upload Image"}
+                  </button>
+                  <button type="button" className="btn-secondary px-3 py-1.5" onClick={() => setMedia((prev) => [...prev, { ...emptyMedia }])}>
+                    Add Media
+                  </button>
+                </div>
               </div>
               {media.map((item, index) => (
                 <div key={index} className="grid gap-3 rounded-xl border border-white/[0.08] bg-slate-950/40 p-3 sm:grid-cols-[120px_1fr_auto]">

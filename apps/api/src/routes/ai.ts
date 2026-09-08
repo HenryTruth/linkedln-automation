@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { prisma } from "@linkedin-automation/db";
 import {
@@ -60,6 +61,20 @@ function safeFilename(value: string, extension: string) {
     .slice(0, 48);
   return `${stem || "vectra-asset"}.${extension}`;
 }
+
+const UPLOAD_MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const UPLOAD_ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"];
+const uploadImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: UPLOAD_MAX_IMAGE_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (!UPLOAD_ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+      cb(new Error("Unsupported image type. Use JPEG, PNG, or GIF."));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 aiRouter.post("/campaign-strategy", async (req, res, next) => {
   try {
@@ -194,6 +209,51 @@ aiRouter.post("/posts/assets/document", async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+aiRouter.post("/posts/assets/upload", (req, res, next) => {
+  uploadImage.single("file")(req, res, async (err) => {
+    try {
+      if (err instanceof multer.MulterError) {
+        res.status(400).json({
+          error:
+            err.code === "LIMIT_FILE_SIZE"
+              ? "Image is too large. Max size is 20MB."
+              : err.message,
+        });
+        return;
+      }
+      if (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : "Upload failed." });
+        return;
+      }
+      if (!req.file) {
+        res.status(400).json({ error: "No file provided." });
+        return;
+      }
+
+      const extension = req.file.mimetype === "image/png" ? "png" : req.file.mimetype === "image/gif" ? "gif" : "jpg";
+      const stem = req.file.originalname.replace(/\.[^.]+$/, "") || "upload";
+      const asset = await prisma.aiGeneratedAsset.create({
+        data: {
+          userId: req.user.id,
+          kind: "UPLOAD",
+          filename: safeFilename(stem, extension),
+          mimeType: req.file.mimetype,
+          bytes: req.file.buffer,
+        },
+      });
+      res.status(201).json({
+        id: asset.id,
+        type: "IMAGE",
+        url: assetPublicUrl(req, asset.id, asset.filename),
+        title: req.file.originalname,
+        description: "",
+      });
+    } catch (nextErr) {
+      next(nextErr);
+    }
+  });
 });
 
 aiRouter.post("/leads/:id/analyze", async (req, res, next) => {
